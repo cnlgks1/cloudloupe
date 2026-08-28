@@ -1,0 +1,70 @@
+# 바이너리
+/cloudloupe
+/cloudloupe.exe
+*.exe
+*.dll
+*.so
+*.dylib
+/bin/
+/build/
+
+# GoReleaser
+/dist/
+
+# 테스트와 커버리지
+*.test
+*.out
+coverage.txt
+coverage.html
+profile.cov
+cpu.prof
+mem.prof
+
+# cloudloupe 로컬 상태
+# 스냅샷 캐시는 사용자 데이터다. 실제 인프라의 계정 ID, ARN, 사설 IP 같은 정보가 담기므로
+# 절대 커밋하지 않는다.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+/snapshots/
+
+# 생성된 리포트에도 실제 계정 데이터가 담길 수 있다
+/reports/
+cloudloupe-report.*
+
+# 자격증명과 비밀. cloudloupe가 이 파일들을 쓰는 일은 없지만 그래도 막아둔다.
+.env
+.env.*
+!.env.example
+# 저장소 루트와 .aws 디렉터리로 앵커링한 이유가 있다. 앵커 없는 "credentials" 패턴은
+# testdata/credentials 픽스처까지 제외해버리는데, 그 파일은 커밋되어야 CI에서 테스트가
+# 돌아간다.
+/credentials
+**/.aws/credentials
+!examples/aws/credentials.example
+!**/testdata/credentials
+*.pem
+*.key
+!**/testdata/**/*.key
+
+# 편집기와 IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+
+# Go 워크스페이스 파일 (기계마다 다름)
+go.work
+go.work.sum

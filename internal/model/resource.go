@@ -1,0 +1,208 @@
+// Package model은 수집된 AWS 리소스를 표현하는 도메인 타입을 정의한다.
+//
+// 이 패키지는 표준 라이브러리 외에 아무것도 의존하지 않고, 다른 cloudloupe
+// 패키지를 import하지 않는다. 나머지 모든 internal 패키지가 이 패키지를 의존할 수
+// 있다. 이 단방향 화살표가 report, cache, graph, findings 계층에서 AWS SDK를
+// 몰아내는 장치다.
+package model
+
+import (
+	"cmp"
+	"slices"
+	"strings"
+	"time"
+)
+
+// 리소스 타입 식별자. "<서비스>:<종류>" 형식이다.
+//
+// 수집기는 이 값을 그대로 보고하고, 리포트는 이 값으로 그룹을 나누며, TUI는 탭
+// 이름으로 쓴다. 안정적으로 유지해야 한다. JSON 출력과 스냅샷 행에 그대로 실리므로
+// 이름을 바꾸면 출력 계약이 바뀐다. 그래서 한국어로 번역하지 않는다.
+const (
+	TypeEC2Instance         = "ec2:instance"
+	TypeEC2Volume           = "ec2:volume"
+	TypeEC2NetworkInterface = "ec2:networkInterface"
+	TypeEC2Address          = "ec2:address"
+	TypeELBv2LoadBalancer   = "elbv2:loadBalancer"
+	TypeELBv2TargetGroup    = "elbv2:targetGroup"
+	TypeRoute53RecordSet    = "route53:recordSet"
+	TypeWAFv2WebACL         = "wafv2:webAcl"
+)
+
+// [Ref]에서 사용하는 관계 이름.
+//
+// 의미가 있는 경우 관계를 양쪽 끝에서 모두 기록한다. 타깃 그룹은 자신이 대상으로
+// 삼는 인스턴스를 나열하고, 각 인스턴스는 자신이 그 그룹의 타깃임을 기록한다.
+// 관계 그래프는 이 ref로부터 만들어지므로, ref를 빼먹은 수집기는 연결이 끊긴
+// 노드를 만들어낸다.
+const (
+	RelationForwardsTo     = "forwards-to"
+	RelationTargets        = "targets"
+	RelationTargetOf       = "target-of"
+	RelationAttachedTo     = "attached-to"
+	RelationAttachedENI    = "attached-eni"
+	RelationAttachedVolume = "attached-volume"
+	RelationAssociatedWith = "associated-with"
+	RelationResolvesTo     = "resolves-to"
+	RelationProtects       = "protects"
+)
+
+// Field는 화면 표시에 쓰이는 순서 있는 키/값 쌍이다.
+//
+// 표시 순서가 의미 있는 데이터를 map이 아니라 슬라이스로 담는 건 의도적이다. Go는
+// map 순회 순서를 무작위화하므로, map을 쓰면 상세 뷰의 행 순서가 렌더링마다 바뀌고
+// 스냅샷 diff가 실제로 일어나지 않은 변경을 보고하게 된다.
+type Field struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// Ref는 다른 리소스를 가리키면서 그 관계의 이름을 함께 담는다.
+//
+// Via에는 그 간선을 의미 있게 만드는 한정어가 들어간다. 어떤 리스너가 전달하는지,
+// 볼륨이 어떤 디바이스로 붙어 있는지, 타깃이 정상 상태인지 같은 것들이다.
+type Ref struct {
+	Type     string `json:"type"`
+	ID       string `json:"id"`
+	Relation string `json:"relation"`
+	Via      string `json:"via,omitempty"`
+}
+
+// Resource는 수집된 AWS 리소스 하나다.
+//
+// Fields는 상세 뷰에 보여줄 사람이 읽는 형태의 투영이다. 키는 API 필드명이 아니라
+// 표시용 라벨이다. Tags는 AWS 태그를 키 순으로 정렬해 담는다. 둘 다 순서 있는
+// 슬라이스인 이유는 [Field]에 적어두었다.
+type Resource struct {
+	Type      string     `json:"type"`
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	ARN       string     `json:"arn,omitempty"`
+	Region    string     `json:"region"`
+	Profile   string     `json:"profile"`
+	AccountID string     `json:"accountId"`
+	Status    string     `json:"status"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	Fields    []Field    `json:"fields"`
+	Tags      []Field    `json:"tags"`
+	Related   []Ref      `json:"related"`
+}
+
+// Key는 프로필과 리전을 넘어 유일한 안정적 식별자를 반환한다.
+//
+// 리소스 ID는 계정과 리전을 넘나들면 충돌한다. 따라서 리소스를 색인하는 모든 코드
+// (그래프, 스냅샷 diff)는 ID가 아니라 이 값을 키로 써야 한다.
+func (r Resource) Key() string {
+	return strings.Join([]string{r.Profile, r.Region, r.Type, r.ID}, "|")
+}
+
+// DisplayName은 Name을 반환하고, 이름이 없는 리소스면 ID로 대체한다.
+func (r Resource) DisplayName() string {
+	if r.Name != "" {
+		return r.Name
+	}
+
+	return r.ID
+}
+
+// Tag는 지정한 태그의 값을 반환한다. 태그가 없으면 빈 문자열이다.
+func (r Resource) Tag(key string) string {
+	return lookup(r.Tags, key)
+}
+
+// FieldValue는 지정한 표시 필드의 값을 반환한다. 없으면 빈 문자열이다.
+func (r Resource) FieldValue(key string) string {
+	return lookup(r.Fields, key)
+}
+
+// RelatedBy는 주어진 관계에 해당하는 ref들을 순서를 유지한 채 반환한다.
+func (r Resource) RelatedBy(relation string) []Ref {
+	var out []Ref
+
+	for _, ref := range r.Related {
+		if ref.Relation == relation {
+			out = append(out, ref)
+		}
+	}
+
+	return out
+}
+
+func lookup(fields []Field, key string) string {
+	for _, f := range fields {
+		if f.Key == key {
+			return f.Value
+		}
+	}
+
+	return ""
+}
+
+// SortResources는 리소스를 제자리에서 결정적으로 정렬한다.
+//
+// 1차 정렬 기준은 알파벳 순이 아니라 의도적으로 배치한 타입 순위다. 그래야 리포트에서
+// 관련된 리소스가 함께 모인다. 로드밸런서 다음에 그 타깃 그룹, 그다음 인스턴스,
+// 그다음 인스턴스에 붙은 스토리지와 네트워크 자원이 온다.
+//
+// 모르는 타입은 알파벳 순으로 맨 뒤에 놓는다. 새 수집기가 기존 출력 순서를 조용히
+// 뒤바꿀 수 없게 하기 위한 것이다.
+func SortResources(resources []Resource) {
+	slices.SortStableFunc(resources, func(a, b Resource) int {
+		if c := cmp.Compare(typeRank(a.Type), typeRank(b.Type)); c != 0 {
+			return c
+		}
+
+		if c := cmp.Compare(a.Type, b.Type); c != 0 {
+			return c
+		}
+
+		if c := cmp.Compare(a.Region, b.Region); c != 0 {
+			return c
+		}
+
+		return cmp.Compare(a.ID, b.ID)
+	})
+}
+
+// typeRank를 패키지 수준 map이 아니라 switch로 둔 이유는 두 가지다. 실행 중에 변경될
+// 수 없고, 순서 전체가 한자리에서 눈에 보인다.
+func typeRank(resourceType string) int {
+	switch resourceType {
+	case TypeRoute53RecordSet:
+		return 0
+	case TypeELBv2LoadBalancer:
+		return 1
+	case TypeELBv2TargetGroup:
+		return 2
+	case TypeEC2Instance:
+		return 3
+	case TypeEC2Volume:
+		return 4
+	case TypeEC2NetworkInterface:
+		return 5
+	case TypeEC2Address:
+		return 6
+	case TypeWAFv2WebACL:
+		return 7
+	default:
+		return 1000
+	}
+}
+
+// TagFields는 AWS 태그 map을 키 순으로 정렬된 표시 필드로 변환한다.
+//
+// 수집기는 SDK로부터 순서 없는 map으로 태그를 받는다. 여기서 정렬해두는 것이 리포트
+// 출력과 스냅샷 diff를 재현 가능하게 만드는 지점이다.
+func TagFields(tags map[string]string) []Field {
+	out := make([]Field, 0, len(tags))
+
+	for k, v := range tags {
+		out = append(out, Field{Key: k, Value: v})
+	}
+
+	slices.SortFunc(out, func(a, b Field) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+
+	return out
+}

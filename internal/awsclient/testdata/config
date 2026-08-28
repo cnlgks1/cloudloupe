@@ -1,0 +1,56 @@
+# examples/aws/config.example의 형태를 그대로 옮긴 픽스처.
+
+[default]
+region = ap-northeast-2
+output = json
+
+[sso-session my-org]
+sso_start_url = https://my-org.awsapps.com/start
+sso_region = ap-northeast-2
+
+[profile prod]
+sso_session = my-org
+sso_account_id = 123456789012
+sso_role_name = ReadOnlyAccess
+region = ap-northeast-2
+
+; 세미콜론 주석도 이 파일에서 유효하다.
+[profile staging]
+sso_account_id = 222233334444
+sso_role_name = ReadOnlyAccess
+region = us-east-1
+
+[profile audit-a]
+role_arn = arn:aws:iam::555566667777:role/cloudloupe-readonly
+source_profile = default
+external_id = 이 픽스처에서는 비밀이 아님
+region = eu-west-1
+
+[profile audit-b]
+role_arn = arn:aws:iam::888899990000:role/cloudloupe-readonly
+source_profile = default
+mfa_serial = arn:aws:iam::111122223333:mfa/alice
+
+[profile from-process]
+credential_process = /usr/local/bin/creds --profile weird
+
+# config 파일에서 "profile " 접두사가 없는 섹션은 사용할 수 없는 프로필이므로
+# 프로필로 노출되어서는 안 된다.
+[bare-section-should-be-ignored]
+region = us-west-2
+
+# 중첩 하위 속성은 섹션이 아니라 바로 위의 키에 속한다.
+[profile nested-props]
+region = ap-southeast-1
+s3 =
+  addressing_style = path
+  use_accelerate_endpoint = true
+
+# 프로필이 아니라 services 블록이다.
+[services my-services]
+s3 =
+  endpoint_url = http://localhost:4566
+
+# "profile"로 시작하는 것처럼 보이지만 전혀 다른 헤더다.
+[profiler-settings]
+region = 무시되어야 함

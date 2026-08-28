@@ -1,0 +1,60 @@
+# ~/.aws/config 예시
+#
+# cloudloupe는 이 파일을 읽어서 프로필 이름과 기본 리전을 파악합니다. 쓰지 않습니다.
+#
+# 필요한 부분을 실제 ~/.aws/config에 복사하고, 자리표시자로 둔 계정 ID, SSO URL, 역할
+# 이름을 바꿔주세요.
+
+# ---------------------------------------------------------------------------
+# 1. ~/.aws/credentials의 정적 키를 사용하는 일반 프로필
+# ---------------------------------------------------------------------------
+[default]
+region = ap-northeast-2
+output = json
+
+# ---------------------------------------------------------------------------
+# 2. IAM Identity Center (SSO). 사람이 쓰기에 권장되는 방식입니다.
+#    로그인:  aws sso login --profile prod
+#    cloudloupe는 캐시된 SSO 토큰을 사용하며, 로그인 자체를 수행하지는 않습니다.
+# ---------------------------------------------------------------------------
+[sso-session my-org]
+sso_start_url = https://my-org.awsapps.com/start
+sso_region = ap-northeast-2
+sso_registration_scopes = sso:account:access
+
+[profile prod]
+sso_session = my-org
+sso_account_id = 123456789012
+sso_role_name = ReadOnlyAccess
+region = ap-northeast-2
+
+[profile staging]
+sso_session = my-org
+sso_account_id = 222233334444
+sso_role_name = ReadOnlyAccess
+region = ap-northeast-2
+
+# ---------------------------------------------------------------------------
+# 3. 계정 간 assume-role. 하나의 신원으로 여러 계정을 조사할 때 씁니다.
+#    대상 역할에 cloudloupe-readonly-policy.json을 붙이고,
+#    cross-account-role-trust-policy.json을 그 역할의 신뢰 정책으로 설정하세요.
+# ---------------------------------------------------------------------------
+[profile audit-account-a]
+role_arn = arn:aws:iam::555566667777:role/cloudloupe-readonly
+source_profile = default
+external_id = 무작위로-생성한-EXTERNAL-ID로-교체
+role_session_name = cloudloupe
+region = us-east-1
+
+[profile audit-account-b]
+role_arn = arn:aws:iam::888899990000:role/cloudloupe-readonly
+source_profile = default
+mfa_serial = arn:aws:iam::111122223333:mfa/your-user
+region = eu-west-1
+
+# ---------------------------------------------------------------------------
+# 4. 기본 리전이 없는 프로필. cloudloupe가 리전을 선택하라고 물어봅니다.
+# ---------------------------------------------------------------------------
+[profile sandbox]
+source_profile = default
+role_arn = arn:aws:iam::123456789012:role/sandbox-readonly

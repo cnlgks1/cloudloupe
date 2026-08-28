@@ -1,0 +1,15 @@
+# CLI 테스트용 픽스처. 프로필 세 개로 세 가지 kind를 모두 덮는다.
+
+[default]
+region = ap-northeast-2
+
+[profile prod]
+sso_session = my-org
+sso_account_id = 123456789012
+sso_role_name = ReadOnlyAccess
+region = ap-northeast-2
+
+[profile audit-a]
+role_arn = arn:aws:iam::555566667777:role/cloudloupe-readonly
+source_profile = default
+region = eu-west-1

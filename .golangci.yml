@@ -1,0 +1,150 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  default: standard
+  enable:
+    # 정확성
+    - bodyclose
+    - contextcheck # context는 전파되어야 하고 버려져서는 안 된다
+    - durationcheck
+    - errorlint # == 와 타입 단정 대신 errors.Is/As
+    - exhaustive # 리소스 타입과 상태 enum에 대한 switch
+    - makezero
+    - nilerr
+    - noctx # context 없는 HTTP 요청 금지
+    - rowserrcheck
+    - sqlclosecheck # sqlite 스냅샷 캐시
+    - wastedassign
+
+    # 에러 처리와 API 형태
+    - errname
+    - wrapcheck # 패키지 경계를 넘는 에러는 문맥을 실어야 한다
+
+    # .kiro/steering/go-conventions.md의 설계 규칙
+    - containedctx # context를 구조체에 저장 금지
+    - fatcontext
+    - gochecknoglobals # ldflags 빌드 변수만 예외
+    - gochecknoinits # 레지스트리는 init()이 아니라 명시적으로 조립한다
+    - interfacebloat # 좁은 인터페이스
+
+    # 스타일과 가독성
+    - dupword
+    - goconst
+    - gocritic
+    - godot
+    - misspell
+    - nakedret
+    - nolintlint
+    - perfsprint
+    - predeclared
+    - revive
+    - unconvert
+    - usestdlibvars
+    - whitespace
+
+    # 보안
+    - gosec
+
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+
+    goconst:
+      min-len: 3
+      min-occurrences: 4
+      ignore-tests: true
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        # 생성자 시그니처에서 파라미터 타입을 합치면 오히려 읽기 나빠진다.
+        - paramTypeCombine
+        # AWS 상태를 다루는 긴 if/else 사슬이 switch보다 명확한 경우가 있다.
+        - ifElseChain
+
+    govet:
+      enable:
+        - nilness
+        - shadow
+
+    misspell:
+      locale: US
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: early-return
+        - name: unused-parameter
+        - name: context-as-argument
+        - name: error-strings
+        - name: errorf
+        - name: receiver-naming
+        - name: unexported-return
+
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - errors.Join(
+        - .Explain(
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+      - common-false-positives
+      - legacy
+    rules:
+      # 테스트는 상대 경로로 픽스처를 읽고 긴 메시지를 검사한다.
+      - path: _test\.go
+        linters:
+          - gosec
+          - goconst
+          - dupword
+          - wrapcheck
+          - gochecknoglobals
+
+      # 빌드 메타데이터는 -ldflags로 주입되므로 패키지 수준 변수가 필요하다. 전역 변수
+      # 금지 원칙의 유일한 문서화된 예외다.
+      - path: cmd/cloudloupe/main\.go
+        linters:
+          - gochecknoglobals
+
+      # error-strings는 에러 문구가 소문자로 시작하고 문장부호로 끝나지 않기를 요구한다.
+      # 한국어 에러 메시지에는 적용되지 않는 영문 관례다.
+      - linters:
+          - revive
+        text: "error-strings"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/cnlgks1/cloudloupe
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -13,7 +13,6 @@ LDFLAGS := -s -w \
 	-X main.date=$(DATE)
 
 # 단일 정적 바이너리가 배포 전략의 전부이므로 CGO는 끈 상태를 유지한다.
-# modernc.org/sqlite가 순수 Go인 것도 이 전제를 지키기 위한 선택이다.
 export CGO_ENABLED := 0
 
 GOLANGCI_VERSION := v2.6.2

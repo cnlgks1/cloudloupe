@@ -17,8 +17,6 @@ linters:
     - makezero
     - nilerr
     - noctx # context 없는 HTTP 요청 금지
-    - rowserrcheck
-    - sqlclosecheck # sqlite 스냅샷 캐시
     - wastedassign
 
     # 에러 처리와 API 형태

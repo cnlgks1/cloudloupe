@@ -48,7 +48,7 @@ AI 없이 이 코드를 유지보수하게 될 사람이 근거를 직접 확인
   - 허용 접두사: `Describe`, `List`, `Get`, `Lookup`, `Search`, `BatchGet`
   - 그 외 모든 SDK 메서드 호출은 CI에서 실패시킨다 (`scripts/verify-readonly.sh`).
 - 자격증명은 읽기만 한다. `~/.aws/*` 파일에 쓰지 않는다.
-- 로컬 쓰기가 허용되는 유일한 대상: SQLite 캐시 파일, 사용자가 지정한 리포트 출력 경로.
+- 로컬 쓰기는 사용자가 지정한 리포트 출력 경로에만 허용한다.
 
 ```go
 // 이 인터페이스가 조회 전용의 경계다. 여기에 Apply/Delete/Modify가 생기면 설계 위반.
@@ -67,15 +67,15 @@ internal/tui ──────────────┐
       ↓                    │
 internal/collect           │  (모두 model만 의존)
       ↓                    ↓
-internal/awsclient    internal/{graph,findings,report,cache}
+internal/awsclient    internal/{graph,findings,report}
       ↓                    ↓
    AWS SDK          internal/model  ← 외부 의존성 0
 ```
 
 - **`internal/model`을 신설한다.** `Resource`, `Ref`, `Field` 같은 핵심 도메인 타입이 여기 산다.
-  이유: `graph`/`findings`/`report`/`cache`가 타입 하나 때문에 AWS SDK 전체를 전이 의존하면 안 된다.
+  이유: `graph`/`findings`/`report`가 타입 하나 때문에 AWS SDK 전체를 전이 의존하면 안 된다.
   `model`은 표준 라이브러리 외에 아무것도 import하지 않는다.
-- 도메인 패키지(`collect`, `graph`, `findings`, `report`, `cache`)는 **`tui`를 절대 import하지 않는다.**
+- 도메인 패키지(`collect`, `graph`, `findings`, `report`)는 **`tui`를 절대 import하지 않는다.**
   TUI는 표현 계층일 뿐이며, 헤드리스 모드에서 도메인이 단독으로 동작해야 한다.
 - 순환 의존이 생기려 하면 공통 타입을 더 낮은 계층으로 내린다. 인터페이스로 우회하지 않는다.
 
@@ -185,7 +185,7 @@ func DefaultRegistry() *Registry {
 
 ## 12. 크로스 플랫폼과 의존성 최소주의
 
-- `CGO_ENABLED=0`을 유지한다. 순수 Go 의존만 쓴다 (SQLite는 `modernc.org/sqlite`).
+- `CGO_ENABLED=0`을 유지하고 순수 Go 의존만 쓴다.
   단일 정적 바이너리가 배포 전략의 전제다.
 - 경로는 항상 `filepath`, 홈 디렉터리는 `os.UserHomeDir()`. 구분자나 경로를 하드코딩하지 않는다.
 - OS 분기는 `runtime.GOOS` 산재보다 파일명 suffix(`_windows.go` / `_unix.go`)를 우선한다.

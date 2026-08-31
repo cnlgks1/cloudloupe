@@ -1,12 +1,12 @@
 module github.com/cnlgks1/cloudloupe
 
-// 하한은 이 프로젝트가 쓸 의존성 중 가장 높은 요구치를 따른다. 검증한 값들:
+// 하한은 현재 의존성 중 가장 높은 요구치를 따른다. 검증한 값들:
 //
-//	modernc.org/sqlite            1.25.0  ← 가장 높음 (5단계 스냅샷 캐시)
-//	charmbracelet/bubbles         1.24.2
-//	charmbracelet/bubbletea       1.24.0
-//	aws-sdk-go-v2                 1.24
-//	charmbracelet/lipgloss        1.18
+//	golang.org/x/sys                 1.25.0  ← 가장 높음
+//	charmbracelet/bubbles           1.24.2
+//	charmbracelet/bubbletea         1.24.0
+//	aws-sdk-go-v2                   1.24
+//	charmbracelet/lipgloss          1.18
 //
 // cloudloupe 자체 코드는 1.22면 충분하다. 하한이 높은 것은 전부 의존성 때문이다.
 //

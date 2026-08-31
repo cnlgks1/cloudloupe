@@ -20,16 +20,6 @@ profile.cov
 cpu.prof
 mem.prof
 
-# cloudloupe 로컬 상태
-# 스냅샷 캐시는 사용자 데이터다. 실제 인프라의 계정 ID, ARN, 사설 IP 같은 정보가 담기므로
-# 절대 커밋하지 않는다.
-*.db
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
-/snapshots/
-
 # 생성된 리포트에도 실제 계정 데이터가 담길 수 있다
 /reports/
 cloudloupe-report.*

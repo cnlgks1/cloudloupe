@@ -48,7 +48,7 @@ cloudloupe는 AWS 리소스를 생성하거나 수정하거나 삭제할 **수 �
   변경 동작이 들어앉을 자리가 없습니다.
 - **자격증명은 읽기만 합니다.** `~/.aws/config`와 `~/.aws/credentials`를 파싱하되 수정하지
   않고, 어디로도 전송하지 않습니다.
-- **로컬에 쓰는 것은** 스냅샷 캐시와 사용자가 요청한 리포트 파일뿐입니다.
+- **현재 실행 경로는** 로컬 파일을 쓰지 않습니다.
 
 필요한 IAM 권한은 읽기 권한뿐입니다. 최소 권한 정책은 [`examples/iam/`](examples/iam/)에
 있습니다.
@@ -234,7 +234,7 @@ cloudloupe는 조사하는 서비스에 대한 읽기 권한이 필요합니다.
 | 2    | EBS, ENI, EIP, ALB/NLB, 타깃 그룹(+타깃 상태), Route 53, WAF(REGIONAL) 수집기      | 완료 |
 | 3    | 관계 그래프: ALB → Listener → TG → EC2, Route 53 → ALB, EC2 → ENI/EIP/EBS          | 예정 |
 | 4    | 근거와 신뢰도를 갖춘 미사용 후보 탐지. CloudWatch와 CloudTrail을 결합              | 예정 |
-| 5    | JSON / CSV / Markdown 리포트, SQLite 스냅샷과 날짜별 diff                          | 예정 |
+| 5    | JSON / CSV / Markdown 리포트                                                         | 예정 |
 | 6    | GoReleaser 릴리스 파이프라인, Homebrew tap, 체크섬                                 | 예정 |
 
 판정 결과를 근거 없이 단정해서 내놓지 않습니다. 각 항목에는 **확정**, **추정**,

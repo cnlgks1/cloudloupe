@@ -19,9 +19,13 @@ type identityMsg struct {
 	err error
 }
 
-// collectDoneMsg는 수집이 끝났을 때 Update로 전달되는 메시지다.
+// collectDoneMsg는 수집과 표시 데이터 준비가 끝났을 때 Update로 전달되는 메시지다.
 type collectDoneMsg struct {
-	result collect.Result
+	requestID  uint64
+	result     collect.Result
+	data       resourceTableData
+	showRegion bool
+	canceled   bool
 }
 
 // handleKey는 키 입력을 화면별로 처리한다.
@@ -338,16 +342,29 @@ func (m *Model) toggleRegion(code string) {
 func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	m.collectSequence++
+	requestID := m.collectSequence
 	m.screen = ScreenCollecting
 	m.loading = strings.Join(m.chosenRegions, ", ") + " 조회 중..."
 
 	profile := m.chosenProfile
 	regions := append([]string(nil), m.chosenRegions...)
 	types := append([]string(nil), m.chosenTypes...)
+	groups := append([]ResourceGroup(nil), m.deps.ResourceGroups...)
+	showRegion := len(regions) > 1
 	collectFn := m.deps.Collect
 
 	cmd := func() tea.Msg {
-		return collectDoneMsg{result: collectFn(ctx, profile, regions, types)}
+		result := collectFn(ctx, profile, regions, types)
+		data, prepared := buildResourceData(ctx, result.Resources, groups, types, showRegion)
+
+		return collectDoneMsg{
+			requestID:  requestID,
+			result:     result,
+			data:       data,
+			showRegion: showRegion,
+			canceled:   !prepared,
+		}
 	}
 
 	return m, tea.Batch(cmd, m.spinner.Tick)
@@ -366,23 +383,36 @@ func (m Model) keyCollecting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
-	if m.screen != ScreenCollecting {
+	if m.screen != ScreenCollecting || msg.requestID != m.collectSequence || msg.canceled {
 		return m, nil
 	}
 
-	m.allResourceRows = append([]model.Resource(nil), msg.result.Resources...)
-	m.resourceRows = append([]model.Resource(nil), msg.result.Resources...)
-	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, m.allResourceRows)
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	m.resources = msg.result.Resources
+	m.resourceData = msg.data
+	m.filteredIndexes = make([]int, len(m.resources))
+	for i := range m.filteredIndexes {
+		m.filteredIndexes[i] = i
+	}
+	m.visibleResourceRows = nil
+	m.resourceCursor = 0
+	m.resourceWindowStart = 0
+	m.resourceTableHeight = m.resourceListHeight()
+	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, m.resources)
 	m.resourceKindFilter = ""
-	m.showRegion = m.shouldShowRegion()
+	m.showRegion = msg.showRegion
 	m.filtering = false
 	m.filterQuery = ""
 	m.previousFilter = ""
 	m.filterInput.SetValue("")
 	m.filterInput.Blur()
 	m.listCaption = m.listTitle(msg.result)
-	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
-		m.deps.ResourceGroups, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
+	m.resourceTable = newResourceTable(
+		m.theme, m.resourceData, nil, m.width, m.resourceTableHeight)
+	m.syncResourceTableWindow()
 	m.screen = ScreenList
 
 	return m, nil
@@ -434,9 +464,12 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		i := m.resourceTable.Cursor()
-		if i >= 0 && i < len(m.resourceRows) {
-			m.detail.SetContent(renderDetail(m.theme, m.resourceRows[i]))
+		if m.resourceCursor >= 0 && m.resourceCursor < len(m.filteredIndexes) {
+			resourceIndex := m.filteredIndexes[m.resourceCursor]
+			if resourceIndex < 0 || resourceIndex >= len(m.resources) {
+				return m, nil
+			}
+			m.detail.SetContent(renderDetail(m.theme, m.resources[resourceIndex]))
 			m.detail.GotoTop()
 			m.screen = ScreenDetail
 
@@ -444,7 +477,42 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m.delegateToActiveList(msg)
+	return m.moveResourceCursor(msg), nil
+}
+
+// moveResourceCursor는 리소스 전체 결과 기준 커서를 이동하고 화면 크기 캐시 구간을 맞춘다.
+func (m Model) moveResourceCursor(msg tea.KeyMsg) Model {
+	if len(m.filteredIndexes) == 0 {
+		return m
+	}
+
+	viewportHeight := max(0, m.resourceTableHeight-1)
+	next := m.resourceCursor
+	switch {
+	case key.Matches(msg, m.resourceTable.KeyMap.LineUp):
+		next--
+	case key.Matches(msg, m.resourceTable.KeyMap.LineDown):
+		next++
+	case key.Matches(msg, m.resourceTable.KeyMap.PageUp):
+		next -= viewportHeight
+	case key.Matches(msg, m.resourceTable.KeyMap.PageDown):
+		next += viewportHeight
+	case key.Matches(msg, m.resourceTable.KeyMap.HalfPageUp):
+		next -= viewportHeight / 2
+	case key.Matches(msg, m.resourceTable.KeyMap.HalfPageDown):
+		next += viewportHeight / 2
+	case key.Matches(msg, m.resourceTable.KeyMap.GotoTop):
+		next = 0
+	case key.Matches(msg, m.resourceTable.KeyMap.GotoBottom):
+		next = len(m.filteredIndexes) - 1
+	default:
+		return m
+	}
+
+	m.resourceCursor = min(max(next, 0), len(m.filteredIndexes)-1)
+	m.syncResourceTableWindow()
+
+	return m
 }
 
 func (m Model) keyResourceKind(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -506,32 +574,41 @@ func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// applyResourceFilter는 현재 종류와 검색어를 모두 만족하는 행만 테이블에 반영한다.
+// applyResourceFilter는 캐시된 검색 문자열과 원본 인덱스로 종류·검색 조건을 적용한다.
 func (m Model) applyResourceFilter() Model {
-	resources := filterResourcesByKind(m.allResourceRows, m.resourceKindFilter)
-	m.resourceRows = filterResources(resources, m.filterQuery)
-	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
-		m.deps.ResourceGroups, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
-	m.resourceTable.SetCursor(0)
+	tokens := strings.Fields(strings.ToLower(m.filterQuery))
+	m.filteredIndexes = m.filteredIndexes[:0]
+
+	for i, resource := range m.resources {
+		if m.resourceKindFilter != "" && resource.Type != m.resourceKindFilter {
+			continue
+		}
+		if i >= len(m.resourceData.searchTexts) || !searchTextMatches(m.resourceData.searchTexts[i], tokens) {
+			continue
+		}
+
+		m.filteredIndexes = append(m.filteredIndexes, i)
+	}
+
+	m.resourceCursor = 0
+	m.resourceWindowStart = 0
+	m.visibleResourceRows = m.visibleResourceRows[:0]
+	m.syncResourceTableWindow()
 
 	return m
 }
 
-func filterResourcesByKind(resources []model.Resource, typeID string) []model.Resource {
-	if typeID == "" {
-		return append([]model.Resource(nil), resources...)
-	}
-
-	filtered := make([]model.Resource, 0, len(resources))
-	for _, resource := range resources {
-		if resource.Type == typeID {
-			filtered = append(filtered, resource)
+func searchTextMatches(searchText string, tokens []string) bool {
+	for _, token := range tokens {
+		if !strings.Contains(searchText, token) {
+			return false
 		}
 	}
 
-	return filtered
+	return true
 }
 
+// collectResourceKinds는 전체 원본 리소스에서 종류별 개수를 계산한다.
 func collectResourceKinds(groups []ResourceGroup, resources []model.Resource) []resourceKind {
 	counts := make(map[string]int)
 	for _, resource := range resources {
@@ -568,55 +645,6 @@ func collectResourceKinds(groups []ResourceGroup, resources []model.Resource) []
 	}
 
 	return kinds
-}
-
-// filterResources는 공백으로 나눈 모든 검색어가 포함된 리소스만 반환한다.
-func filterResources(resources []model.Resource, query string) []model.Resource {
-	tokens := strings.Fields(strings.ToLower(query))
-	if len(tokens) == 0 {
-		return append([]model.Resource(nil), resources...)
-	}
-
-	filtered := make([]model.Resource, 0, len(resources))
-	for _, resource := range resources {
-		if resourceMatches(resource, tokens) {
-			filtered = append(filtered, resource)
-		}
-	}
-
-	return filtered
-}
-
-func resourceMatches(resource model.Resource, tokens []string) bool {
-	parts := []string{
-		resource.Type,
-		resource.ID,
-		resource.Name,
-		resource.ARN,
-		resource.Region,
-		resource.Profile,
-		resource.AccountID,
-		resource.Status,
-	}
-
-	for _, field := range resource.Fields {
-		parts = append(parts, field.Key, field.Value)
-	}
-	for _, tag := range resource.Tags {
-		parts = append(parts, tag.Key, tag.Value)
-	}
-	for _, ref := range resource.Related {
-		parts = append(parts, ref.Type, ref.ID, ref.Relation, ref.Via)
-	}
-
-	haystack := strings.ToLower(strings.Join(parts, "\n"))
-	for _, token := range tokens {
-		if !strings.Contains(haystack, token) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // --- 상세 ---

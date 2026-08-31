@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -26,45 +27,111 @@ type resourceColumn struct {
 	value func(model.Resource) string
 }
 
-// buildTable은 리소스 목록과 카탈로그 스키마로 테이블 열과 행을 만든다.
-//
-// schemaResources는 필터 전 전체 결과다. 공통 열과 필드 스키마를 이 값으로 결정해 필터
-// 결과가 0개가 되어도 열 구성이 흔들리지 않게 한다. selectedTypes는 결과가 비어도 단일
-// 타입의 catalog Columns를 유지하고, 여러 타입을 선택했으면 타입 열을 표시하게 한다.
-func buildTable(
-	theme Theme,
-	resources, schemaResources []model.Resource,
+// resourceTableData는 한 번 계산한 리소스 목록의 표시·검색 데이터를 보관한다.
+// rows의 각 위치는 원본 resources의 같은 위치와 대응한다.
+type resourceTableData struct {
+	titles          []string
+	rows            []table.Row
+	searchTexts     []string
+	preferredWidths []int
+}
+
+// buildResourceData는 고정 스키마의 행, 검색 문자열, 선호 폭을 수집 완료 시 한 번 만든다.
+func buildResourceData(
+	ctx context.Context,
+	resources []model.Resource,
 	groups []ResourceGroup,
 	selectedTypes []string,
 	showRegion bool,
-	width, height int,
-) table.Model {
-	resourceColumns := resourceColumns(schemaResources, groups, selectedTypes, showRegion)
-	titles := make([]string, 0, len(resourceColumns))
-	for _, column := range resourceColumns {
-		titles = append(titles, column.title)
+) (resourceTableData, bool) {
+	select {
+	case <-ctx.Done():
+		return resourceTableData{}, false
+	default:
 	}
 
-	rows := make([]table.Row, 0, len(resources))
-	for _, resource := range resources {
-		row := make(table.Row, 0, len(resourceColumns))
-		for _, column := range resourceColumns {
-			row = append(row, column.value(resource))
+	columns := resourceColumns(resources, groups, selectedTypes, showRegion)
+	data := resourceTableData{
+		titles:          make([]string, len(columns)),
+		rows:            make([]table.Row, len(resources)),
+		searchTexts:     make([]string, len(resources)),
+		preferredWidths: make([]int, len(columns)),
+	}
+	for i, column := range columns {
+		data.titles[i] = column.title
+		data.preferredWidths[i] = lipgloss.Width(column.title) + 2
+	}
+
+	for i, resource := range resources {
+		if i%256 == 0 {
+			select {
+			case <-ctx.Done():
+				return resourceTableData{}, false
+			default:
+			}
 		}
-		rows = append(rows, row)
+
+		row := make(table.Row, len(columns))
+		for columnIndex, column := range columns {
+			row[columnIndex] = column.value(resource)
+			data.preferredWidths[columnIndex] = max(
+				data.preferredWidths[columnIndex], lipgloss.Width(row[columnIndex])+2)
+		}
+		data.rows[i] = row
+		data.searchTexts[i] = resourceSearchText(resource)
 	}
 
-	columns := layoutResourceColumns(titles, rows, width)
-	t := table.New(
-		table.WithColumns(columns),
+	select {
+	case <-ctx.Done():
+		return resourceTableData{}, false
+	default:
+		return data, true
+	}
+}
+
+// resourceSearchText는 기존 검색 범위 전체를 소문자 문자열 하나로 고정한다.
+func resourceSearchText(resource model.Resource) string {
+	var text strings.Builder
+	write := func(value string) {
+		text.WriteString(value)
+		text.WriteByte('\n')
+	}
+
+	write(resource.Type)
+	write(resource.ID)
+	write(resource.Name)
+	write(resource.ARN)
+	write(resource.Region)
+	write(resource.Profile)
+	write(resource.AccountID)
+	write(resource.Status)
+	for _, field := range resource.Fields {
+		write(field.Key)
+		write(field.Value)
+	}
+	for _, tag := range resource.Tags {
+		write(tag.Key)
+		write(tag.Value)
+	}
+	for _, ref := range resource.Related {
+		write(ref.Type)
+		write(ref.ID)
+		write(ref.Relation)
+		write(ref.Via)
+	}
+
+	return strings.ToLower(text.String())
+}
+
+// newResourceTable은 캐시된 행과 선호 폭으로 리소스 테이블을 만든다.
+func newResourceTable(theme Theme, data resourceTableData, rows []table.Row, width, height int) table.Model {
+	return table.New(
+		table.WithColumns(layoutResourceColumns(data.titles, data.preferredWidths, width)),
 		table.WithRows(rows),
 		table.WithFocused(true),
 		table.WithHeight(height),
+		table.WithStyles(tableStyles(theme)),
 	)
-
-	t.SetStyles(tableStyles(theme))
-
-	return t
 }
 
 func resourceColumns(
@@ -264,11 +331,11 @@ func fieldColumnKeys(resources []model.Resource, groups []ResourceGroup, selecte
 	return keys
 }
 
-// layoutResourceColumns는 내용 길이와 열 의미에 따라 리소스 열 너비를 배분한다.
+// layoutResourceColumns는 캐시한 선호 폭과 열 의미에 따라 실제 열 너비를 배분한다.
 //
 // 이름·ID·DNS·값은 남는 폭을 우선 사용하고, 포트·개수·IOPS·TTL 같은 짧은 값은 좁게
 // 유지한다. 터미널이 좁으면 각 열의 최소 너비까지 긴 열부터 줄인다.
-func layoutResourceColumns(titles []string, rows []table.Row, width int) []table.Column {
+func layoutResourceColumns(titles []string, preferredWidths []int, width int) []table.Column {
 	if len(titles) == 0 {
 		return nil
 	}
@@ -281,10 +348,8 @@ func layoutResourceColumns(titles []string, rows []table.Row, width int) []table
 	for i, title := range titles {
 		minimums[i], maximums[i], growable[i] = resourceColumnBounds(title)
 		preferred := lipgloss.Width(title) + 2
-		for _, row := range rows {
-			if i < len(row) {
-				preferred = max(preferred, lipgloss.Width(row[i])+2)
-			}
+		if i < len(preferredWidths) {
+			preferred = max(preferred, preferredWidths[i])
 		}
 		widths[i] = min(max(preferred, minimums[i]), maximums[i])
 	}
@@ -355,6 +420,20 @@ func sumWidths(widths []int) int {
 	}
 
 	return total
+}
+
+// sameTableColumns는 resize에서 실제 열 배치가 달라질 때만 테이블을 갱신하게 한다.
+func sameTableColumns(left, right []table.Column) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // layoutColumns는 일반 선택 테이블의 열 너비를 균등하게 배분한다.

@@ -1,14 +1,31 @@
 package tui_test
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/cnlgks1/cloudloupe/internal/awsclient"
+	"github.com/cnlgks1/cloudloupe/internal/collect"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 	"github.com/cnlgks1/cloudloupe/internal/tui"
 )
+
+// 이 테스트들은 렌더링 문자열이 아니라 "메시지 입력 → 기대 화면"으로 상태 전이를
+// 검증한다(원칙 11). 렌더링 비교는 스타일이 조금만 바뀌어도 깨진다.
+//
+// TUI는 awsclient/collect를 직접 부르지 않고 Deps 함수로 주입받으므로, 여기서는 AWS
+// 없이 가짜 Deps를 넘긴다.
+
+func sampleProfiles() []awsclient.Profile {
+	return []awsclient.Profile{
+		{Name: "prod", Kind: awsclient.KindSSO, Region: "ap-northeast-2"},
+		{Name: "staging", Kind: awsclient.KindSSO, Region: "us-east-1"},
+	}
+}
 
 func sampleResources() []model.Resource {
 	return []model.Resource{
@@ -22,131 +39,591 @@ func sampleResources() []model.Resource {
 				{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Relation: model.RelationForwardsTo},
 			},
 		},
-		{
-			Type:   model.TypeEC2Instance,
-			ID:     "i-0a1b",
-			Name:   "web-01",
-			Region: "ap-northeast-2",
-		},
+		{Type: model.TypeEC2Instance, ID: "i-0a1b", Name: "web-01", Region: "ap-northeast-2"},
 	}
 }
 
-// send는 Update를 직접 호출해 메시지를 흘려보낸다.
-//
-// TUI 테스트는 렌더링 문자열 비교가 아니라 "메시지 입력 → 기대 상태"로 한다. 렌더링
-// 비교는 스타일이 조금만 바뀌어도 깨진다.
+// okDeps는 성공하는 가짜 의존성을 만든다. 프로필 로딩도 성공한다.
+func okDeps(resources []model.Resource) tui.Deps {
+	return tui.Deps{
+		LoadProfiles: func(_ awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
+			return sampleProfiles(), awsclient.Locations{}, nil
+		},
+		ResourceTypes: []tui.ResourceType{
+			{ID: "ec2:instance", Label: "EC2 인스턴스"},
+			{ID: "ec2:volume", Label: "EBS 볼륨"},
+		},
+		Identify: func(_ context.Context, profile, _ string) (awsclient.Identity, error) {
+			return awsclient.Identity{AccountID: "123456789012", ARN: "arn:aws:sts::123456789012:user/" + profile}, nil
+		},
+		Collect: func(_ context.Context, _ string, _, _ []string) collect.Result {
+			return collect.Result{Resources: resources}
+		},
+		Explain: awsclient.Explain,
+	}
+}
+
+func newTestModel(t *testing.T, deps tui.Deps) tui.Model {
+	t.Helper()
+
+	m := tui.NewModel(tui.New(true), deps, awsclient.Override{})
+
+	return send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+}
+
+// mkModel은 필터 흐름 테스트용으로 리소스를 담은 모델을 만든다(창 크기는 미적용).
+func mkModel(t *testing.T, resources []model.Resource) tui.Model {
+	t.Helper()
+
+	return tui.NewModel(tui.New(true), okDeps(resources), awsclient.Override{})
+}
+
 func send(m tui.Model, msgs ...tea.Msg) tui.Model {
-	var current tea.Model = m
+	var cur tea.Model = m
 	for _, msg := range msgs {
-		current, _ = current.Update(msg)
+		cur, _ = cur.Update(msg)
 	}
 
-	return current.(tui.Model)
+	return cur.(tui.Model)
+}
+
+// step은 Update를 호출하고, 반환된 tea.Cmd가 만들어내는 메시지를 모두 흘려보낸다.
+//
+// 신원 확인·수집은 tea.Cmd로 나가서 tea.Msg로 돌아온다. 실제 런타임이 하는 일을 흉내
+// 내어, Cmd를 실행하고 그 결과 메시지를 다시 Update에 넣는다. tea.Batch는 여러 Cmd를
+// tea.BatchMsg(=[]tea.Cmd)로 묶으므로, 그 경우 각 Cmd를 재귀적으로 처리한다.
+func step(m tui.Model, msg tea.Msg) tui.Model {
+	next, cmd := m.Update(msg)
+
+	return drain(next.(tui.Model), cmd)
+}
+
+func drain(m tui.Model, cmd tea.Cmd) tui.Model {
+	if cmd == nil {
+		return m
+	}
+
+	switch msg := cmd().(type) {
+	case nil:
+		return m
+	case tea.BatchMsg:
+		// 배치의 각 Cmd를 한 번씩 실행해 결과 메시지를 흘려보낸다. 스피너 Tick은
+		// 상태를 바꾸지 않으므로 결과 Cmd를 더 따라가지 않는다(무한 Tick 방지).
+		for _, c := range msg {
+			if c == nil {
+				continue
+			}
+
+			if inner := c(); inner != nil {
+				next, _ := m.Update(inner)
+				m = next.(tui.Model)
+			}
+		}
+
+		return m
+	default:
+		next, _ := m.Update(msg)
+
+		return next.(tui.Model)
+	}
 }
 
 func keyMsg(s string) tea.KeyMsg {
-	if s == "enter" {
+	switch s {
+	case "enter":
 		return tea.KeyMsg{Type: tea.KeyEnter}
-	}
-
-	if s == "esc" {
+	case "esc":
 		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "space":
+		return tea.KeyMsg{Type: tea.KeySpace}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "left":
+		return tea.KeyMsg{Type: tea.KeyLeft}
+	case "right":
+		return tea.KeyMsg{Type: tea.KeyRight}
+	default:
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
-
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 }
 
-func TestModelStartsOnList(t *testing.T) {
+func TestStartsOnProfileScreen(t *testing.T) {
 	t.Parallel()
 
-	m := tui.NewModel(tui.New(false), sampleResources())
-	if m.Screen() != 0 {
-		t.Errorf("초기 화면이 리스트가 아니다: %v", m.Screen())
+	m := newTestModel(t, okDeps(nil))
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("초기 화면 = %v, want 프로필 선택", m.Screen())
 	}
 }
 
-func TestEnterOpensDetailEscGoesBack(t *testing.T) {
+func TestStartsOnConfigPathWhenNoConfig(t *testing.T) {
 	t.Parallel()
 
-	m := tui.NewModel(tui.New(false), sampleResources())
-	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	// 설정을 못 찾으면 죽지 않고 경로 입력 화면으로 시작해야 한다. 사용자가 물어본 흐름이다.
+	deps := okDeps(nil)
+	deps.LoadProfiles = func(_ awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
+		return nil, awsclient.Locations{}, awsclient.ErrNoSharedConfig
+	}
 
-	listScreen := m.Screen()
+	m := newTestModel(t, deps)
+	if m.Screen() != tui.ScreenConfigPath {
+		t.Errorf("설정 없을 때 화면 = %v, want 경로 입력", m.Screen())
+	}
+}
 
-	// enter로 상세 진입.
+func TestConfigPathEntryRetriesLoad(t *testing.T) {
+	t.Parallel()
+
+	// 경로 입력 화면에서 경로를 입력하고 enter를 누르면, 그 경로로 다시 로딩한다.
+	// 이번엔 성공하도록 해서 프로필 선택으로 넘어가는지 본다.
+	loaded := ""
+	attempt := 0
+
+	deps := okDeps(nil)
+	deps.LoadProfiles = func(ov awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
+		attempt++
+		if attempt == 1 {
+			// 첫 로딩(NewModel 안)은 실패 → 경로 입력 화면.
+			return nil, awsclient.Locations{}, awsclient.ErrNoSharedConfig
+		}
+
+		loaded = ov.ConfigPath
+
+		return sampleProfiles(), awsclient.Locations{}, nil
+	}
+
+	m := newTestModel(t, deps)
+	if m.Screen() != tui.ScreenConfigPath {
+		t.Fatalf("경로 입력 화면으로 시작해야 한다, got %v", m.Screen())
+	}
+
+	// 경로를 타이핑하고 enter.
+	m = send(m, keyMsg("/tmp/custom/config"))
 	m = send(m, keyMsg("enter"))
-	if m.Screen() == listScreen {
-		t.Error("enter를 눌렀는데 상세로 전환되지 않았다")
+
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("경로 입력 후 화면 = %v, want 프로필 선택", m.Screen())
 	}
 
-	// esc로 복귀.
-	m = send(m, keyMsg("esc"))
-	if m.Screen() != listScreen {
-		t.Error("esc를 눌렀는데 리스트로 돌아오지 않았다")
+	if loaded != "/tmp/custom/config" {
+		t.Errorf("입력한 경로로 재시도해야 한다, got %q", loaded)
 	}
 }
 
-func TestViewRendersOnBothThemes(t *testing.T) {
+func TestFullFlowProfileToList(t *testing.T) {
 	t.Parallel()
 
-	// View는 순수해야 한다. 두 테마 모두에서 패닉 없이 문자열을 만들어야 한다.
-	for _, ascii := range []bool{false, true} {
-		m := tui.NewModel(tui.New(ascii), sampleResources())
-		m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	m := newTestModel(t, okDeps(sampleResources()))
 
-		if out := m.View(); out == "" {
-			t.Errorf("ascii=%v: View가 빈 문자열을 반환했다", ascii)
-		}
+	// 프로필 선택 → 신원 확인 Cmd 실행 → 리전 선택.
+	m = step(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenRegion {
+		t.Fatalf("프로필 선택 후 화면 = %v, want 리전 선택", m.Screen())
+	}
 
-		// 상세 화면도 렌더링되는지.
-		m = send(m, keyMsg("enter"))
-		if out := m.View(); !strings.Contains(out, "web-alb") {
-			t.Errorf("ascii=%v: 상세 뷰에 리소스 이름이 없다:\n%s", ascii, out)
-		}
+	// 리전 선택 → 리소스 타입 선택. 무조건 조회로 직행하지 않는다.
+	m = send(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Fatalf("리전 선택 후 화면 = %v, want 리소스 타입 선택", m.Screen())
+	}
+
+	// 타입 선택(비우면 전체) → 수집 Cmd 실행 → 리소스 목록.
+	m = step(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenList {
+		t.Fatalf("타입 선택 후 화면 = %v, want 리소스 목록", m.Screen())
+	}
+
+	// enter로 상세, esc로 목록 복귀.
+	m = send(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenDetail {
+		t.Fatalf("enter 후 화면 = %v, want 상세", m.Screen())
+	}
+
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenList {
+		t.Errorf("esc 후 화면 = %v, want 리소스 목록", m.Screen())
+	}
+}
+
+func TestEscGoesBackOneStep(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(t, okDeps(sampleResources()))
+	m = step(m, keyMsg("enter")) // 리전 선택
+
+	// 리전에서 esc → 프로필로.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("리전에서 esc 후 = %v, want 프로필", m.Screen())
+	}
+}
+
+func TestIdentityFailureShowsError(t *testing.T) {
+	t.Parallel()
+
+	deps := okDeps(nil)
+	deps.Identify = func(_ context.Context, _, _ string) (awsclient.Identity, error) {
+		return awsclient.Identity{}, errors.New("ExpiredToken")
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter"))
+
+	if m.Screen() != tui.ScreenError {
+		t.Fatalf("신원 확인 실패 후 화면 = %v, want 오류", m.Screen())
+	}
+
+	// 오류 화면에서 esc → 프로필로 복귀.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("오류에서 esc 후 = %v, want 프로필", m.Screen())
+	}
+}
+
+func TestRegionMultiSelect(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(t, okDeps(sampleResources()))
+	m = step(m, keyMsg("enter")) // 리전 선택
+
+	// space로 현재 리전 체크 → enter로 타입 선택 화면.
+	m = send(m, keyMsg("space"))
+	m = send(m, keyMsg("enter"))
+
+	if m.Screen() != tui.ScreenResourceType {
+		t.Errorf("리전 체크 후 → 화면 = %v, want 타입 선택", m.Screen())
+	}
+
+	// 타입은 비운 채 조회 → 리소스 목록.
+	m = step(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenList {
+		t.Errorf("타입 선택 후 조회 → 화면 = %v, want 리소스 목록", m.Screen())
+	}
+}
+
+func TestResourceTypeSelectionFiltersCollect(t *testing.T) {
+	t.Parallel()
+
+	// 사용자가 특정 타입만 고르면 그 타입만 Collect에 전달되어야 한다. 무조건 전부
+	// 조회하면 느리고 API 스로틀링 위험이다.
+	var gotTypes []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = types
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 타입 선택 화면
+
+	// 첫 타입(ec2:instance)을 space로 체크하고 조회.
+	m = send(m, keyMsg("space"))
+	m = step(m, keyMsg("enter"))
+
+	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
+		t.Errorf("선택한 타입만 넘어가야 한다, got %v", gotTypes)
+	}
+}
+
+func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
+	t.Parallel()
+
+	// space로 아무것도 체크하지 않고 enter만 누르면, 커서에 있는 타입 하나만 조회되어야
+	// 한다. "EC2에 커서를 두고 enter를 눌렀는데 전체(모든 타입)가 나온다"는 회귀를
+	// 방어한다. 커서는 첫 항목(ec2:instance)에 있다.
+	var gotTypes []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = types
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 타입 선택 화면
+	m = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서의 타입 하나
+
+	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
+		t.Errorf("체크 없이 enter는 커서의 타입 하나여야 한다, got %v", gotTypes)
 	}
 }
 
 func TestViewIsPure(t *testing.T) {
 	t.Parallel()
 
-	// View를 여러 번 호출해도 같은 결과여야 한다. 상태를 바꾸면 안 된다.
-	m := tui.NewModel(tui.New(false), sampleResources())
-	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	// View를 여러 번 호출해도 같아야 한다. 상태를 바꾸면 안 된다(원칙 7).
+	m := newTestModel(t, okDeps(sampleResources()))
 
-	first := m.View()
-	second := m.View()
-
-	if first != second {
-		t.Error("View가 호출마다 다른 결과를 낸다 — 순수하지 않다")
+	if m.View() != m.View() {
+		t.Error("View가 호출마다 다르다 — 순수하지 않다")
 	}
 }
 
-func TestDetailShowsOrderedFields(t *testing.T) {
+func TestViewRendersEveryScreenWithoutPanic(t *testing.T) {
 	t.Parallel()
 
-	// Fields는 순서 있는 슬라이스이므로 상세 뷰 순서가 결정적이어야 한다.
-	res := []model.Resource{{
-		Type:   model.TypeEC2Instance,
-		ID:     "i-1",
-		Name:   "test",
-		Region: "ap-northeast-2",
-		Fields: []model.Field{
-			{Key: "첫째", Value: "1"},
-			{Key: "둘째", Value: "2"},
-			{Key: "셋째", Value: "3"},
-		},
-	}}
+	// 두 테마 모두에서 모든 화면이 패닉 없이 렌더링되어야 한다.
+	for _, ascii := range []bool{false, true} {
+		m := tui.NewModel(tui.New(ascii), okDeps(sampleResources()), awsclient.Override{})
+		m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 
-	m := tui.NewModel(tui.New(true), res)
-	m = send(m, tea.WindowSizeMsg{Width: 80, Height: 24}, keyMsg("enter"))
+		if m.View() == "" {
+			t.Errorf("ascii=%v: 프로필 화면이 빈 문자열", ascii)
+		}
 
-	out := m.View()
+		m = step(m, keyMsg("enter")) // 프로필 → 리전 (신원확인 Cmd)
+		m = send(m, keyMsg("enter")) // 리전 → 타입 선택 (Cmd 없음)
+		m = step(m, keyMsg("enter")) // 타입 → 목록 (수집 Cmd)
+		m = send(m, keyMsg("enter")) // 목록 → 상세
 
-	first := strings.Index(out, "첫째")
-	second := strings.Index(out, "둘째")
-	third := strings.Index(out, "셋째")
+		if out := m.View(); !strings.Contains(out, "web-alb") {
+			t.Errorf("ascii=%v: 상세 뷰에 리소스 이름이 없다:\n%s", ascii, out)
+		}
+	}
+}
 
-	if !(first < second && second < third) {
-		t.Errorf("필드 순서가 어긋났다: 첫째=%d 둘째=%d 셋째=%d\n%s", first, second, third, out)
+func TestBackNavigationKeepsTypeSelection(t *testing.T) {
+	t.Parallel()
+
+	// 타입을 골라 두고 esc로 리전에 갔다가 다시 타입 화면으로 돌아와도 선택이 남아야
+	// 한다. "뒤로 가면 선택이 날아간다"는 회귀를 방어한다.
+	var gotTypes []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = types
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 타입 선택 화면
+
+	// 첫 타입(ec2:instance)을 체크한다.
+	m = send(m, keyMsg("space"))
+
+	// esc로 리전으로 갔다가 enter로 다시 타입 화면으로.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenRegion {
+		t.Fatalf("타입에서 esc 후 = %v, want 리전", m.Screen())
+	}
+
+	m = send(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Fatalf("리전에서 enter 후 = %v, want 타입 선택", m.Screen())
+	}
+
+	// 여기서 바로 조회하면, 앞서 고른 타입이 그대로 살아 있어야 한다.
+	m = step(m, keyMsg("enter"))
+	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
+		t.Errorf("뒤로 갔다 와도 선택한 타입이 유지되어야 한다, got %v", gotTypes)
+	}
+}
+
+func TestNewProfileResetsSelection(t *testing.T) {
+	t.Parallel()
+
+	// 프로필을 바꿔 신원 확인을 다시 하면 이전 프로필에서 고른 타입 선택이 비워져야
+	// 한다. 프로필 A의 선택이 B로 새면 안 된다.
+	var gotTypes []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = types
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 타입 선택 화면
+	m = send(m, keyMsg("down"))  // 두 번째 타입(ec2:volume)으로 커서 이동
+	m = send(m, keyMsg("space")) // ec2:volume 체크
+
+	// 프로필까지 뒤로: 타입 → 리전 → 프로필.
+	m = send(m, keyMsg("esc"))
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenProfile {
+		t.Fatalf("두 번 esc 후 = %v, want 프로필", m.Screen())
+	}
+
+	// 프로필에서 다시 enter → 리전 → 타입 → 조회. 이전 volume 체크는 초기화됐으므로
+	// 커서(첫 항목 ec2:instance) 하나만 넘어가야 한다.
+	m = step(m, keyMsg("enter")) // 리전 (신원 확인 다시)
+	m = send(m, keyMsg("enter")) // 타입 화면
+	m = step(m, keyMsg("enter")) // 체크 없이 조회
+
+	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
+		t.Errorf("새 프로필에서는 이전 선택이 비워지고 커서의 타입만 나와야 한다, got %v", gotTypes)
+	}
+}
+
+func TestArrowKeysNavigateList(t *testing.T) {
+	t.Parallel()
+
+	// 화살표(↑/↓)로 테이블 커서가 이동해야 한다. 비-터미널 테스트 환경에서는 선택 행
+	// 강조가 렌더 문자열에 드러나지 않으므로, 커서 이동을 "실제 선택 결과"로 확인한다.
+	// ↓ 두 번 → space로 세 번째 리전을 고르면, 첫 리전이 아닌 리전이 조회로 넘어가야 한다.
+	// 화살표 이동이 실제 선택까지 반영되는지가 핵심이며, 이는 TestArrowSelectsRegionUnderCursor
+	// 가 이미 한 칸 이동으로 검증한다. 여기서는 두 칸 이동도 동작하는지 함께 지킨다.
+	var gotRegions []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, regions, _ []string) collect.Result {
+		gotRegions = regions
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전 화면
+
+	m = send(m, keyMsg("down"))
+	m = send(m, keyMsg("down"))
+	m = send(m, keyMsg("up")) // 순이동 확인: 아래 2 위 1 = 한 칸 아래
+	m = send(m, keyMsg("space"))
+	m = send(m, keyMsg("enter")) // 타입
+	m = step(m, keyMsg("enter")) // 조회
+
+	if len(gotRegions) != 1 {
+		t.Fatalf("화살표 이동 후 고른 리전 1개가 넘어가야 한다, got %v", gotRegions)
+	}
+
+	first := awsclient.Regions(sampleProfiles()[0].Region)[0].Code
+	if gotRegions[0] == first {
+		t.Errorf("화살표로 커서를 옮겼는데 여전히 첫 리전(%s)이 선택됐다", first)
+	}
+}
+
+func TestArrowSelectsRegionUnderCursor(t *testing.T) {
+	t.Parallel()
+
+	// 화살표로 내려가 space로 고르면, 커서가 가리키던(첫 번째가 아닌) 리전이 선택되어
+	// 조회로 넘어가야 한다. 화살표 이동이 실제 선택에까지 반영되는지 본다.
+	var gotRegions []string
+
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, regions, _ []string) collect.Result {
+		gotRegions = regions
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전 화면
+
+	// 화살표로 한 칸 내려 두 번째 리전에 커서를 두고 space로 선택.
+	m = send(m, keyMsg("down"))
+	m = send(m, keyMsg("space"))
+	m = send(m, keyMsg("enter")) // 타입 화면
+	m = step(m, keyMsg("enter")) // 조회
+
+	if len(gotRegions) != 1 {
+		t.Fatalf("화살표로 내려 고른 리전 1개가 조회로 넘어가야 한다, got %v", gotRegions)
+	}
+
+	// 첫 번째 리전이 아니어야 한다(커서가 내려갔으므로). 모델은 프로필의 기본 리전을
+	// 목록 맨 위로 올리므로, 그 순서 기준의 첫 리전과 비교한다.
+	first := awsclient.Regions(sampleProfiles()[0].Region)[0].Code
+	if gotRegions[0] == first {
+		t.Errorf("화살표로 내렸는데 여전히 첫 리전(%s)이 선택됐다", first)
+	}
+}
+
+func TestArrowRightAdvancesLeftGoesBack(t *testing.T) {
+	t.Parallel()
+
+	// →는 다음 단계(enter와 동일), ←는 이전 단계(esc와 동일)로 가야 한다. 마법사형
+	// 흐름을 화살표만으로 오갈 수 있어야 한다는 요구를 지킨다.
+	m := newTestModel(t, okDeps(sampleResources()))
+
+	// 프로필에서 → 로 신원 확인 → 리전.
+	m = step(m, keyMsg("right"))
+	if m.Screen() != tui.ScreenRegion {
+		t.Fatalf("프로필에서 → 후 = %v, want 리전", m.Screen())
+	}
+
+	// 리전에서 → 로 타입.
+	m = send(m, keyMsg("right"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Fatalf("리전에서 → 후 = %v, want 타입", m.Screen())
+	}
+
+	// 타입에서 ← 로 리전으로 되돌아온다.
+	m = send(m, keyMsg("left"))
+	if m.Screen() != tui.ScreenRegion {
+		t.Fatalf("타입에서 ← 후 = %v, want 리전", m.Screen())
+	}
+
+	// 리전에서 ← 로 프로필로.
+	m = send(m, keyMsg("left"))
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("리전에서 ← 후 = %v, want 프로필", m.Screen())
+	}
+}
+
+func TestProfileScreenCEntersPathInput(t *testing.T) {
+	t.Parallel()
+
+	// 프로필 화면에서 c를 누르면 경로 입력 화면으로 가야 한다. 기본 위치를 쓰는 사용자는
+	// 방해받지 않고, 다른 경로를 쓰려는 사람만 이 문으로 들어간다.
+	m := newTestModel(t, okDeps(sampleResources()))
+	if m.Screen() != tui.ScreenProfile {
+		t.Fatalf("시작 화면 = %v, want 프로필", m.Screen())
+	}
+
+	m = send(m, keyMsg("c"))
+	if m.Screen() != tui.ScreenConfigPath {
+		t.Errorf("c 입력 후 = %v, want 경로 입력", m.Screen())
+	}
+
+	// 프로필이 이미 있으므로 esc는 종료가 아니라 프로필로 복귀여야 한다.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenProfile {
+		t.Errorf("경로 입력에서 esc 후 = %v, want 프로필(뒤로)", m.Screen())
+	}
+}
+
+func TestConfigPathSubmitsBothPaths(t *testing.T) {
+	t.Parallel()
+
+	// 경로 입력 화면에서 config와 credentials 두 경로를 각각 입력하고 enter를 누르면,
+	// 둘 다 LoadProfiles로 넘어가야 한다. tab으로 두 번째 칸으로 이동한다.
+	var gotOverride awsclient.Override
+
+	deps := okDeps(sampleResources())
+	deps.LoadProfiles = func(ov awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
+		gotOverride = ov
+
+		return sampleProfiles(), awsclient.Locations{}, nil
+	}
+
+	m := newTestModel(t, deps)
+	m = send(m, keyMsg("c")) // 경로 입력 화면
+
+	// 첫 칸(config)에 경로 타이핑.
+	m = send(m, keyMsg("/etc/aws/config"))
+
+	// tab으로 credentials 칸으로 이동해 타이핑.
+	m = send(m, tea.KeyMsg{Type: tea.KeyTab})
+	m = send(m, keyMsg("/etc/aws/creds"))
+
+	// enter로 적용.
+	m = send(m, keyMsg("enter"))
+
+	if gotOverride.ConfigPath != "/etc/aws/config" {
+		t.Errorf("ConfigPath = %q, want /etc/aws/config", gotOverride.ConfigPath)
+	}
+
+	if gotOverride.CredentialsPath != "/etc/aws/creds" {
+		t.Errorf("CredentialsPath = %q, want /etc/aws/creds", gotOverride.CredentialsPath)
 	}
 }

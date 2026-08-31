@@ -28,10 +28,26 @@ set -euo pipefail
 # 포괄적인 예외로 처리하지 않는다.
 ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 
-# ctx를 첫 인자로 받는 AWS가 아닌 메서드들. 모양만으로는 SDK 오퍼레이션과 구별할 수 없다.
-# 이 목록은 짧게 유지한다. 항목 하나하나가 검사의 구멍이므로, 내부 메서드 이름을 AWS
-# 오퍼레이션 작명과 겹치지 않게 짓는 편이 낫다.
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Value|Retrieve|Do'
+# ctx를 첫 인자로 받지만 AWS 오퍼레이션이 아닌 것들. 모양만으로는 SDK 조회 호출과
+# 구별할 수 없다. 이 목록은 짧게 유지한다. 항목 하나하나가 검사의 구멍이므로, 내부
+# 메서드 이름을 AWS 오퍼레이션 작명과 겹치지 않게 짓는 편이 낫다.
+#
+# 항목별 근거:
+#   Collect/NextPage/Run   - 우리 수집기·러너·페이지네이터 메서드
+#   Explain                - 에러를 사람이 읽는 문장으로 바꾸는 우리 함수
+#   Config/WhoAmI          - 우리 awsclient 함수. Config는 로컬 설정 로드(파일 읽기),
+#                            WhoAmI는 내부에서 GetCallerIdentity(조회)를 부른다
+#   LoadDefaultConfig      - AWS SDK 설정 로더. 자격증명 체인을 구성할 뿐 리소스를
+#                            조회하지 않는다
+#   CommandContext         - os/exec 표준 라이브러리. aws CLI 대조에 쓴다
+#   Value/Retrieve/Do      - SDK 자격증명 provider와 HTTP client의 표준 메서드
+#   recordSets             - route53 수집기의 내부 메서드. 내부에서 ListResourceRecordSets
+#                            (조회)를 부른다. ctx를 첫 인자로 받아 모양이 SDK 호출과 같다
+#   targetHealth           - elbv2 타깃그룹 수집기의 내부 메서드. DescribeTargetHealth
+#                            (조회)를 감싼다
+#   webACLToResource       - wafv2 수집기의 내부 메서드. 요약을 리소스로 바꾸며 내부에서
+#                            GetWebACL(조회)을 부른다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

@@ -25,6 +25,7 @@ type PathSource string
 
 // 경로가 결정되는 방식.
 const (
+	PathFromFlag PathSource = "직접 지정"
 	PathFromEnv  PathSource = "환경 변수"
 	PathFromHome PathSource = "홈 디렉터리"
 )
@@ -81,15 +82,35 @@ type Locations struct {
 	DefaultRegion  EnvValue
 }
 
+// Override는 명시적으로 지정한 경로다. --config/--credentials 플래그나 TUI에서 사용자가
+// 직접 입력한 경로가 여기 담긴다.
+//
+// 우선순위가 가장 높다. 사용자가 "이 파일을 봐라"라고 명시했으면 환경 변수나 홈 디렉터리
+// 기본값보다 그 지시를 따르는 것이 당연하다.
+type Override struct {
+	ConfigPath      string
+	CredentialsPath string
+}
+
 // Resolve는 현재 환경에서 AWS 설정 위치와 기본값을 결정한다.
 //
-// 해석 순서는 AWS CLI를 따른다. 파일 경로는 전용 환경 변수가 있으면 그것을, 없으면
-// 홈 디렉터리의 .aws 아래를 쓴다. 기본 프로필과 리전은 정식 변수를 먼저 보고 레거시
-// 별칭으로 넘어간다.
-//
-// 홈 디렉터리를 알 수 없어도 실패하지 않는다. 환경 변수로 두 파일을 모두 지정한
-// 환경(컨테이너, CI)에서는 홈이 필요 없기 때문이다. 홈이 필요한데 없을 때만 에러다.
+// ResolveWith(Override{})와 같다. 명시적 경로가 없는 일반적인 경우에 쓴다.
 func Resolve() (Locations, error) {
+	return ResolveWith(Override{})
+}
+
+// ResolveWith는 명시적 경로 지정을 반영해 위치를 결정한다.
+//
+// 우선순위(높은 것부터):
+//  1. Override — 플래그나 TUI에서 사용자가 직접 지정한 경로
+//  2. 전용 환경 변수(AWS_CONFIG_FILE 등)
+//  3. 홈 디렉터리의 ~/.aws
+//
+// 이 순서는 AWS CLI의 관례를 따르되, 사용자가 실행 시점에 명시한 경로를 맨 위에 둔다.
+//
+// 홈 디렉터리를 알 수 없어도 두 경로가 모두 명시(또는 환경 변수)되어 있으면 실패하지
+// 않는다. 홈이 필요한데 없을 때만 에러다.
+func ResolveWith(ov Override) (Locations, error) {
 	loc := Locations{
 		DefaultProfile: firstEnv(EnvProfile, EnvDefaultProfile),
 		DefaultRegion:  firstEnv(EnvRegion, EnvDefaultRegion),
@@ -104,12 +125,12 @@ func Resolve() (Locations, error) {
 
 	var err error
 
-	loc.Config, err = resolvePath(EnvConfigFile, home, homeErr, "config")
+	loc.Config, err = resolvePathWith(ov.ConfigPath, EnvConfigFile, home, homeErr, "config")
 	if err != nil {
 		return loc, err
 	}
 
-	loc.Credentials, err = resolvePath(EnvCredentialsFile, home, homeErr, "credentials")
+	loc.Credentials, err = resolvePathWith(ov.CredentialsPath, EnvCredentialsFile, home, homeErr, "credentials")
 	if err != nil {
 		return loc, err
 	}
@@ -117,7 +138,24 @@ func Resolve() (Locations, error) {
 	return loc, nil
 }
 
-func resolvePath(envVar, home string, homeErr error, filename string) (ResolvedPath, error) {
+func resolvePathWith(override, envVar, home string, homeErr error, filename string) (ResolvedPath, error) {
+	// 1순위: 명시적으로 지정한 경로(플래그, TUI 입력).
+	if v := strings.TrimSpace(override); v != "" {
+		expanded, err := expandHome(v, home, homeErr)
+		if err != nil {
+			return ResolvedPath{}, err
+		}
+
+		expanded = absolute(expanded)
+
+		return ResolvedPath{
+			Path:   expanded,
+			Source: PathFromFlag,
+			Exists: fileExists(expanded),
+		}, nil
+	}
+
+	// 2순위: 전용 환경 변수.
 	if v := strings.TrimSpace(os.Getenv(envVar)); v != "" {
 		// 환경 변수의 ~ 는 셸이 확장해주지 않는 경우가 있어서 직접 처리한다.
 		expanded, err := expandHome(v, home, homeErr)

@@ -1,4 +1,4 @@
-package collect_test
+package ec2_test
 
 import (
 	"context"
@@ -7,24 +7,25 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
 	"github.com/cnlgks1/cloudloupe/internal/collect"
+	"github.com/cnlgks1/cloudloupe/internal/collector/ec2"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
 // fakeEC2는 describeInstancesAPI를 만족하는 테스트 대역이다.
 //
-// 좁은 인터페이스 덕분에 *ec2.Client 전체를 흉내 낼 필요 없이 메서드 하나만 구현하면
+// 좁은 인터페이스 덕분에 *awsec2.Client 전체를 흉내 낼 필요 없이 메서드 하나만 구현하면
 // 된다. 실제 AWS를 절대 호출하지 않는다.
 type fakeEC2 struct {
-	pages []*ec2.DescribeInstancesOutput
+	pages []*awsec2.DescribeInstancesOutput
 	err   error
 	calls int
 }
 
-func (f *fakeEC2) DescribeInstances(_ context.Context, _ *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+func (f *fakeEC2) DescribeInstances(_ context.Context, _ *awsec2.DescribeInstancesInput, _ ...func(*awsec2.Options)) (*awsec2.DescribeInstancesOutput, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -41,7 +42,7 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 
 	launch := time.Date(2025, time.March, 11, 2, 51, 19, 0, time.UTC)
 
-	api := &fakeEC2{pages: []*ec2.DescribeInstancesOutput{{
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{{
 		Reservations: []ec2types.Reservation{{
 			Instances: []ec2types.Instance{{
 				InstanceId:       aws.String("i-0a1b2c3d4e5f60718"),
@@ -69,7 +70,7 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 		// NextToken 없음 → 페이지 하나로 끝.
 	}}}
 
-	c := collect.NewEC2InstanceCollector(api)
+	c := ec2.NewInstance(api)
 
 	got, err := c.Collect(context.Background(), collect.Request{
 		Scope: collect.Scope{Profile: "prod", Region: "ap-northeast-2", AccountID: "123456789012"},
@@ -121,7 +122,7 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
 	t.Parallel()
 
-	api := &fakeEC2{pages: []*ec2.DescribeInstancesOutput{{
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{{
 		Reservations: []ec2types.Reservation{{
 			Instances: []ec2types.Instance{{
 				InstanceId: aws.String("i-1"),
@@ -136,7 +137,7 @@ func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
 		}},
 	}}}
 
-	c := collect.NewEC2InstanceCollector(api)
+	c := ec2.NewInstance(api)
 
 	got, err := c.Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
 	if err != nil {
@@ -161,7 +162,7 @@ func TestEC2InstanceCollectorFollowsPagination(t *testing.T) {
 
 	// 페이지가 여러 개면 전부 따라가야 한다. NextToken이 있으면 페이지네이터가 다시
 	// 호출한다.
-	api := &fakeEC2{pages: []*ec2.DescribeInstancesOutput{
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{
 		{
 			Reservations: []ec2types.Reservation{{Instances: []ec2types.Instance{
 				{InstanceId: aws.String("i-1"), State: &ec2types.InstanceState{Name: ec2types.InstanceStateNameRunning}},
@@ -175,7 +176,7 @@ func TestEC2InstanceCollectorFollowsPagination(t *testing.T) {
 		},
 	}}
 
-	c := collect.NewEC2InstanceCollector(api)
+	c := ec2.NewInstance(api)
 
 	got, err := c.Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
 	if err != nil {
@@ -195,7 +196,7 @@ func TestEC2InstanceCollectorWrapsError(t *testing.T) {
 	t.Parallel()
 
 	api := &fakeEC2{err: errors.New("UnauthorizedOperation")}
-	c := collect.NewEC2InstanceCollector(api)
+	c := ec2.NewInstance(api)
 
 	_, err := c.Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
 	if err == nil {
@@ -211,7 +212,7 @@ func TestEC2InstanceCollectorWrapsError(t *testing.T) {
 func TestEC2InstanceCollectorType(t *testing.T) {
 	t.Parallel()
 
-	c := collect.NewEC2InstanceCollector(&fakeEC2{})
+	c := ec2.NewInstance(&fakeEC2{})
 	if c.Type() != model.TypeEC2Instance {
 		t.Errorf("Type() = %q, want %q", c.Type(), model.TypeEC2Instance)
 	}

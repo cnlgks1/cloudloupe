@@ -11,6 +11,8 @@ package collect
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
@@ -36,8 +38,8 @@ type Request struct {
 // Collector는 한 종류의 AWS 리소스를 조회하는 수집기다.
 //
 // 메서드가 둘뿐이며 그중 하나는 자기 종류를 알려주는 Type()이다. 실제 동작은 Collect
-// 하나뿐이고, 이름 그대로 "수집"만 한다. 새 리소스 타입을 추가하려면 이 인터페이스를
-// 구현하고 [DefaultRegistry]에 등록하기만 하면 된다.
+// 하나뿐이고, 이름 그대로 "수집"만 한다. 새 리소스 타입은 서비스 구현 패키지에서
+// 이 인터페이스를 구현하고 상위 catalog 조립 계층에 명시적으로 등록한다.
 //
 // 구현체는 자신이 필요한 SDK 메서드만 담은 좁은 인터페이스를 받아야 한다("accept
 // interfaces, return structs"). 그래야 자격증명 없이 fake로 테스트할 수 있다.
@@ -54,25 +56,46 @@ type Collector interface {
 
 // Registry는 수집기들을 타입 ID로 모아 둔 목록이다.
 //
-// init() 부수효과로 채우지 않는다. 등록은 [DefaultRegistry]에서 한곳에 명시적으로
-// 이루어진다. import 부수효과에 기댄 등록은 추적이 어렵고 테스트에서 격리가 안 된다.
+// 이 패키지는 등록할 AWS 서비스나 기본 수집기 목록을 알지 않는다. 어떤 수집기를 쓸지는
+// 상위 조립 계층이 명시적으로 결정한다. 덕분에 collect는 AWS SDK를 의존하지 않는 순수한
+// 실행 코어로 유지된다.
 type Registry struct {
 	collectors []Collector
+	types      map[string]struct{}
 }
 
 // NewRegistry는 빈 레지스트리를 만든다.
 func NewRegistry() *Registry {
-	return &Registry{}
+	return &Registry{types: make(map[string]struct{})}
 }
 
 // Add는 수집기를 등록한다. 같은 순서로 조회되도록 등록 순서를 유지한다.
-func (r *Registry) Add(c Collector) {
+//
+// 빈 타입과 중복 타입을 오류로 거부한다. 등록 실수로 같은 AWS API를 두 번 호출하거나
+// 결과가 중복되는 문제를 시작 시점에 드러내기 위한 검증이다.
+func (r *Registry) Add(c Collector) error {
+	if c == nil {
+		return errors.New("nil 수집기는 등록할 수 없음")
+	}
+
+	typ := c.Type()
+	if typ == "" {
+		return errors.New("타입이 빈 수집기는 등록할 수 없음")
+	}
+
+	if _, exists := r.types[typ]; exists {
+		return fmt.Errorf("수집기 타입 중복: %s", typ)
+	}
+
 	r.collectors = append(r.collectors, c)
+	r.types[typ] = struct{}{}
+
+	return nil
 }
 
-// Collectors는 등록된 수집기 목록을 반환한다.
+// Collectors는 등록된 수집기 목록의 복사본을 반환한다.
 func (r *Registry) Collectors() []Collector {
-	return r.collectors
+	return append([]Collector(nil), r.collectors...)
 }
 
 // Types는 등록된 수집기들의 타입 ID 목록을 등록 순서대로 반환한다.
@@ -100,7 +123,8 @@ func (r *Registry) Select(types []string) (selected *Registry, unknown []string)
 
 	for _, c := range r.collectors {
 		if want[c.Type()] {
-			selected.Add(c)
+			// 원본 Registry가 유효하므로 여기서는 실패할 수 없다.
+			_ = selected.Add(c)
 			found[c.Type()] = true
 		}
 	}

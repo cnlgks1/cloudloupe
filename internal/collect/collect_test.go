@@ -67,32 +67,19 @@ func TestRegistrySelect(t *testing.T) {
 	})
 }
 
-func TestDefaultRegistryRegistersOnlyKnownReadOnlyTypes(t *testing.T) {
+func TestRegistryRejectsDuplicateType(t *testing.T) {
 	t.Parallel()
 
-	// DefaultRegistry가 등록하는 타입은 전부 model에 정의된 알려진 조회 대상이어야 한다.
-	// 여기서는 nil 클라이언트로도 등록 자체를 확인할 수 있다. Collect를 호출하지 않는 한
-	// 클라이언트는 쓰이지 않기 때문이다.
-	reg := collect.DefaultRegistry(collect.Clients{})
-
-	if len(reg.Types()) == 0 {
-		t.Fatal("DefaultRegistry가 비어 있다")
+	reg := collect.NewRegistry()
+	if err := reg.Add(&fakeCollector{typ: model.TypeEC2Instance}); err != nil {
+		t.Fatalf("첫 등록 실패: %v", err)
 	}
 
-	known := map[string]bool{
-		model.TypeEC2Instance:         true,
-		model.TypeEC2Volume:           true,
-		model.TypeEC2NetworkInterface: true,
-		model.TypeEC2Address:          true,
-		model.TypeELBv2LoadBalancer:   true,
-		model.TypeELBv2TargetGroup:    true,
-		model.TypeRoute53RecordSet:    true,
-		model.TypeWAFv2WebACL:         true,
+	if err := reg.Add(&fakeCollector{typ: model.TypeEC2Instance}); err == nil {
+		t.Fatal("같은 타입의 수집기를 중복 등록했는데 오류가 없다")
 	}
 
-	for _, typ := range reg.Types() {
-		if !known[typ] {
-			t.Errorf("DefaultRegistry에 알 수 없는 타입 %q가 등록되어 있다", typ)
-		}
+	if got := reg.Types(); !reflect.DeepEqual(got, []string{model.TypeEC2Instance}) {
+		t.Errorf("중복 거부 후 Types() = %v", got)
 	}
 }

@@ -1,27 +1,28 @@
-package collect
+package ec2
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
+	"github.com/cnlgks1/cloudloupe/internal/collect"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
 // describeInstancesAPI는 EC2 인스턴스 수집기가 필요로 하는 SDK 메서드만 담은 인터페이스다.
 //
-// *ec2.Client 전체가 아니라 이 한 메서드만 받는다("accept interfaces, return structs").
+// *awsec2.Client 전체가 아니라 이 한 메서드만 받는다("accept interfaces, return structs").
 // 두 가지 효과가 있다. 첫째, 이 수집기가 조회 메서드 하나만 쓴다는 것이 타입에 드러난다.
-// 둘째, 자격증명 없이 fake로 테스트할 수 있다. *ec2.Client가 이 인터페이스를 자동으로
+// 둘째, 자격증명 없이 fake로 테스트할 수 있다. *awsec2.Client가 이 인터페이스를 자동으로
 // 만족한다.
 //
 // 메서드 이름이 Describe로 시작하므로 조회 전용 가드(scripts/verify-readonly.sh)를
 // 통과한다.
 type describeInstancesAPI interface {
-	DescribeInstances(context.Context, *ec2.DescribeInstancesInput, ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+	DescribeInstances(context.Context, *awsec2.DescribeInstancesInput, ...func(*awsec2.Options)) (*awsec2.DescribeInstancesOutput, error)
 }
 
 // ec2InstanceCollector는 EC2 인스턴스를 조회한다.
@@ -29,8 +30,8 @@ type ec2InstanceCollector struct {
 	api describeInstancesAPI
 }
 
-// NewEC2InstanceCollector는 인스턴스 수집기를 만든다.
-func NewEC2InstanceCollector(api describeInstancesAPI) Collector {
+// NewInstance는 인스턴스 수집기를 만든다.
+func NewInstance(api describeInstancesAPI) collect.Collector {
 	return ec2InstanceCollector{api: api}
 }
 
@@ -41,8 +42,8 @@ func (c ec2InstanceCollector) Type() string { return model.TypeEC2Instance }
 //
 // SDK 페이지네이터를 쓴다. 토큰 루프를 손으로 돌리지 않는다. ctx는 페이지마다 검사되어
 // 중간에 취소하면 즉시 멈춘다.
-func (c ec2InstanceCollector) Collect(ctx context.Context, req Request) ([]model.Resource, error) {
-	paginator := ec2.NewDescribeInstancesPaginator(c.api, &ec2.DescribeInstancesInput{})
+func (c ec2InstanceCollector) Collect(ctx context.Context, req collect.Request) ([]model.Resource, error) {
+	paginator := awsec2.NewDescribeInstancesPaginator(c.api, &awsec2.DescribeInstancesInput{})
 
 	var out []model.Resource
 
@@ -67,7 +68,7 @@ func (c ec2InstanceCollector) Collect(ctx context.Context, req Request) ([]model
 //
 // SDK의 포인터 값은 여기 경계에서 값으로 바꾼다(aws.ToString 등). 포인터가 도메인
 // 모델 안까지 들어오면 nil 체크가 전염된다.
-func instanceToResource(scope Scope, inst ec2types.Instance) model.Resource {
+func instanceToResource(scope collect.Scope, inst ec2types.Instance) model.Resource {
 	id := aws.ToString(inst.InstanceId)
 
 	// ARN은 채우지 않는다. 인스턴스 describe 응답에 ARN이 없고, 문자열로 조립할 수는
@@ -146,33 +147,4 @@ func azOf(inst ec2types.Instance) string {
 	}
 
 	return orDash(aws.ToString(inst.Placement.AvailabilityZone))
-}
-
-// ec2Tags는 SDK 태그 슬라이스를 정렬된 도메인 필드로 바꾼다.
-func ec2Tags(tags []ec2types.Tag) []model.Field {
-	m := make(map[string]string, len(tags))
-	for _, t := range tags {
-		m[aws.ToString(t.Key)] = aws.ToString(t.Value)
-	}
-
-	return model.TagFields(m)
-}
-
-// tagValue는 SDK 태그 슬라이스에서 특정 키의 값을 찾는다.
-func tagValue(tags []ec2types.Tag, key string) string {
-	for _, t := range tags {
-		if aws.ToString(t.Key) == key {
-			return aws.ToString(t.Value)
-		}
-	}
-
-	return ""
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }

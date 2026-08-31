@@ -100,13 +100,13 @@ func (r Runner) Run(ctx context.Context, jobs []Job) Result {
 			mu.Lock()
 			defer mu.Unlock()
 
-			if err != nil {
-				errs = append(errs, collectError(job, err))
-
-				return
-			}
-
+			// 수집기가 성공 데이터와 부분 오류를 함께 반환할 수 있다. 오류가 있다는 이유로
+			// 이미 읽은 리소스를 버리지 않는다.
 			resources = append(resources, res...)
+
+			if err != nil {
+				errs = appendCollectErrors(errs, job, err)
+			}
 		}(job)
 	}
 
@@ -129,6 +129,23 @@ func collectError(job Job, err error) model.CollectError {
 		Region:  job.Request.Scope.Region,
 		Message: err.Error(),
 	}
+}
+
+// appendCollectErrors는 errors.Join으로 묶인 부분 오류를 각각의 CollectError로 펼친다.
+func appendCollectErrors(dst []model.CollectError, job Job, err error) []model.CollectError {
+	type multiError interface {
+		Unwrap() []error
+	}
+
+	if joined, ok := err.(multiError); ok {
+		for _, child := range joined.Unwrap() {
+			dst = appendCollectErrors(dst, job, child)
+		}
+
+		return dst
+	}
+
+	return append(dst, collectError(job, err))
 }
 
 func canceledError(job Job, err error) model.CollectError {

@@ -5,17 +5,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cnlgks1/cloudloupe/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/cnlgks1/cloudloupe/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://goreportcard.com/report/github.com/cnlgks1/cloudloupe"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/cnlgks1/cloudloupe"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg">
+  <img alt="상태" src="https://img.shields.io/badge/status-개발%20중-orange.svg">
 </p>
+
+<!--
+CI·Go Report Card 배지는 저장소를 공개로 전환한 뒤 추가한다. 비공개 상태에서는
+badge.svg가 인증을 요구해 깨진 이미지로 보인다. 공개 전환 시 아래를 되살릴 것:
+  [CI](actions/workflows/ci.yml/badge.svg)
+  [Go Report Card](goreportcard.com/badge/github.com/cnlgks1/cloudloupe)
+-->
+
 
 ---
 
-> **개발 초기 단계입니다.** 프로젝트 구조와 규약, 릴리스 파이프라인은 자리를 잡았고
-> 리소스 수집과 TUI를 만들고 있습니다. 지금 동작하는 범위는 [로드맵](#로드맵)을
->참고하세요.
+> **개발 중입니다.** 대화형 TUI로 프로필을 고르고 EC2 인스턴스를 조회하는 흐름이
+> 동작합니다. 나머지 리소스 타입과 관계 분석·미사용 탐지는 [로드맵](#로드맵)에 따라
+> 추가되고 있습니다.
 
 ## 무엇인가
 
@@ -85,26 +92,64 @@ go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
 유니코드 박스 문자를 렌더링하지 못하는 Windows 터미널을 위해 ASCII 폴백이 있습니다.
 자동으로 감지하며, `--ascii`나 `CLOUDLOUPE_ASCII=1`로 강제할 수도 있습니다.
 
+## 지원 리소스
+
+조회할 수 있는 리소스는 아래와 같습니다.
+
+| 리소스 | 타입 ID | 상태 |
+| --- | --- | :---: |
+| EC2 인스턴스 | `ec2:instance` | O |
+| EBS 볼륨 | `ec2:volume` | O |
+| 네트워크 인터페이스 (ENI) | `ec2:networkInterface` | O |
+| Elastic IP | `ec2:address` | O |
+| 로드밸런서 (ALB/NLB) | `elbv2:loadBalancer` | O |
+| 타깃 그룹 (+타깃 상태) | `elbv2:targetGroup` | O |
+| Route 53 레코드 | `route53:recordSet` | O |
+| WAF Web ACL (REGIONAL) | `wafv2:webAcl` | O |
+
+모든 조회는 `Describe`/`List`/`Get` 계열 API만 씁니다. 새 리소스 타입은 서비스별 수집기와
+카탈로그 정의를 추가하면 되며, 조회 전용 가드가 쓰기 API를 자동으로 차단합니다.
+
 ## 사용법
 
-지금 동작하는 것은 프로필 탐색뿐입니다. AWS에 접속하지 않으므로 자격증명 없이도 실행됩니다.
-
 ```sh
-# 공유 설정에서 발견한 프로필 목록
+# 대화형 TUI 시작: 프로필 선택 → 계정 확인 → 리전 선택 → 타입 선택 → 조회
 cloudloupe
 
-# 스크립트에서 쓸 JSON
+# 설정이 기본 위치에 없으면 실행 중 경로를 입력받는다.
+# 미리 지정할 수도 있다:
+cloudloupe --config /path/to/config --credentials /path/to/credentials
+
+# ASCII 테마 (구형 Windows 콘솔)
+cloudloupe --ascii
+
+# TUI 없이 프로필 목록만 (스크립트용)
+cloudloupe --list-profiles
 cloudloupe --output json
 
 # 설정 위치 진단
 cloudloupe --check
-
-# 버전 정보
-cloudloupe --version
 ```
 
-리전 선택, 리소스 조회, TUI, `--profile`/`--region`/`--ascii` 플래그, CSV·Markdown 리포트는
-아직 없습니다. [로드맵](#로드맵)에서 어느 단계에 들어오는지 확인하세요.
+인자 없이 실행하면 TUI가 뜹니다. 파이프로 넘기거나 터미널이 아니면 자동으로 목록
+출력으로 폴백합니다.
+
+### TUI 흐름
+
+```text
+프로필 선택       ↑/↓ 또는 j/k 이동, enter/→ 선택, c 설정 경로 지정
+계정 확인         선택한 프로필의 계정·사용자 확인 (STS)
+리전 선택         ↑/↓ 또는 j/k 이동, space 다중 선택, enter/→ 다음
+리소스 타입 선택  ↑/↓ 또는 j/k 이동, space 다중 선택, enter/→ 조회
+수집 중           esc로 취소
+리소스 목록       enter/→ 상세, p 프로필 전환, R 리전 전환, esc 뒤로, q 종료
+상세              ↑/↓ 또는 j/k 스크롤, esc/← 목록 복귀
+```
+
+프로필·리전·리소스 타입·리소스 목록은 모두 컬럼 정렬 테이블로 표시됩니다. 상단 경로에는
+현재 프로필, 리전과 리소스 타입이 항상 표시됩니다.
+
+`~/.aws/config`를 기본으로 보고, 없거나 다른 곳에 있으면 첫 화면에서 경로를 입력받습니다.
 
 ### 설정을 어디서 읽는가
 
@@ -183,18 +228,38 @@ cloudloupe는 조사하는 서비스에 대한 읽기 권한이 필요합니다.
 
 ## 로드맵
 
-| 단계 | 범위                                                                              | 상태     |
-| ---- | --------------------------------------------------------------------------------- | -------- |
-| 1    | 프로필 탐색, 호출자 신원 확인, 리전 선택, EC2 + ALB 조회 TUI                       | 진행 중  |
-| 2    | EBS, ENI, EIP, 타깃 그룹(+타깃 상태), Route 53, WAF(REGIONAL)                      | 예정     |
-| 3    | 관계 그래프: ALB → Listener → TG → EC2, Route 53 → ALB, EC2 → ENI/EIP/EBS          | 예정     |
-| 4    | 근거와 신뢰도를 갖춘 미사용 후보 탐지. CloudWatch와 CloudTrail을 결합              | 예정     |
-| 5    | JSON / CSV / Markdown 리포트, SQLite 스냅샷과 날짜별 diff                          | 예정     |
-| 6    | GoReleaser 릴리스 파이프라인, Homebrew tap, 체크섬                                 | 뼈대만   |
+| 단계 | 범위                                                                              | 상태 |
+| ---- | --------------------------------------------------------------------------------- | ---- |
+| 1    | 프로필 선택, 호출자 신원 확인, 리전 선택, EC2 인스턴스 조회 TUI                    | 완료 |
+| 2    | EBS, ENI, EIP, ALB/NLB, 타깃 그룹(+타깃 상태), Route 53, WAF(REGIONAL) 수집기      | 완료 |
+| 3    | 관계 그래프: ALB → Listener → TG → EC2, Route 53 → ALB, EC2 → ENI/EIP/EBS          | 예정 |
+| 4    | 근거와 신뢰도를 갖춘 미사용 후보 탐지. CloudWatch와 CloudTrail을 결합              | 예정 |
+| 5    | JSON / CSV / Markdown 리포트, SQLite 스냅샷과 날짜별 diff                          | 예정 |
+| 6    | GoReleaser 릴리스 파이프라인, Homebrew tap, 체크섬                                 | 예정 |
 
 판정 결과를 근거 없이 단정해서 내놓지 않습니다. 각 항목에는 **확정**, **추정**,
 **확인 필요** 중 하나의 신뢰도와 그 판단에 사용한 API 응답 및 지표가 함께 붙습니다.
 믿으라고 하는 대신 직접 판단할 수 있게 하려는 것입니다.
+
+## 소스 구조
+
+```text
+cmd/cloudloupe          플래그, 입출력, TUI 실행
+internal/app            프로필·리전별 AWS 설정과 수집 실행 조립
+internal/catalog        타입 ID·표시명·범위·테이블 열·수집기 생성의 단일 출처
+internal/collect        AWS SDK를 모르는 Collector/Registry/Runner 실행 코어
+internal/collector/ec2  EC2 계열 조회와 SDK → model 변환
+internal/collector/elbv2
+internal/collector/route53
+internal/collector/wafv2
+internal/model          외부 의존성이 없는 도메인 모델
+internal/tui            Bubble Tea 상태 전이와 렌더링
+```
+
+새 리소스는 해당 서비스의 `internal/collector/<service>`에 좁은 조회 인터페이스와 수집기를
+추가하고 `internal/catalog/catalog.go`에 정의 하나를 등록합니다. 기존 서비스라면 그 두
+위치만 수정합니다. 새로운 AWS 서비스일 때만 catalog의 서비스 클라이언트 묶음도 추가합니다.
+`internal/collect`와 TUI 화면 전이 코드는 신규 리소스 때문에 수정하지 않습니다.
 
 ## 개발
 

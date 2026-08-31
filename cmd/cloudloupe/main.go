@@ -18,7 +18,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbletea"
+	"github.com/mattn/go-isatty"
+
+	"github.com/cnlgks1/cloudloupe/internal/app"
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
+	"github.com/cnlgks1/cloudloupe/internal/catalog"
+	"github.com/cnlgks1/cloudloupe/internal/tui"
 )
 
 // 빌드 정보. 릴리스 시 -ldflags로 주입된다. 이 프로젝트에서 유일하게 허용된 패키지 수준
@@ -43,7 +49,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 	var (
 		showVersion = fs.Bool("version", false, "버전 정보를 출력하고 종료한다")
 		check       = fs.Bool("check", false, "설정 위치를 진단하고 문제가 있으면 0이 아닌 코드로 종료한다")
-		output      = fs.String("output", "text", "프로필 목록 출력 형식: text 또는 json")
+		listOnly    = fs.Bool("list-profiles", false, "TUI 없이 프로필 목록만 출력한다")
+		output      = fs.String("output", "", "프로필 목록 출력 형식: text 또는 json (지정하면 TUI 대신 목록만 출력)")
+		ascii       = fs.Bool("ascii", false, "유니코드 대신 ASCII 문자로 렌더링한다 (구형 Windows 콘솔용)")
+		configPath  = fs.String("config", "", "AWS config 파일 경로 (기본: ~/.aws/config 또는 AWS_CONFIG_FILE)")
+		credsPath   = fs.String("credentials", "", "AWS credentials 파일 경로 (기본: ~/.aws/credentials)")
 	)
 
 	fs.Usage = func() {
@@ -66,7 +76,89 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runCheck(stdout)
 	}
 
-	return listProfiles(stdout, *output)
+	// --output이나 --list-profiles를 주면 헤드리스 모드(프로필 목록만). 그 외에는
+	// 대화형 TUI를 띄운다. 파이프로 넘기거나 터미널이 아니면 자동으로 목록 출력으로
+	// 폴백한다.
+	if *output != "" || *listOnly {
+		format := *output
+		if format == "" {
+			format = "text"
+		}
+
+		return listProfiles(stdout, format)
+	}
+
+	override := awsclient.Override{ConfigPath: *configPath, CredentialsPath: *credsPath}
+
+	if !isInteractive() {
+		// 터미널이 아니면(파이프, CI) TUI를 띄울 수 없다. 목록 출력으로 폴백한다.
+		return listProfiles(stdout, "text")
+	}
+
+	return runTUI(ascii, override)
+}
+
+// isInteractive는 표준 출력이 터미널인지 확인한다.
+//
+// 파이프나 CI에서 실행하면 TUI를 띄울 수 없으므로 목록 출력으로 폴백한다.
+func isInteractive() bool {
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
+// runTUI는 대화형 TUI를 띄운다.
+//
+// 여기가 배선의 핵심이다. TUI는 awsclient/collect를 직접 부르지 않고 tui.Deps 함수로
+// 주입받는다. 실제 AWS 연결(Config, STS, 수집기)과 프로필 로딩을 이 함수들 안에 담아
+// 주입한다. 덕분에 tui 패키지는 AWS를 모르고, 테스트에서는 가짜 Deps를 넘길 수 있다.
+//
+// 설정이 없어도 여기서 죽지 않는다. TUI가 경로 입력 화면을 띄워 사용자가 직접 위치를
+// 지정할 수 있게 한다. LoadProfiles를 함수로 주입하는 이유가 이것이다. 경로를 바꿔가며
+// 다시 시도할 수 있어야 한다.
+func runTUI(ascii *bool, override awsclient.Override) error {
+	deps := tui.Deps{
+		LoadProfiles: func(ov awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
+			loc, err := awsclient.ResolveWith(ov)
+			if err != nil {
+				return nil, loc, err
+			}
+
+			profiles, err := loc.LoadProfiles()
+
+			return profiles, loc, err
+		},
+		ResourceTypes: resourceTypes(),
+		Identify:      app.Identify,
+		Collect:       app.Collect,
+		Explain:       awsclient.Explain,
+	}
+
+	theme := tui.New(tui.DetectASCII(*ascii))
+	model := tui.NewModel(theme, deps, override)
+
+	// AltScreen: TUI가 별도 화면 버퍼를 쓰고, 종료하면 원래 터미널 내용이 복원된다.
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	if _, err := program.Run(); err != nil {
+		return fmt.Errorf("TUI 실행: %w", err)
+	}
+
+	return nil
+}
+
+// resourceTypes는 카탈로그의 지원 타입을 TUI 표시 모델로 변환한다.
+func resourceTypes() []tui.ResourceType {
+	definitions := catalog.Definitions()
+	out := make([]tui.ResourceType, 0, len(definitions))
+
+	for _, definition := range definitions {
+		out = append(out, tui.ResourceType{
+			ID:      definition.Type,
+			Label:   definition.Label,
+			Columns: definition.Columns,
+		})
+	}
+
+	return out
 }
 
 // runCheck는 설정 위치를 진단한다.

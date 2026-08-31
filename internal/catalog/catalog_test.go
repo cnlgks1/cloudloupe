@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 
 	"github.com/cnlgks1/cloudloupe/internal/collect"
 	"github.com/cnlgks1/cloudloupe/internal/model"
@@ -35,6 +36,9 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeEC2Volume,
 		model.TypeEC2NetworkInterface,
 		model.TypeEC2Address,
+		model.TypeEC2VPC,
+		model.TypeEC2Subnet,
+		model.TypeEC2SecurityGroup,
 		model.TypeELBv2LoadBalancer,
 		model.TypeELBv2TargetGroup,
 		model.TypeRoute53RecordSet,
@@ -67,7 +71,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "elbv2", "route53", "wafv2"}
+	wantIDs := []string{"ec2", "vpc", "elbv2", "route53", "wafv2"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)
@@ -93,11 +97,24 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 		t.Errorf("EC2 타입 = %v, want %v", gotEC2Types, wantEC2Types)
 	}
 
-	if got, want := groups[2].Types[0].Columns,
+	wantVPCTypes := []string{
+		model.TypeEC2VPC,
+		model.TypeEC2Subnet,
+		model.TypeEC2SecurityGroup,
+	}
+	gotVPCTypes := make([]string, 0, len(groups[1].Types))
+	for _, definition := range groups[1].Types {
+		gotVPCTypes = append(gotVPCTypes, definition.Type)
+	}
+	if !slices.Equal(gotVPCTypes, wantVPCTypes) {
+		t.Errorf("VPC 타입 = %v, want %v", gotVPCTypes, wantVPCTypes)
+	}
+
+	if got, want := groups[3].Types[0].Columns,
 		[]string{"타입", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
-	if got, want := groups[3].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
+	if got, want := groups[4].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
 		t.Errorf("WAF 열 = %v, want %v", got, want)
 	}
 
@@ -314,4 +331,33 @@ func TestBuildRegistryRejectsBrokenFactory(t *testing.T) {
 			t.Errorf("err = %v, want 타입 불일치", err)
 		}
 	})
+}
+
+func TestEC2GroupsShareLazyClient(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	groups := ec2GroupsWithClientFactory(func() *awsec2.Client {
+		calls++
+		return awsec2.New(awsec2.Options{})
+	})
+
+	if calls != 0 {
+		t.Fatalf("그룹 조립 중 EC2 클라이언트를 %d회 생성함, want 0", calls)
+	}
+	if len(groups) != 2 || groups[0].ID != "ec2" || groups[1].ID != "vpc" {
+		t.Fatalf("EC2 계열 그룹 = %+v", groups)
+	}
+
+	groups[0].Types[0].newCollector()
+	if calls != 1 {
+		t.Fatalf("첫 EC2 수집기 생성 뒤 클라이언트 생성 횟수 = %d, want 1", calls)
+	}
+
+	groups[1].Types[0].newCollector()
+	groups[1].Types[1].newCollector()
+	groups[1].Types[2].newCollector()
+	if calls != 1 {
+		t.Errorf("EC2와 VPC 그룹이 클라이언트를 공유하지 않음: 생성 %d회, want 1", calls)
+	}
 }

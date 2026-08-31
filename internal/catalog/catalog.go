@@ -262,10 +262,11 @@ func allDefinitions(cfg aws.Config) []Definition {
 // 새 리소스는 해당 서비스의 definitions 함수에 추가한다. 새 서비스는 definitions 함수를
 // 만들고 이곳에 그룹 한 개를 추가한다. 순서를 숨기는 init 자동 등록은 사용하지 않는다.
 func allGroups(cfg aws.Config) []Group {
-	return []Group{
-		{ID: "ec2", Label: "EC2", Types: ec2Definitions(cfg)},
-		{ID: "elbv2", Label: "ELB", Types: elbv2Definitions(cfg)},
-		{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
-		{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
-	}
+	groups := ec2Groups(cfg)
+
+	return append(groups,
+		Group{ID: "elbv2", Label: "ELB", Types: elbv2Definitions(cfg)},
+		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
+		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
+	)
 }

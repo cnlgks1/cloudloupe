@@ -2,7 +2,7 @@
 //
 // 이 패키지는 표준 라이브러리 외에 아무것도 의존하지 않고, 다른 cloudloupe
 // 패키지를 import하지 않는다. 나머지 모든 internal 패키지가 이 패키지를 의존할 수
-// 있다. 이 단방향 화살표가 report, cache, graph, findings 계층에서 AWS SDK를
+// 있다. 이 단방향 화살표가 report, graph, findings 계층에서 AWS SDK를
 // 몰아내는 장치다.
 package model
 
@@ -23,6 +23,9 @@ const (
 	TypeEC2Volume           = "ec2:volume"
 	TypeEC2NetworkInterface = "ec2:networkInterface"
 	TypeEC2Address          = "ec2:address"
+	TypeEC2VPC              = "ec2:vpc"
+	TypeEC2Subnet           = "ec2:subnet"
+	TypeEC2SecurityGroup    = "ec2:securityGroup"
 	TypeELBv2LoadBalancer   = "elbv2:loadBalancer"
 	TypeELBv2TargetGroup    = "elbv2:targetGroup"
 	TypeRoute53RecordSet    = "route53:recordSet"
@@ -182,8 +185,14 @@ func typeRank(resourceType string) int {
 		return 5
 	case TypeEC2Address:
 		return 6
-	case TypeWAFv2WebACL:
+	case TypeEC2VPC:
 		return 7
+	case TypeEC2Subnet:
+		return 8
+	case TypeEC2SecurityGroup:
+		return 9
+	case TypeWAFv2WebACL:
+		return 10
 	default:
 		return 1000
 	}

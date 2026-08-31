@@ -117,9 +117,12 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 	// 따로 둔 목적은 리포트를 위에서 아래로 읽었을 때 로드밸런서에서 시작해 인스턴스에
 	// 매달린 것들로 자연스럽게 내려가게 하는 것이다.
 	resources := []model.Resource{
+		{Type: model.TypeEC2SecurityGroup, ID: "sg-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Address, ID: "eipalloc-1", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0f1e", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2VPC, ID: "vpc-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0a1b", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2LoadBalancer, ID: "web-alb", Region: "ap-northeast-2"},
@@ -128,7 +131,7 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 
 	model.SortResources(resources)
 
-	want := []string{"web-alb", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1"}
+	want := []string{"web-alb", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1", "vpc-1", "subnet-1", "sg-1"}
 
 	got := make([]string, 0, len(resources))
 	for _, r := range resources {

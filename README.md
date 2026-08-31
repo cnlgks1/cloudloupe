@@ -99,13 +99,14 @@ TUI에서는 큰 AWS 리소스 단위로 선택하며, 내부에서는 아래 �
 | 선택 리소스 | 포함 세부 타입 | 상태 |
 | --- | --- | :---: |
 | EC2 | 인스턴스, EBS 볼륨, ENI, Elastic IP | O |
+| VPC | VPC, 서브넷, 보안 그룹 | O |
 | ELB | 로드 밸런서, 타깃 그룹과 타깃 상태 | O |
 | Route 53 | 레코드 | O |
 | WAF | Web ACL (REGIONAL) | O |
 
 내부 타입 ID(`ec2:instance`, `ec2:volume`, `ec2:networkInterface`, `ec2:address`,
-`elbv2:loadBalancer`, `elbv2:targetGroup`, `route53:recordSet`, `wafv2:webAcl`)는
-관계 식별과 수집기 선택에 그대로 사용합니다. 모든 조회는 `Describe`/`List`/`Get` 계열
+`ec2:vpc`, `ec2:subnet`, `ec2:securityGroup`, `elbv2:loadBalancer`, `elbv2:targetGroup`,
+`route53:recordSet`, `wafv2:webAcl`)는 관계 식별과 수집기 선택에 그대로 사용합니다. 모든 조회는 `Describe`/`List`/`Get` 계열
 API만 씁니다. 새 리소스는 서비스 그룹의 수집기와 카탈로그 정의를 추가하며, 조회 전용
 가드가 쓰기 API를 자동으로 차단합니다.
 
@@ -231,7 +232,7 @@ cloudloupe는 조사하는 서비스에 대한 읽기 권한이 필요합니다.
 | 단계 | 범위                                                                              | 상태 |
 | ---- | --------------------------------------------------------------------------------- | ---- |
 | 1    | 프로필 선택, 호출자 신원 확인, 리전 선택, EC2 인스턴스 조회 TUI                    | 완료 |
-| 2    | EBS, ENI, EIP, ALB/NLB, 타깃 그룹(+타깃 상태), Route 53, WAF(REGIONAL) 수집기      | 완료 |
+| 2    | EBS, ENI, EIP, VPC, 서브넷, 보안 그룹, ALB/NLB, 타깃 그룹, Route 53, WAF 수집기 | 완료 |
 | 3    | 관계 그래프: ALB → Listener → TG → EC2, Route 53 → ALB, EC2 → ENI/EIP/EBS          | 예정 |
 | 4    | 근거와 신뢰도를 갖춘 미사용 후보 탐지. CloudWatch와 CloudTrail을 결합              | 예정 |
 | 5    | JSON / CSV / Markdown 리포트                                                         | 예정 |
@@ -256,10 +257,11 @@ internal/model          외부 의존성이 없는 도메인 모델
 internal/tui            Bubble Tea 상태 전이와 렌더링
 ```
 
-새 리소스는 해당 서비스의 `internal/collector/<service>`에 좁은 조회 인터페이스와 수집기를
-추가하고 `internal/catalog/catalog.go`에 정의 하나를 등록합니다. 기존 서비스라면 그 두
-위치만 수정합니다. 새로운 AWS 서비스일 때만 catalog의 서비스 클라이언트 묶음도 추가합니다.
-`internal/collect`와 TUI 화면 전이 코드는 신규 리소스 때문에 수정하지 않습니다.
+새 리소스는 `internal/model`에 안정적인 타입 ID와 정렬 순서를 추가하고, 해당 서비스의
+`internal/collector/<service>`에 좁은 조회 인터페이스·수집기·자격증명 없는 테스트 대역을
+구현한 뒤 `internal/catalog`의 서비스 그룹에 정의를 등록합니다. README 지원 표와 IAM 예제
+정책도 함께 확인합니다. `internal/collect`와 TUI 화면 전이 코드는 신규 리소스 때문에 수정하지
+않습니다.
 
 ## 개발
 

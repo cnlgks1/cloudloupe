@@ -8,7 +8,7 @@
   <a href="https://github.com/cnlgks1/cloudloupe/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/cnlgks1/cloudloupe/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://goreportcard.com/report/github.com/cnlgks1/cloudloupe"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/cnlgks1/cloudloupe"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <img alt="Go version" src="https://img.shields.io/badge/go-1.24.2%2B-00ADD8.svg">
+  <img alt="Go version" src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg">
 </p>
 
 ---

@@ -8,6 +8,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/catalog"
 	"github.com/cnlgks1/cloudloupe/internal/collect"
@@ -30,20 +32,45 @@ func Identify(ctx context.Context, profile, region string) (awsclient.Identity, 
 	return awsclient.WhoAmI(ctx, awsclient.STSFromConfig(cfg))
 }
 
+type collectDeps struct {
+	identify func(context.Context, string, string) (awsclient.Identity, error)
+	config   func(context.Context, string, string) (aws.Config, error)
+	registry func(aws.Config, bool, []string) (*collect.Registry, []string, error)
+	run      func(context.Context, []collect.Job) collect.Result
+}
+
 // Collect는 선택 프로필의 여러 리전에서 지정한 리소스 타입을 조회한다.
 //
 // 리전 하나의 설정이나 권한이 실패해도 다른 리전은 계속 실행한다. Route 53 같은 글로벌
-// 타입은 첫 번째 리전의 설정으로 한 번만 실행한다. 모든 실패는 성공한 리소스와 함께
-// Result.Errors에 보존한다.
+// 타입은 설정과 카탈로그 조립에 처음 성공한 리전에서 한 번만 실행한다. 모든 실패는 성공한
+// 리소스와 함께 Result.Errors에 보존한다.
 func Collect(ctx context.Context, profile string, regions, types []string) collect.Result {
+	return collectWith(ctx, profile, regions, types, collectDeps{
+		identify: Identify,
+		config:   awsclient.Config,
+		registry: catalog.Registry,
+		run:      (collect.Runner{}).Run,
+	})
+}
+
+func collectWith(
+	ctx context.Context,
+	profile string,
+	regions, types []string,
+	deps collectDeps,
+) collect.Result {
 	var result collect.Result
 
-	accountID := identifyAccount(ctx, profile, regions, &result)
+	accountID := identifyAccount(ctx, profile, regions, &result, deps.identify)
 	jobs := make([]collect.Job, 0, len(regions)*len(catalog.Definitions()))
 	reportedUnknown := make(map[string]struct{})
+	includeGlobal := true
+	loadConfig := deps.config
+	registerCollectors := deps.registry
+	runJobs := deps.run
 
-	for index, region := range regions {
-		cfg, err := awsclient.Config(ctx, profile, region)
+	for _, region := range regions {
+		cfg, err := loadConfig(ctx, profile, region)
 		if err != nil {
 			result.Errors = append(result.Errors, collectError(configErrorType, profile, region,
 				fmt.Errorf("AWS 설정 로드: %w", err)))
@@ -51,7 +78,7 @@ func Collect(ctx context.Context, profile string, regions, types []string) colle
 			continue
 		}
 
-		registry, unknown, err := catalog.Registry(cfg, index == 0, types)
+		registry, unknown, err := registerCollectors(cfg, includeGlobal, types)
 		for _, typ := range unknown {
 			if _, exists := reportedUnknown[typ]; exists {
 				continue
@@ -68,23 +95,33 @@ func Collect(ctx context.Context, profile string, regions, types []string) colle
 			continue
 		}
 
+		// 첫 리전 설정이나 카탈로그 조립이 실패하면 다음 성공 리전에서 글로벌 타입을
+		// 계획한다. 성공적으로 한 번 조립된 뒤에만 이후 리전에서 제외한다.
+		includeGlobal = false
+
 		scope := collect.Scope{Profile: profile, Region: region, AccountID: accountID}
 		jobs = append(jobs, collect.Plan(registry, []collect.Scope{scope})...)
 	}
 
-	runResult := (collect.Runner{}).Run(ctx, jobs)
+	runResult := runJobs(ctx, jobs)
 	result.Resources = append(result.Resources, runResult.Resources...)
 	result.Errors = append(result.Errors, runResult.Errors...)
 
 	return result
 }
 
-func identifyAccount(ctx context.Context, profile string, regions []string, result *collect.Result) string {
+func identifyAccount(
+	ctx context.Context,
+	profile string,
+	regions []string,
+	result *collect.Result,
+	identify func(context.Context, string, string) (awsclient.Identity, error),
+) string {
 	if len(regions) == 0 {
 		return ""
 	}
 
-	identity, err := Identify(ctx, profile, regions[0])
+	identity, err := identify(ctx, profile, regions[0])
 	if err != nil {
 		result.Errors = append(result.Errors, collectError(identityErrorType, profile, regions[0],
 			fmt.Errorf("계정 확인: %w", err)))

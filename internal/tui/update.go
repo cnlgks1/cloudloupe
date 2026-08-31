@@ -10,6 +10,7 @@ import (
 
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/collect"
+	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
 // identityMsg는 신원 확인 결과를 Update로 전달한다.
@@ -30,8 +31,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyConfigPath(msg)
 	}
 
-	// ctrl+c는 어느 화면에서든 즉시 종료. q는 상세 외에서.
-	if msg.String() == "ctrl+c" || (key.Matches(msg, m.keys.Quit) && m.screen != ScreenDetail) {
+	// ctrl+c는 입력 중이어도 즉시 종료한다.
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
+	// 필터 입력 중에는 q, p, R 같은 문자도 검색어로 전달한다.
+	if m.screen == ScreenList && m.filtering {
+		return m.keyResourceFilter(msg)
+	}
+
+	// q는 상세 외에서 종료한다.
+	if key.Matches(msg, m.keys.Quit) && m.screen != ScreenDetail {
 		return m, tea.Quit
 	}
 
@@ -168,6 +179,7 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 	m.chosenTypes = nil
 	m.replaceRegionOnEnter = false
 	m.replaceTypeOnEnter = false
+	m.explicitTypeSelection = false
 	m.regions = awsclient.Regions(m.profileRegion())
 	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
 	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, nil, m.width, m.listHeight())
@@ -252,6 +264,7 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if i >= 0 && i < len(m.deps.ResourceTypes) {
 			m.toggleType(m.deps.ResourceTypes[i].ID)
 			m.replaceTypeOnEnter = false
+			m.explicitTypeSelection = len(m.chosenTypes) > 0
 			m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, m.chosenTypes, m.width, m.listHeight())
 			m.typeTable.SetCursor(i)
 		}
@@ -259,12 +272,14 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		// 목록에서 타입을 바꾸러 왔거나 체크가 없으면 현재 커서 타입 하나로 교체한다.
-		if m.replaceTypeOnEnter || len(m.chosenTypes) == 0 {
+		// space로 만든 명시적 다중 선택이 없으면 항상 현재 커서 타입 하나를 조회한다.
+		// 이전 Enter 선택이 chosenTypes에 남아 있어도 새 커서 선택을 덮지 못하게 한다.
+		if m.replaceTypeOnEnter || !m.explicitTypeSelection || len(m.chosenTypes) == 0 {
 			i := m.typeTable.Cursor()
 			if i >= 0 && i < len(m.deps.ResourceTypes) {
 				m.chosenTypes = []string{m.deps.ResourceTypes[i].ID}
 			}
+			m.explicitTypeSelection = false
 		}
 		m.replaceTypeOnEnter = false
 
@@ -321,6 +336,7 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 func (m Model) keyCollecting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Back) {
 		m.cancelWork()
+		m.replaceTypeOnEnter = true
 		m.screen = ScreenResourceType
 
 		return m, nil
@@ -334,9 +350,17 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.resourceRows = msg.result.Resources
+	m.allResourceRows = append([]model.Resource(nil), msg.result.Resources...)
+	m.resourceRows = append([]model.Resource(nil), msg.result.Resources...)
+	m.showRegion = m.shouldShowRegion()
+	m.filtering = false
+	m.filterQuery = ""
+	m.previousFilter = ""
+	m.filterInput.SetValue("")
+	m.filterInput.Blur()
 	m.listCaption = m.listTitle(msg.result)
-	m.resourceTable = buildTable(m.theme, m.resourceRows, m.deps.ResourceTypes, m.width, m.listHeight())
+	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
+		m.deps.ResourceTypes, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
 	m.screen = ScreenList
 
 	return m, nil
@@ -355,6 +379,14 @@ func (m Model) listTitle(result collect.Result) string {
 
 func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
+	case msg.String() == "/":
+		m.previousFilter = m.filterQuery
+		m.filterInput.SetValue(m.filterQuery)
+		m.filterInput.CursorEnd()
+		m.filtering = true
+
+		return m, m.filterInput.Focus()
+
 	case key.Matches(msg, m.keys.Back):
 		m.replaceTypeOnEnter = true
 		m.screen = ScreenResourceType
@@ -384,6 +416,91 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m.delegateToActiveList(msg)
+}
+
+// keyResourceFilter는 목록 필터 입력을 처리한다.
+func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.filterQuery = m.previousFilter
+		m.filterInput.SetValue(m.previousFilter)
+		m.filterInput.Blur()
+		m.filtering = false
+
+		return m.applyResourceFilter(), nil
+	case tea.KeyEnter:
+		m.filterQuery = strings.TrimSpace(m.filterInput.Value())
+		m.filterInput.SetValue(m.filterQuery)
+		m.filterInput.Blur()
+		m.filtering = false
+
+		return m.applyResourceFilter(), nil
+	default:
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		m.filterQuery = m.filterInput.Value()
+
+		return m.applyResourceFilter(), cmd
+	}
+}
+
+// applyResourceFilter는 현재 쿼리와 일치하는 행만 테이블에 반영한다.
+func (m Model) applyResourceFilter() Model {
+	m.resourceRows = filterResources(m.allResourceRows, m.filterQuery)
+	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
+		m.deps.ResourceTypes, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
+	m.resourceTable.SetCursor(0)
+
+	return m
+}
+
+// filterResources는 공백으로 나눈 모든 검색어가 포함된 리소스만 반환한다.
+func filterResources(resources []model.Resource, query string) []model.Resource {
+	tokens := strings.Fields(strings.ToLower(query))
+	if len(tokens) == 0 {
+		return append([]model.Resource(nil), resources...)
+	}
+
+	filtered := make([]model.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if resourceMatches(resource, tokens) {
+			filtered = append(filtered, resource)
+		}
+	}
+
+	return filtered
+}
+
+func resourceMatches(resource model.Resource, tokens []string) bool {
+	parts := []string{
+		resource.Type,
+		resource.ID,
+		resource.Name,
+		resource.ARN,
+		resource.Region,
+		resource.Profile,
+		resource.AccountID,
+		resource.Status,
+	}
+
+	for _, field := range resource.Fields {
+		parts = append(parts, field.Key, field.Value)
+	}
+	for _, tag := range resource.Tags {
+		parts = append(parts, tag.Key, tag.Value)
+	}
+	for _, ref := range resource.Related {
+		parts = append(parts, ref.Type, ref.ID, ref.Relation, ref.Via)
+	}
+
+	haystack := strings.ToLower(strings.Join(parts, "\n"))
+	for _, token := range tokens {
+		if !strings.Contains(haystack, token) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // --- 상세 ---

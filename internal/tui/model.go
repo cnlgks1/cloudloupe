@@ -97,9 +97,15 @@ type Model struct {
 	detail       viewport.Model
 	spinner      spinner.Model
 
-	resourceTable table.Model
-	resourceRows  []model.Resource
-	listCaption   string
+	resourceTable   table.Model
+	allResourceRows []model.Resource
+	resourceRows    []model.Resource
+	listCaption     string
+	filterInput     textinput.Model
+	filtering       bool
+	filterQuery     string
+	previousFilter  string
+	showRegion      bool
 
 	chosenProfile string
 	identity      awsclient.Identity
@@ -111,6 +117,10 @@ type Model struct {
 	// 현재 커서 행을 우선하도록 한다. space로 다중 선택을 조작하면 false로 바뀐다.
 	replaceRegionOnEnter bool
 	replaceTypeOnEnter   bool
+
+	// explicitTypeSelection은 chosenTypes가 space로 명시적으로 체크된 목록인지 나타낸다.
+	// false면 chosenTypes에 이전 Enter 선택이 남아 있어도 현재 커서 타입으로 교체한다.
+	explicitTypeSelection bool
 
 	errText string
 	loading string
@@ -162,6 +172,11 @@ func NewModel(theme Theme, deps Deps, override awsclient.Override) Model {
 	credsTI.Placeholder = "~/.aws/credentials 경로 (비우면 config와 같은 위치)"
 	credsTI.CharLimit = 512
 
+	filterTI := textinput.New()
+	filterTI.Prompt = "/ "
+	filterTI.Placeholder = "타입, 이름, ID, 리전, 상태, 필드 검색"
+	filterTI.CharLimit = 256
+
 	m := Model{
 		theme:       theme,
 		keys:        defaultKeys(),
@@ -169,6 +184,7 @@ func NewModel(theme Theme, deps Deps, override awsclient.Override) Model {
 		override:    override,
 		configInput: cfgTI,
 		credsInput:  credsTI,
+		filterInput: filterTI,
 		detail:      viewport.New(0, 0),
 		spinner:     sp,
 	}
@@ -277,14 +293,7 @@ func (m Model) View() string {
 	case ScreenCollecting:
 		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: 취소"))
 	case ScreenList:
-		return m.screenWithHelp(m.listCaption, m.resourceTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "상세"},
-			[2]string{"p", "프로필 전환"},
-			[2]string{"R", "리전 전환"},
-			[2]string{"esc", "뒤로"},
-			[2]string{"q", "종료"},
-		)
+		return m.resourceListView()
 	case ScreenDetail:
 		return m.detail.View() + m.helpBar(
 			[2]string{"↑↓/jk", "스크롤"},
@@ -295,6 +304,40 @@ func (m Model) View() string {
 	default:
 		return ""
 	}
+}
+
+// resourceListView는 리소스 목록과 독립된 필터 한 줄을 렌더링한다.
+//
+// 필터 줄을 항상 한 줄 예약해 입력 시작·적용·취소 때 테이블 높이가 흔들리지 않게 한다.
+func (m Model) resourceListView() string {
+	filterLine := m.theme.Faint.Render("/ 필터")
+	help := [][2]string{
+		{"↑↓/jk", "이동"},
+		{"enter/→", "상세"},
+		{"/", "필터"},
+		{"p", "프로필 전환"},
+		{"R", "리전 전환"},
+		{"esc", "뒤로"},
+		{"q", "종료"},
+	}
+
+	if m.filtering {
+		filterLine = m.filterInput.View()
+		help = [][2]string{
+			{"입력", "실시간 검색"},
+			{"enter", "적용"},
+			{"esc", "취소"},
+		}
+	} else if m.filterQuery != "" {
+		filterLine = fmt.Sprintf("/ %s  %s", m.filterQuery,
+			m.theme.Faint.Render(fmt.Sprintf("결과 %d/%d개", len(m.resourceRows), len(m.allResourceRows))))
+	}
+
+	return m.breadcrumb() + "\n" +
+		m.theme.Title.Render(m.listCaption) + "\n" +
+		filterLine + "\n" +
+		m.resourceTable.View() +
+		m.helpBar(help...)
 }
 
 // Screen은 현재 화면을 노출한다. 테스트에서 상태 전이를 확인하는 데 쓴다.
@@ -312,8 +355,9 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	// 부르면 내부 페이지네이션 계산에서 패닉이 난다(설정을 못 찾아 경로 입력 화면으로
 	// 시작하면 profileList조차 없다). 각 리스트는 만들어질 때 현재 창 크기로 초기화하고,
 	// 여기서는 살아 있는 것만 갱신한다.
-	m.configInput.Width = msg.Width - 4
-	m.credsInput.Width = msg.Width - 4
+	m.configInput.Width = max(1, msg.Width-4)
+	m.credsInput.Width = max(1, msg.Width-4)
+	m.filterInput.Width = max(1, msg.Width-4)
 
 	// 살아 있는 테이블만 현재 창 크기로 다시 만든다. 아직 안 만들어진 테이블은 제로값이라
 	// Rows()가 비어 있다.
@@ -333,9 +377,10 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.typeTable.SetCursor(cursor)
 	}
 
-	if len(m.resourceRows) > 0 {
+	if len(m.allResourceRows) > 0 || m.screen == ScreenList {
 		cursor := m.resourceTable.Cursor()
-		m.resourceTable = buildTable(m.theme, m.resourceRows, m.deps.ResourceTypes, msg.Width, h)
+		m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
+			m.deps.ResourceTypes, m.chosenTypes, m.showRegion, msg.Width, m.resourceListHeight())
 		m.resourceTable.SetCursor(cursor)
 	}
 
@@ -444,6 +489,16 @@ func (m Model) listHeight() int {
 	}
 
 	return h
+}
+
+// resourceListHeight는 독립된 필터 한 줄을 제외한 리소스 테이블 높이를 반환한다.
+func (m Model) resourceListHeight() int {
+	return max(1, m.listHeight()-1)
+}
+
+// shouldShowRegion은 여러 리전을 함께 조회할 때만 행별 리전 열을 표시한다.
+func (m Model) shouldShowRegion() bool {
+	return len(m.chosenRegions) > 1
 }
 
 // helpBar는 화면 하단에 그릴 한국어 키 안내를 만든다.

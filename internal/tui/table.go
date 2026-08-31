@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
@@ -16,29 +18,42 @@ import (
 // 제공한 타입별 Fields 키를 붙인다. 결과 첫 행에 스키마를 의존하지 않으므로 조건부 필드나
 // 빈 결과에서도 타입 정의가 흔들리지 않는다.
 
-// commonColumns는 모든 리소스 타입에 공통인 앞쪽 열이다.
-var commonColumns = []string{"타입", "이름", "ID", "리전", "상태"}
+// resourceColumn은 리소스 공통·타입별 열의 제목과 값 추출을 함께 정의한다.
+// 제목과 행 생성을 같은 목록에서 처리해 열 수와 셀 수가 어긋나지 않게 한다.
+type resourceColumn struct {
+	title string
+	value func(model.Resource) string
+}
 
 // buildTable은 리소스 목록과 카탈로그 스키마로 테이블 열과 행을 만든다.
 //
-// 한 타입만 있으면 그 타입의 Columns를 공통 열 뒤에 붙인다. 여러 타입이 섞이면 타입마다
-// 필드 의미가 다르므로 공통 열만 표시하고, 상세 화면에서 타입별 전체 필드를 보여준다.
-func buildTable(theme Theme, resources []model.Resource, types []ResourceType, width, height int) table.Model {
-	fieldKeys := fieldColumnKeys(resources, types)
-
-	titles := append(append([]string{}, commonColumns...), fieldKeys...)
-	columns := layoutColumns(titles, width)
+// schemaResources는 필터 전 전체 결과다. 공통 열과 필드 스키마를 이 값으로 결정해 필터
+// 결과가 0개가 되어도 열 구성이 흔들리지 않게 한다. selectedTypes는 결과가 비어도 단일
+// 타입의 catalog Columns를 유지하고, 여러 타입을 선택했으면 타입 열을 표시하게 한다.
+func buildTable(
+	theme Theme,
+	resources, schemaResources []model.Resource,
+	types []ResourceType,
+	selectedTypes []string,
+	showRegion bool,
+	width, height int,
+) table.Model {
+	resourceColumns := resourceColumns(schemaResources, types, selectedTypes, showRegion)
+	titles := make([]string, 0, len(resourceColumns))
+	for _, column := range resourceColumns {
+		titles = append(titles, column.title)
+	}
 
 	rows := make([]table.Row, 0, len(resources))
-	for _, r := range resources {
-		row := []string{r.Type, r.DisplayName(), r.ID, r.Region, r.Status}
-		for _, key := range fieldKeys {
-			row = append(row, r.FieldValue(key))
+	for _, resource := range resources {
+		row := make(table.Row, 0, len(resourceColumns))
+		for _, column := range resourceColumns {
+			row = append(row, column.value(resource))
 		}
-
 		rows = append(rows, row)
 	}
 
+	columns := layoutResourceColumns(titles, rows, width)
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
@@ -51,21 +66,110 @@ func buildTable(theme Theme, resources []model.Resource, types []ResourceType, w
 	return t
 }
 
+func resourceColumns(
+	resources []model.Resource,
+	types []ResourceType,
+	selectedTypes []string,
+	showRegion bool,
+) []resourceColumn {
+	var columns []resourceColumn
+
+	if multipleResourceTypes(resources, selectedTypes) {
+		columns = append(columns, resourceColumn{title: "타입", value: func(resource model.Resource) string {
+			return resource.Type
+		}})
+	}
+
+	columns = append(columns, resourceColumn{title: "이름", value: func(resource model.Resource) string {
+		return resource.DisplayName()
+	}})
+
+	if hasDistinctResourceID(resources) {
+		columns = append(columns, resourceColumn{title: "ID", value: func(resource model.Resource) string {
+			return resource.ID
+		}})
+	}
+
+	if showRegion {
+		columns = append(columns, resourceColumn{title: "리전", value: func(resource model.Resource) string {
+			return resource.Region
+		}})
+	}
+
+	if hasResourceStatus(resources) {
+		columns = append(columns, resourceColumn{title: "상태", value: func(resource model.Resource) string {
+			return resource.Status
+		}})
+	}
+
+	for _, key := range fieldColumnKeys(resources, types, selectedTypes) {
+		columns = append(columns, resourceColumn{title: key, value: func(resource model.Resource) string {
+			return resource.FieldValue(key)
+		}})
+	}
+
+	return columns
+}
+
+func multipleResourceTypes(resources []model.Resource, selectedTypes []string) bool {
+	if len(selectedTypes) > 1 {
+		return true
+	}
+	if len(selectedTypes) == 1 || len(resources) < 2 {
+		return false
+	}
+
+	first := resources[0].Type
+	for _, resource := range resources[1:] {
+		if resource.Type != first {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasDistinctResourceID(resources []model.Resource) bool {
+	for _, resource := range resources {
+		if resource.DisplayName() != resource.ID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasResourceStatus(resources []model.Resource) bool {
+	for _, resource := range resources {
+		if strings.TrimSpace(resource.Status) != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // fieldColumnKeys는 단일 타입 목록에 사용할 안정적인 Fields 키 순서를 반환한다.
 //
 // 카탈로그에 정의된 Columns를 우선한다. 테스트나 외부 주입처럼 스키마가 없는 경우에만
 // 같은 타입의 모든 리소스 Fields 합집합을 처음 나타난 순서로 사용한다. 첫 행 하나만 보고
 // 스키마를 정하지 않으므로 조건부 필드도 사라지지 않는다.
-func fieldColumnKeys(resources []model.Resource, types []ResourceType) []string {
-	if len(resources) == 0 {
+func fieldColumnKeys(resources []model.Resource, types []ResourceType, selectedTypes []string) []string {
+	resourceType := ""
+	switch {
+	case len(selectedTypes) == 1:
+		resourceType = selectedTypes[0]
+	case len(selectedTypes) > 1:
 		return nil
-	}
-
-	resourceType := resources[0].Type
-	for _, resource := range resources[1:] {
-		if resource.Type != resourceType {
-			return nil
+	case len(resources) > 0:
+		resourceType = resources[0].Type
+		for _, resource := range resources[1:] {
+			if resource.Type != resourceType {
+				return nil
+			}
 		}
+	default:
+		return nil
 	}
 
 	for _, typ := range types {
@@ -91,7 +195,100 @@ func fieldColumnKeys(resources []model.Resource, types []ResourceType) []string 
 	return keys
 }
 
-// layoutColumns는 열 제목들에 너비를 배분한다.
+// layoutResourceColumns는 내용 길이와 열 의미에 따라 리소스 열 너비를 배분한다.
+//
+// 이름·ID·DNS·값은 남는 폭을 우선 사용하고, 포트·개수·IOPS·TTL 같은 짧은 값은 좁게
+// 유지한다. 터미널이 좁으면 각 열의 최소 너비까지 긴 열부터 줄인다.
+func layoutResourceColumns(titles []string, rows []table.Row, width int) []table.Column {
+	if len(titles) == 0 {
+		return nil
+	}
+
+	widths := make([]int, len(titles))
+	minimums := make([]int, len(titles))
+	maximums := make([]int, len(titles))
+	growable := make([]bool, len(titles))
+
+	for i, title := range titles {
+		minimums[i], maximums[i], growable[i] = resourceColumnBounds(title)
+		preferred := lipgloss.Width(title) + 2
+		for _, row := range rows {
+			if i < len(row) {
+				preferred = max(preferred, lipgloss.Width(row[i])+2)
+			}
+		}
+		widths[i] = min(max(preferred, minimums[i]), maximums[i])
+	}
+
+	usable := max(1, width-2)
+	total := sumWidths(widths)
+	for total > usable {
+		candidate := -1
+		largestSlack := 0
+		for i := range widths {
+			slack := widths[i] - minimums[i]
+			if slack > largestSlack {
+				candidate = i
+				largestSlack = slack
+			}
+		}
+		if candidate < 0 {
+			break
+		}
+		widths[candidate]--
+		total--
+	}
+
+	for total < usable {
+		grew := false
+		for i := range widths {
+			if !growable[i] || widths[i] >= maximums[i] || total >= usable {
+				continue
+			}
+			widths[i]++
+			total++
+			grew = true
+		}
+		if !grew {
+			break
+		}
+	}
+
+	columns := make([]table.Column, 0, len(titles))
+	for i, title := range titles {
+		columns = append(columns, table.Column{Title: title, Width: widths[i]})
+	}
+
+	return columns
+}
+
+func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
+	titleWidth := lipgloss.Width(title) + 2
+
+	switch title {
+	case "포트", "타깃 수", "IOPS", "TTL", "규칙 수":
+		return max(6, titleWidth), max(10, titleWidth), false
+	case "암호화":
+		return max(8, titleWidth), max(12, titleWidth), false
+	case "상태", "리전", "프로토콜", "스킴", "종류", "타깃 종류", "타입":
+		return max(10, titleWidth), max(22, titleWidth), false
+	case "이름", "ID", "DNS 이름", "값", "별칭 대상", "설명", "호스팅 영역":
+		return max(12, titleWidth), max(48, titleWidth), true
+	default:
+		return max(10, titleWidth), max(30, titleWidth), false
+	}
+}
+
+func sumWidths(widths []int) int {
+	var total int
+	for _, width := range widths {
+		total += width
+	}
+
+	return total
+}
+
+// layoutColumns는 일반 선택 테이블의 열 너비를 균등하게 배분한다.
 //
 // 터미널 너비를 열 개수로 고르게 나눈다. 최소 너비를 두어 좁은 터미널에서도 제목이
 // 뭉개지지 않게 한다. 정교한 내용 기반 배분 대신 단순 균등 배분을 쓴다("영리함보다

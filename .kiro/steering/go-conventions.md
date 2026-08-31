@@ -3,6 +3,40 @@
 이 문서는 cloudloupe 구현 시 항상 지켜야 하는 설계 규약이다.
 새 코드를 쓰거나 리뷰할 때 이 원칙을 기준으로 판단한다.
 
+## 이 규약의 뿌리
+
+여기 적힌 규칙은 우리가 지어낸 것이 아니라 Go 커뮤니티가 오래 다듬어 온 통념을 따른다.
+AI 없이 이 코드를 유지보수하게 될 사람이 근거를 직접 확인할 수 있도록 원전을 남긴다.
+
+- **Rob Pike, "Go Proverbs"** (Gopherfest SV 2015). Go 공동 창시자가 정리한 격언 모음.
+  <https://go-proverbs.github.io/> — 영상: <https://www.youtube.com/watch?v=PAAkCSZUG1c>
+  - "The bigger the interface, the weaker the abstraction." (인터페이스가 클수록 추상화는 약하다) → 아래 원칙 3
+  - "Make the zero value useful." (제로 값을 쓸모 있게) → 원칙 8
+  - "A little copying is better than a little dependency." (약간의 복사가 약간의 의존보다 낫다) → 원칙 12
+  - "Clear is better than clever." (영리함보다 명확함) → 전반
+  - "Errors are values." / "Don't just check errors, handle them gracefully." → 원칙 5
+  - "Design the architecture, name the components, document the details." → 원칙 2, 17번은 이 문서 전체의 태도
+  - "Cgo is not Go." / "Syscall/Cgo must be guarded with build tags." → 원칙 12
+  - "Don't panic." → 원칙 5
+
+- **Dave Cheney, "Clear is better than clever"** (GopherCon SG 2019).
+  <https://dave.cheney.net/2019/07/09/clear-is-better-than-clever>
+  가독성과 유지보수성이 영리한 코드보다 우선한다는 근거. 이 프로젝트의 주석 밀도와
+  명시적 조립(원칙 9)이 여기서 온다.
+
+- **"Accept interfaces, return structs."** Go 커뮤니티 관용구. 소비하는 쪽이 자신이 필요한
+  동작만 담은 좁은 인터페이스를 정의하고, 생산하는 쪽은 구체 타입을 반환한다. → 원칙 3
+  <https://medium.com/@cep21/what-accept-interfaces-return-structs-means-in-go-2fe879e25ee8>
+
+- **"Effective Go"** (Go 공식 문서). 명명, 에러 처리, 인터페이스 관용의 1차 출처.
+  <https://go.dev/doc/effective_go>
+
+- **"Go Code Review Comments"** (Go 위키). getter에 Get 안 붙이기, 에러 문자열 소문자
+  시작 같은 세부 관례의 출처. → 원칙 10
+  <https://go.dev/wiki/CodeReviewComments>
+
+원칙과 격언이 충돌하면 원칙 1(조회 전용)이 언제나 이긴다. 이 도구의 존재 이유이기 때문이다.
+
 ---
 
 ## 1. 조회 전용은 타입과 CI로 강제한다 (최우선)

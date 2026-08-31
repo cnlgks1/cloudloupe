@@ -165,7 +165,7 @@ func DefaultRegistry() *Registry {
 **한국어로 쓴다:**
 
 - Go doc 주석과 인라인 주석 전부
-- README, CONTRIBUTING, SECURITY
+- README
 - 워크플로 주석, Makefile 도움말, 스크립트 메시지
 - 커밋 메시지 본문, 사용자에게 보이는 CLI 출력과 에러 메시지
 

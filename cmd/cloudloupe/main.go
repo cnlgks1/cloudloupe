@@ -297,7 +297,7 @@ func noConfigError(loc awsclient.Locations, cause error) error {
 
 	fmt.Fprintf(&sb, "\n다른 위치의 설정을 쓰려면 %s와 %s를 지정하세요.\n",
 		awsclient.EnvConfigFile, awsclient.EnvCredentialsFile)
-	sb.WriteString("프로필 형태는 examples/aws/config.example을 참고하세요.")
+	sb.WriteString("cloudloupe --check 로 어디를 찾아보는지 확인할 수 있습니다.")
 
 	return errors.New(sb.String())
 }
@@ -526,14 +526,6 @@ func detail(p awsclient.Profile) string {
 	default:
 		return "-"
 	}
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }
 
 // formatTable은 열을 표시 폭에 맞춰 정렬한 표를 만든다.

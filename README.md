@@ -196,25 +196,18 @@ cloudloupe는 조사하는 서비스에 대한 읽기 권한이 필요합니다.
 **확인 필요** 중 하나의 신뢰도와 그 판단에 사용한 API 응답 및 지표가 함께 붙습니다.
 믿으라고 하는 대신 직접 판단할 수 있게 하려는 것입니다.
 
-## 기여
+## 개발
 
-이슈와 PR을 환영합니다. 개발 환경 설정은 [CONTRIBUTING.md](CONTRIBUTING.md)를 보시고,
-이 코드베이스가 따르는 설계 규칙은
-[`.kiro/steering/go-conventions.md`](.kiro/steering/go-conventions.md)에 정리되어 있습니다.
-특히 조회 전용 강제는 타협 대상이 아닙니다.
+```sh
+make ci       # gofmt, vet, 조회 전용 가드, 테스트, 빌드
+make test     # 테스트만
+make build    # 바이너리
+make help     # 전체 타깃
+```
 
-## 보안
-
-cloudloupe는 AWS 자격증명과 인프라 메타데이터를 다룹니다. 취약점 신고는
-[SECURITY.md](SECURITY.md)를 참고하세요. 보안 문제는 공개 이슈로 열지 말아주세요.
+설계 규칙은 [`.kiro/steering/go-conventions.md`](.kiro/steering/go-conventions.md)에 있습니다.
+조회 전용 강제는 타협 대상이 아닙니다.
 
 ## 라이선스
 
 [MIT](LICENSE)
-
-## 만든 것들
-
-[Charm](https://charm.sh)의 [Bubble Tea](https://github.com/charmbracelet/bubbletea),
-[Bubbles](https://github.com/charmbracelet/bubbles),
-[Lip Gloss](https://github.com/charmbracelet/lipgloss)와
-[AWS SDK for Go v2](https://github.com/aws/aws-sdk-go-v2)로 만들었습니다.

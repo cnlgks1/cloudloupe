@@ -279,7 +279,7 @@ func TestMissingSharedConfigExplainsWhatToDo(t *testing.T) {
 	}
 
 	// ~/.aws가 없는 첫 사용자에게는 "파일 없음"만 던지지 말고 해결 방법을 알려줘야 한다.
-	for _, want := range []string{"aws configure", "examples/aws/config.example"} {
+	for _, want := range []string{"aws configure", "--check"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("에러는 %q를 안내해야 한다:\n%v", want, err)
 		}

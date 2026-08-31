@@ -26,10 +26,11 @@ func route53Definitions(cfg aws.Config) []Definition {
 
 	return []Definition{
 		{
-			Type:    model.TypeRoute53RecordSet,
-			Label:   "Route 53 레코드",
-			Scope:   Global,
-			Columns: []string{"타입", "호스팅 영역", "TTL", "값", "별칭 대상"},
+			Type:           model.TypeRoute53RecordSet,
+			Label:          "레코드",
+			Scope:          Global,
+			Columns:        []string{"타입", "호스팅 영역", "TTL", "값", "별칭 대상"},
+			SummaryColumns: []string{"타입", "호스팅 영역", "TTL", "값"},
 			newCollector: func() collect.Collector {
 				return route53collector.NewRecordSet(clientFor())
 			},

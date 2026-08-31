@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -33,12 +34,12 @@ type resourceColumn struct {
 func buildTable(
 	theme Theme,
 	resources, schemaResources []model.Resource,
-	types []ResourceType,
+	groups []ResourceGroup,
 	selectedTypes []string,
 	showRegion bool,
 	width, height int,
 ) table.Model {
-	resourceColumns := resourceColumns(schemaResources, types, selectedTypes, showRegion)
+	resourceColumns := resourceColumns(schemaResources, groups, selectedTypes, showRegion)
 	titles := make([]string, 0, len(resourceColumns))
 	for _, column := range resourceColumns {
 		titles = append(titles, column.title)
@@ -68,15 +69,16 @@ func buildTable(
 
 func resourceColumns(
 	resources []model.Resource,
-	types []ResourceType,
+	groups []ResourceGroup,
 	selectedTypes []string,
 	showRegion bool,
 ) []resourceColumn {
 	var columns []resourceColumn
+	mixedTypes := multipleResourceTypes(resources, selectedTypes)
 
-	if multipleResourceTypes(resources, selectedTypes) {
-		columns = append(columns, resourceColumn{title: "타입", value: func(resource model.Resource) string {
-			return resource.Type
+	if mixedTypes {
+		columns = append(columns, resourceColumn{title: "종류", value: func(resource model.Resource) string {
+			return resourceTypeLabel(groups, resource.Type)
 		}})
 	}
 
@@ -102,7 +104,17 @@ func resourceColumns(
 		}})
 	}
 
-	for _, key := range fieldColumnKeys(resources, types, selectedTypes) {
+	if mixedTypes {
+		if hasSummaryColumns(groups, selectedTypes) {
+			columns = append(columns, resourceColumn{title: "주요 정보", value: func(resource model.Resource) string {
+				return resourceSummary(groups, resource)
+			}})
+		}
+
+		return columns
+	}
+
+	for _, key := range fieldColumnKeys(resources, groups, selectedTypes) {
 		columns = append(columns, resourceColumn{title: key, value: func(resource model.Resource) string {
 			return resource.FieldValue(key)
 		}})
@@ -149,12 +161,71 @@ func hasResourceStatus(resources []model.Resource) bool {
 	return false
 }
 
+func resourceTypeMetadata(groups []ResourceGroup, typeID string) (ResourceType, bool) {
+	for _, group := range groups {
+		for _, resourceType := range group.Types {
+			if resourceType.ID == typeID {
+				return resourceType, true
+			}
+		}
+	}
+
+	return ResourceType{}, false
+}
+
+func resourceTypeLabel(groups []ResourceGroup, typeID string) string {
+	resourceType, ok := resourceTypeMetadata(groups, typeID)
+	if !ok || resourceType.Label == "" {
+		return typeID
+	}
+
+	return resourceType.Label
+}
+
+func hasSummaryColumns(groups []ResourceGroup, selectedTypes []string) bool {
+	selected := make(map[string]struct{}, len(selectedTypes))
+	for _, typeID := range selectedTypes {
+		selected[typeID] = struct{}{}
+	}
+
+	for _, group := range groups {
+		for _, resourceType := range group.Types {
+			if len(selected) > 0 {
+				if _, exists := selected[resourceType.ID]; !exists {
+					continue
+				}
+			}
+			if len(resourceType.SummaryColumns) > 0 {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func resourceSummary(groups []ResourceGroup, resource model.Resource) string {
+	resourceType, ok := resourceTypeMetadata(groups, resource.Type)
+	if !ok {
+		return ""
+	}
+
+	parts := make([]string, 0, len(resourceType.SummaryColumns))
+	for _, key := range resourceType.SummaryColumns {
+		if value := strings.TrimSpace(resource.FieldValue(key)); value != "" {
+			parts = append(parts, key+" "+value)
+		}
+	}
+
+	return strings.Join(parts, " · ")
+}
+
 // fieldColumnKeys는 단일 타입 목록에 사용할 안정적인 Fields 키 순서를 반환한다.
 //
 // 카탈로그에 정의된 Columns를 우선한다. 테스트나 외부 주입처럼 스키마가 없는 경우에만
 // 같은 타입의 모든 리소스 Fields 합집합을 처음 나타난 순서로 사용한다. 첫 행 하나만 보고
 // 스키마를 정하지 않으므로 조건부 필드도 사라지지 않는다.
-func fieldColumnKeys(resources []model.Resource, types []ResourceType, selectedTypes []string) []string {
+func fieldColumnKeys(resources []model.Resource, groups []ResourceGroup, selectedTypes []string) []string {
 	resourceType := ""
 	switch {
 	case len(selectedTypes) == 1:
@@ -172,10 +243,8 @@ func fieldColumnKeys(resources []model.Resource, types []ResourceType, selectedT
 		return nil
 	}
 
-	for _, typ := range types {
-		if typ.ID == resourceType && len(typ.Columns) > 0 {
-			return append([]string(nil), typ.Columns...)
-		}
+	if metadata, ok := resourceTypeMetadata(groups, resourceType); ok && len(metadata.Columns) > 0 {
+		return append([]string(nil), metadata.Columns...)
 	}
 
 	seen := make(map[string]struct{})
@@ -272,7 +341,7 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 		return max(8, titleWidth), max(12, titleWidth), false
 	case "상태", "리전", "프로토콜", "스킴", "종류", "타깃 종류", "타입":
 		return max(10, titleWidth), max(22, titleWidth), false
-	case "이름", "ID", "DNS 이름", "값", "별칭 대상", "설명", "호스팅 영역":
+	case "이름", "ID", "DNS 이름", "값", "별칭 대상", "설명", "호스팅 영역", "주요 정보":
 		return max(12, titleWidth), max(48, titleWidth), true
 	default:
 		return max(10, titleWidth), max(30, titleWidth), false
@@ -360,31 +429,77 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 	return newDataTable(theme, columns, rows, height)
 }
 
-// buildTypeTable은 리소스 타입 선택 테이블을 만든다. 다중 선택이므로 선택 표시 열을 둔다.
-// 열: 선택 / 타입 / 타입 ID.
-func buildTypeTable(theme Theme, types []ResourceType, chosen []string, width, height int) table.Model {
-	set := make(map[string]bool, len(chosen))
-	for _, c := range chosen {
-		set[c] = true
-	}
-
-	titles := []string{"", "타입", "타입 ID"}
+// buildTypeTable은 AWS 서비스별 큰 리소스 선택 테이블을 만든다.
+//
+// 세부 타입 ID를 노출하지 않고 그룹에 포함되는 리소스 이름만 보여준다. 선택 결과는
+// resourceGroupTypeIDs로 펼쳐 실제 수집기에는 기존의 정밀한 타입 ID가 전달된다.
+func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width, height int) table.Model {
+	titles := []string{"", "리소스", "포함 항목"}
 	columns := layoutColumns(titles, width)
 	if len(columns) > 0 {
 		columns[0].Width = 3
 	}
 
-	rows := make([]table.Row, 0, len(types))
-	for _, t := range types {
+	rows := make([]table.Row, 0, len(groups))
+	for _, group := range groups {
 		mark := " "
-		if set[t.ID] {
+		if resourceGroupSelected(group, chosen) {
 			mark = theme.Glyphs.Healthy
 		}
 
-		rows = append(rows, table.Row{mark, t.Label, t.ID})
+		labels := make([]string, 0, len(group.Types))
+		for _, resourceType := range group.Types {
+			labels = append(labels, resourceType.Label)
+		}
+		rows = append(rows, table.Row{mark, group.Label, strings.Join(labels, ", ")})
 	}
 
 	return newDataTable(theme, columns, rows, height)
+}
+
+// buildResourceKindTable은 수집 결과 안의 세부 종류를 단일 선택 표로 만든다.
+func buildResourceKindTable(theme Theme, kinds []resourceKind, width, height int) table.Model {
+	titles := []string{"종류", "개수"}
+	columns := layoutColumns(titles, width)
+
+	total := 0
+	for _, kind := range kinds {
+		total += kind.Count
+	}
+	rows := make([]table.Row, 0, len(kinds)+1)
+	rows = append(rows, table.Row{"전체", strconv.Itoa(total)})
+	for _, kind := range kinds {
+		rows = append(rows, table.Row{kind.Label, strconv.Itoa(kind.Count)})
+	}
+
+	return newDataTable(theme, columns, rows, height)
+}
+
+func resourceGroupTypeIDs(group ResourceGroup) []string {
+	types := make([]string, 0, len(group.Types))
+	for _, resourceType := range group.Types {
+		types = append(types, resourceType.ID)
+	}
+
+	return types
+}
+
+func resourceGroupSelected(group ResourceGroup, chosen []string) bool {
+	if len(group.Types) == 0 {
+		return false
+	}
+
+	selected := make(map[string]struct{}, len(chosen))
+	for _, typeID := range chosen {
+		selected[typeID] = struct{}{}
+	}
+	for _, resourceType := range group.Types {
+		if _, exists := selected[resourceType.ID]; !exists {
+			return false
+		}
+	}
+
+	return true
 }
 
 // newDataTable은 공통 설정을 적용한 table.Model을 만든다.

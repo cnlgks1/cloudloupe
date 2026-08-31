@@ -29,28 +29,68 @@ const (
 //
 // Columns는 Resource.Fields에 들어가는 키 순서다. TUI가 첫 번째 결과의 우연한 필드
 // 모양으로 열을 결정하지 않고, 결과가 없어도 안정적인 스키마를 사용하게 한다.
+// SummaryColumns는 여러 타입을 한 서비스 목록에 함께 표시할 때 "주요 정보"로 압축할
+// 필드다. 상세 타입을 각각 선택지로 노출하지 않으면서도 핵심 값은 목록에서 볼 수 있게 한다.
 type Definition struct {
-	Type    string
-	Label   string
-	Scope   ScopeKind
-	Columns []string
+	Type           string
+	Label          string
+	Scope          ScopeKind
+	Columns        []string
+	SummaryColumns []string
 
 	newCollector func() collect.Collector
 }
 
+// Group은 사용자가 한 번에 선택하는 큰 AWS 리소스 묶음이다.
+//
+// Types는 내부 수집과 관계 모델에 사용하는 세부 타입이다. TUI는 그룹만 보여주고 선택된
+// 그룹의 Types를 수집기에 전달하므로, 화면을 단순하게 유지하면서 내부 타입 정밀도는 잃지 않는다.
+type Group struct {
+	ID    string
+	Label string
+	Types []Definition
+}
+
 // Definitions는 지원 타입 정의를 표시·실행 순서대로 반환한다.
 //
-// 호출자가 내부 상태를 바꿀 수 없도록 매번 새 슬라이스와 Columns 복사본을 반환한다.
+// 호출자가 내부 상태를 바꿀 수 없도록 매번 새 슬라이스와 필드 슬라이스 복사본을 반환한다.
 func Definitions() []Definition {
 	definitions := allDefinitions(aws.Config{})
 	out := make([]Definition, len(definitions))
 
 	for i, definition := range definitions {
-		out[i] = definition
-		out[i].Columns = append([]string(nil), definition.Columns...)
+		out[i] = copyDefinition(definition)
 	}
 
 	return out
+}
+
+// Groups는 사용자가 선택할 서비스별 큰 리소스 묶음을 반환한다.
+//
+// 세부 타입은 그룹 안에 남아 수집기 선택과 관계 식별에 사용된다. 반환값은 호출자가
+// 변경해도 카탈로그 내부 조립에 영향을 주지 않는 방어적 복사본이다.
+func Groups() ([]Group, error) {
+	groups := allGroups(aws.Config{})
+	if err := validateGroups(groups); err != nil {
+		return nil, fmt.Errorf("리소스 그룹 검증: %w", err)
+	}
+
+	out := make([]Group, len(groups))
+	for i, group := range groups {
+		out[i] = Group{ID: group.ID, Label: group.Label, Types: make([]Definition, len(group.Types))}
+		for j, definition := range group.Types {
+			out[i].Types[j] = copyDefinition(definition)
+		}
+	}
+
+	return out, nil
+}
+
+func copyDefinition(definition Definition) Definition {
+	definition.Columns = append([]string(nil), definition.Columns...)
+	definition.SummaryColumns = append([]string(nil), definition.SummaryColumns...)
+
+	return definition
 }
 
 // Registry는 AWS 설정과 선택 타입으로 실행 가능한 수집기 레지스트리를 만든다.
@@ -58,7 +98,12 @@ func Definitions() []Definition {
 // includeGlobal이 false면 글로벌 타입은 제외한다. selected가 비면 지원 타입을 모두
 // 포함하며, 알 수 없는 타입은 unknown으로 반환해 호출자가 사용자에게 알려줄 수 있다.
 func Registry(cfg aws.Config, includeGlobal bool, selected []string) (*collect.Registry, []string, error) {
-	return buildRegistry(allDefinitions(cfg), includeGlobal, selected)
+	groups := allGroups(cfg)
+	if err := validateGroups(groups); err != nil {
+		return nil, nil, fmt.Errorf("리소스 그룹 검증: %w", err)
+	}
+
+	return buildRegistry(flattenGroups(groups), includeGlobal, selected)
 }
 
 func buildRegistry(definitions []Definition, includeGlobal bool, selected []string) (*collect.Registry, []string, error) {
@@ -147,21 +192,80 @@ func validateDefinitions(definitions []Definition) error {
 			}
 			seenColumns[column] = struct{}{}
 		}
+
+		seenSummary := make(map[string]struct{}, len(definition.SummaryColumns))
+		for _, column := range definition.SummaryColumns {
+			if _, exists := seenColumns[column]; !exists {
+				return fmt.Errorf("%s: 주요 정보 열이 목록 열에 없음 (%s)", definition.Type, column)
+			}
+			if _, exists := seenSummary[column]; exists {
+				return fmt.Errorf("%s: 주요 정보 열 중복 (%s)", definition.Type, column)
+			}
+			seenSummary[column] = struct{}{}
+		}
 	}
 
 	return nil
 }
 
-// allDefinitions는 서비스별 정의를 최종 표시·실행 순서로 조립한다.
-//
-// 새 리소스는 해당 서비스의 definitions 함수에 추가한다. 새 서비스는 definitions 함수를
-// 만들고 이곳에 한 줄을 추가한다. 순서를 숨기는 init 자동 등록은 사용하지 않는다.
-func allDefinitions(cfg aws.Config) []Definition {
+func validateGroups(groups []Group) error {
+	seenIDs := make(map[string]struct{}, len(groups))
+	typeGroups := make(map[string]string)
+
+	for i, group := range groups {
+		if strings.TrimSpace(group.ID) == "" {
+			return fmt.Errorf("그룹 %d: ID가 비어 있음", i)
+		}
+		if _, exists := seenIDs[group.ID]; exists {
+			return fmt.Errorf("그룹 ID 중복: %s", group.ID)
+		}
+		seenIDs[group.ID] = struct{}{}
+
+		if strings.TrimSpace(group.Label) == "" {
+			return fmt.Errorf("%s: 표시명이 비어 있음", group.ID)
+		}
+		if len(group.Types) == 0 {
+			return fmt.Errorf("%s: 포함 타입이 없음", group.ID)
+		}
+
+		for _, definition := range group.Types {
+			if owner, exists := typeGroups[definition.Type]; exists {
+				return fmt.Errorf("%s: 타입 %s가 그룹 %s에도 포함됨", group.ID, definition.Type, owner)
+			}
+			typeGroups[definition.Type] = group.ID
+
+			if len(group.Types) > 1 && len(definition.SummaryColumns) == 0 {
+				return fmt.Errorf("%s: 타입 %s의 주요 정보 열이 없음", group.ID, definition.Type)
+			}
+		}
+	}
+
+	return validateDefinitions(flattenGroups(groups))
+}
+
+func flattenGroups(groups []Group) []Definition {
 	var definitions []Definition
-	definitions = append(definitions, ec2Definitions(cfg)...)
-	definitions = append(definitions, elbv2Definitions(cfg)...)
-	definitions = append(definitions, route53Definitions(cfg)...)
-	definitions = append(definitions, wafv2Definitions(cfg)...)
+	for _, group := range groups {
+		definitions = append(definitions, group.Types...)
+	}
 
 	return definitions
+}
+
+// allDefinitions는 서비스별 정의를 최종 표시·실행 순서로 펼친다.
+func allDefinitions(cfg aws.Config) []Definition {
+	return flattenGroups(allGroups(cfg))
+}
+
+// allGroups는 사용자가 보는 큰 AWS 리소스 단위와 내부 세부 타입을 함께 조립한다.
+//
+// 새 리소스는 해당 서비스의 definitions 함수에 추가한다. 새 서비스는 definitions 함수를
+// 만들고 이곳에 그룹 한 개를 추가한다. 순서를 숨기는 init 자동 등록은 사용하지 않는다.
+func allGroups(cfg aws.Config) []Group {
+	return []Group{
+		{ID: "ec2", Label: "EC2", Types: ec2Definitions(cfg)},
+		{ID: "elbv2", Label: "ELB", Types: elbv2Definitions(cfg)},
+		{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
+		{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
+	}
 }

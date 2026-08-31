@@ -94,26 +94,25 @@ go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
 
 ## 지원 리소스
 
-조회할 수 있는 리소스는 아래와 같습니다.
+TUI에서는 큰 AWS 리소스 단위로 선택하며, 내부에서는 아래 세부 타입을 함께 수집합니다.
 
-| 리소스 | 타입 ID | 상태 |
+| 선택 리소스 | 포함 세부 타입 | 상태 |
 | --- | --- | :---: |
-| EC2 인스턴스 | `ec2:instance` | O |
-| EBS 볼륨 | `ec2:volume` | O |
-| 네트워크 인터페이스 (ENI) | `ec2:networkInterface` | O |
-| Elastic IP | `ec2:address` | O |
-| 로드밸런서 (ALB/NLB) | `elbv2:loadBalancer` | O |
-| 타깃 그룹 (+타깃 상태) | `elbv2:targetGroup` | O |
-| Route 53 레코드 | `route53:recordSet` | O |
-| WAF Web ACL (REGIONAL) | `wafv2:webAcl` | O |
+| EC2 | 인스턴스, EBS 볼륨, ENI, Elastic IP | O |
+| ELB | 로드 밸런서, 타깃 그룹과 타깃 상태 | O |
+| Route 53 | 레코드 | O |
+| WAF | Web ACL (REGIONAL) | O |
 
-모든 조회는 `Describe`/`List`/`Get` 계열 API만 씁니다. 새 리소스 타입은 서비스별 수집기와
-카탈로그 정의를 추가하면 되며, 조회 전용 가드가 쓰기 API를 자동으로 차단합니다.
+내부 타입 ID(`ec2:instance`, `ec2:volume`, `ec2:networkInterface`, `ec2:address`,
+`elbv2:loadBalancer`, `elbv2:targetGroup`, `route53:recordSet`, `wafv2:webAcl`)는
+관계 식별과 수집기 선택에 그대로 사용합니다. 모든 조회는 `Describe`/`List`/`Get` 계열
+API만 씁니다. 새 리소스는 서비스 그룹의 수집기와 카탈로그 정의를 추가하며, 조회 전용
+가드가 쓰기 API를 자동으로 차단합니다.
 
 ## 사용법
 
 ```sh
-# 대화형 TUI 시작: 프로필 선택 → 계정 확인 → 리전 선택 → 타입 선택 → 조회
+# 대화형 TUI 시작: 프로필 선택 → 계정 확인 → 리전 선택 → 리소스 선택 → 조회
 cloudloupe
 
 # 설정이 기본 위치에 없으면 실행 중 경로를 입력받는다.
@@ -140,14 +139,15 @@ cloudloupe --check
 프로필 선택       ↑/↓ 또는 j/k 이동, enter/→ 선택, c 설정 경로 지정
 계정 확인         선택한 프로필의 계정·사용자 확인 (STS)
 리전 선택         ↑/↓ 또는 j/k 이동, space 다중 선택, enter/→ 다음
-리소스 타입 선택  ↑/↓ 또는 j/k 이동, space 다중 선택, enter/→ 조회
+리소스 선택       ↑/↓ 또는 j/k 이동, space 다중 선택, enter/→ 조회
 수집 중           esc로 취소
-리소스 목록       enter/→ 상세, p 프로필 전환, R 리전 전환, esc 뒤로, q 종료
+리소스 목록       t 종류 필터, / 텍스트 검색, enter/→ 상세, p 프로필 전환, R 리전 전환, esc 뒤로, q 종료
+종류 필터         실제 종류가 2개 이상일 때 전체/종류별 선택, enter/→ 적용, esc/← 취소
 상세              ↑/↓ 또는 j/k 스크롤, esc/← 목록 복귀
 ```
 
-프로필·리전·리소스 타입·리소스 목록은 모두 컬럼 정렬 테이블로 표시됩니다. 상단 경로에는
-현재 프로필, 리전과 리소스 타입이 항상 표시됩니다.
+프로필·리전·리소스 그룹·리소스 목록은 모두 컬럼 정렬 테이블로 표시됩니다. 상단 경로에는
+현재 프로필, 리전과 선택한 리소스 그룹이 항상 표시됩니다.
 
 `~/.aws/config`를 기본으로 보고, 없거나 다른 곳에 있으면 첫 화면에서 경로를 입력받습니다.
 

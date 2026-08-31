@@ -35,6 +35,7 @@ const (
 	ScreenResourceType // 조회할 리소스 타입 선택
 	ScreenCollecting
 	ScreenList
+	ScreenResourceKind // 수집 결과 안의 세부 종류 필터 선택
 	ScreenDetail
 	ScreenError
 )
@@ -48,9 +49,9 @@ type Deps struct {
 	// (~/.aws)를 쓴다. 경로를 바꿔가며 다시 시도할 수 있도록 함수로 주입한다.
 	LoadProfiles func(awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error)
 
-	// ResourceTypes는 조회 가능한 리소스 타입 목록이다. 타입 선택 화면에 보여준다.
-	// {ID: "ec2:instance", Label: "EC2 인스턴스"} 형태.
-	ResourceTypes []ResourceType
+	// ResourceGroups는 사용자가 선택할 AWS 서비스별 큰 리소스 목록이다.
+	// 세부 타입은 그룹 안에 남아 실제 수집기 선택과 목록 종류 표시에 사용한다.
+	ResourceGroups []ResourceGroup
 
 	// Identify는 프로필의 신원을 확인한다(STS GetCallerIdentity).
 	Identify func(ctx context.Context, profile, region string) (awsclient.Identity, error)
@@ -62,11 +63,26 @@ type Deps struct {
 	Explain func(error) string
 }
 
-// ResourceType은 타입 선택 화면에 보여줄 리소스 타입 하나다.
+// ResourceGroup은 선택 화면에 보여줄 AWS 서비스별 큰 리소스 묶음이다.
+type ResourceGroup struct {
+	ID    string         // "ec2" 같은 안정적인 그룹 ID
+	Label string         // "EC2" 같은 표시 이름
+	Types []ResourceType // 그룹을 선택했을 때 함께 수집할 내부 세부 타입
+}
+
+// ResourceType은 그룹 안에서 수집되는 내부 리소스 타입의 표시 메타데이터다.
 type ResourceType struct {
-	ID      string   // "ec2:instance" 같은 타입 ID
-	Label   string   // "EC2 인스턴스" 같은 표시 이름
-	Columns []string // 목록 테이블에 표시할 Resource.Fields 키 순서
+	ID             string   // "ec2:instance" 같은 타입 ID
+	Label          string   // "EC2 인스턴스" 같은 표시 이름
+	Columns        []string // 단일 타입 목록에 표시할 Resource.Fields 키 순서
+	SummaryColumns []string // 혼합 그룹의 주요 정보에 합칠 필드 순서
+}
+
+// resourceKind는 실제 수집 결과에 존재하는 세부 종류와 개수다.
+type resourceKind struct {
+	ID    string
+	Label string
+	Count int
 }
 
 // Model은 대화형 TUI 전체의 상태다.
@@ -94,18 +110,21 @@ type Model struct {
 	profileTable table.Model
 	regionTable  table.Model
 	typeTable    table.Model
+	kindTable    table.Model
 	detail       viewport.Model
 	spinner      spinner.Model
 
-	resourceTable   table.Model
-	allResourceRows []model.Resource
-	resourceRows    []model.Resource
-	listCaption     string
-	filterInput     textinput.Model
-	filtering       bool
-	filterQuery     string
-	previousFilter  string
-	showRegion      bool
+	resourceTable      table.Model
+	allResourceRows    []model.Resource
+	resourceRows       []model.Resource
+	listCaption        string
+	filterInput        textinput.Model
+	filtering          bool
+	filterQuery        string
+	previousFilter     string
+	resourceKinds      []resourceKind
+	resourceKindFilter string
+	showRegion         bool
 
 	chosenProfile string
 	identity      awsclient.Identity
@@ -142,6 +161,7 @@ type keyMap struct {
 	Quit          key.Binding
 	SwitchProfile key.Binding
 	SwitchRegion  key.Binding
+	FilterKind    key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -152,6 +172,7 @@ func defaultKeys() keyMap {
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "종료")),
 		SwitchProfile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "프로필 전환")),
 		SwitchRegion:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "리전 전환")),
+		FilterKind:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "종류 필터")),
 	}
 }
 
@@ -284,16 +305,22 @@ func (m Model) View() string {
 			[2]string{"esc/←", "뒤로"},
 		)
 	case ScreenResourceType:
-		return m.screenWithHelp("리소스 타입", m.typeTable,
+		return m.screenWithHelp("리소스 선택", m.typeTable,
 			[2]string{"↑↓/jk", "이동"},
 			[2]string{"space", "여러 개 선택"},
-			[2]string{"enter/→", "이 타입 조회"},
+			[2]string{"enter/→", "이 리소스 조회"},
 			[2]string{"esc/←", "뒤로"},
 		)
 	case ScreenCollecting:
 		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: 취소"))
 	case ScreenList:
 		return m.resourceListView()
+	case ScreenResourceKind:
+		return m.screenWithHelp("종류 필터", m.kindTable,
+			[2]string{"↑↓/jk", "이동"},
+			[2]string{"enter/→", "적용"},
+			[2]string{"esc/←", "취소"},
+		)
 	case ScreenDetail:
 		return m.detail.View() + m.helpBar(
 			[2]string{"↑↓/jk", "스크롤"},
@@ -314,11 +341,27 @@ func (m Model) resourceListView() string {
 	help := [][2]string{
 		{"↑↓/jk", "이동"},
 		{"enter/→", "상세"},
-		{"/", "필터"},
+		{"/", "검색"},
 		{"p", "프로필 전환"},
 		{"R", "리전 전환"},
 		{"esc", "뒤로"},
 		{"q", "종료"},
+	}
+
+	lines := []string{
+		m.breadcrumb(),
+		m.theme.Title.Render(m.listCaption),
+	}
+	if m.hasResourceKindFilter() {
+		kind := m.resourceKindFilterLabel()
+		kindLine := m.theme.Faint.Render("종류: ") + m.theme.Title.Render(kind) +
+			m.theme.Faint.Render("  t: 변경")
+		if m.resourceKindFilter != "" && m.filterQuery == "" {
+			kindLine += "  " + m.theme.Faint.Render(
+				fmt.Sprintf("결과 %d/%d개", len(m.resourceRows), len(m.allResourceRows)))
+		}
+		lines = append(lines, kindLine)
+		help = append([][2]string{{"t", "종류 필터"}}, help...)
 	}
 
 	if m.filtering {
@@ -332,12 +375,26 @@ func (m Model) resourceListView() string {
 		filterLine = fmt.Sprintf("/ %s  %s", m.filterQuery,
 			m.theme.Faint.Render(fmt.Sprintf("결과 %d/%d개", len(m.resourceRows), len(m.allResourceRows))))
 	}
+	lines = append(lines, filterLine)
 
-	return m.breadcrumb() + "\n" +
-		m.theme.Title.Render(m.listCaption) + "\n" +
-		filterLine + "\n" +
-		m.resourceTable.View() +
-		m.helpBar(help...)
+	return strings.Join(lines, "\n") + "\n" + m.resourceTable.View() + m.helpBar(help...)
+}
+
+func (m Model) hasResourceKindFilter() bool {
+	return len(m.resourceKinds) > 1
+}
+
+func (m Model) resourceKindFilterLabel() string {
+	if m.resourceKindFilter == "" {
+		return "전체"
+	}
+	for _, kind := range m.resourceKinds {
+		if kind.ID == m.resourceKindFilter {
+			return kind.Label
+		}
+	}
+
+	return m.resourceKindFilter
 }
 
 // Screen은 현재 화면을 노출한다. 테스트에서 상태 전이를 확인하는 데 쓴다.
@@ -371,16 +428,22 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.regionTable.SetCursor(cursor)
 	}
 
-	if len(m.deps.ResourceTypes) > 0 && len(m.typeTable.Rows()) > 0 {
+	if len(m.deps.ResourceGroups) > 0 && len(m.typeTable.Rows()) > 0 {
 		cursor := m.typeTable.Cursor()
-		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, m.chosenTypes, msg.Width, h)
+		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, msg.Width, h)
 		m.typeTable.SetCursor(cursor)
 	}
 
-	if len(m.allResourceRows) > 0 || m.screen == ScreenList {
+	if m.hasResourceKindFilter() && len(m.kindTable.Rows()) > 0 {
+		cursor := m.kindTable.Cursor()
+		m.kindTable = buildResourceKindTable(m.theme, m.resourceKinds, msg.Width, h)
+		m.kindTable.SetCursor(cursor)
+	}
+
+	if len(m.allResourceRows) > 0 || m.screen == ScreenList || m.screen == ScreenResourceKind {
 		cursor := m.resourceTable.Cursor()
 		m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
-			m.deps.ResourceTypes, m.chosenTypes, m.showRegion, msg.Width, m.resourceListHeight())
+			m.deps.ResourceGroups, m.chosenTypes, m.showRegion, msg.Width, m.resourceListHeight())
 		m.resourceTable.SetCursor(cursor)
 	}
 
@@ -400,6 +463,8 @@ func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.regionTable, cmd = m.regionTable.Update(msg)
 	case ScreenResourceType:
 		m.typeTable, cmd = m.typeTable.Update(msg)
+	case ScreenResourceKind:
+		m.kindTable, cmd = m.kindTable.Update(msg)
 	case ScreenList:
 		m.resourceTable, cmd = m.resourceTable.Update(msg)
 	case ScreenDetail:
@@ -493,7 +558,12 @@ func (m Model) listHeight() int {
 
 // resourceListHeight는 독립된 필터 한 줄을 제외한 리소스 테이블 높이를 반환한다.
 func (m Model) resourceListHeight() int {
-	return max(1, m.listHeight()-1)
+	height := m.listHeight() - 1 // 검색 줄
+	if m.hasResourceKindFilter() {
+		height-- // 종류 필터 줄
+	}
+
+	return max(1, height)
 }
 
 // shouldShowRegion은 여러 리전을 함께 조회할 때만 행별 리전 열을 표시한다.
@@ -524,7 +594,7 @@ func (m Model) screenWithHelp(caption string, t table.Model, pairs ...[2]string)
 	return header + "\n" + title + "\n" + t.View() + m.helpBar(pairs...)
 }
 
-// breadcrumb은 상단에 고정으로 그리는 경로 헤더다. 현재 프로필·리전·리소스 타입을 보여준다.
+// breadcrumb은 상단에 고정으로 그리는 경로 헤더다. 현재 프로필·리전·리소스 그룹을 보여준다.
 //
 // 아직 안 고른 항목은 "-"로 둔다. 계정 ID가 확인됐으면 프로필 옆에 함께 보여준다.
 func (m Model) breadcrumb() string {
@@ -539,8 +609,8 @@ func (m Model) breadcrumb() string {
 	}
 
 	resource := "-"
-	if len(m.chosenTypes) > 0 {
-		resource = strings.Join(m.chosenTypes, ",")
+	if labels := selectedResourceGroupLabels(m.deps.ResourceGroups, m.chosenTypes); len(labels) > 0 {
+		resource = strings.Join(labels, ",")
 	}
 
 	label := func(k, v string) string {
@@ -554,6 +624,17 @@ func (m Model) breadcrumb() string {
 	}
 
 	return strings.Join(parts, m.theme.Faint.Render("   "))
+}
+
+func selectedResourceGroupLabels(groups []ResourceGroup, chosenTypes []string) []string {
+	var labels []string
+	for _, group := range groups {
+		if resourceGroupSelected(group, chosenTypes) {
+			labels = append(labels, group.Label)
+		}
+	}
+
+	return labels
 }
 
 // renderDetail은 리소스 상세를 문자열로 만든다. Fields는 순서 있는 슬라이스이므로

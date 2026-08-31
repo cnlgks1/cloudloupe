@@ -3,6 +3,7 @@ package tui_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -49,9 +50,23 @@ func okDeps(resources []model.Resource) tui.Deps {
 		LoadProfiles: func(_ awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
 			return sampleProfiles(), awsclient.Locations{}, nil
 		},
-		ResourceTypes: []tui.ResourceType{
-			{ID: "ec2:instance", Label: "EC2 인스턴스"},
-			{ID: "ec2:volume", Label: "EBS 볼륨"},
+		ResourceGroups: []tui.ResourceGroup{
+			{
+				ID:    "ec2",
+				Label: "EC2",
+				Types: []tui.ResourceType{
+					{ID: model.TypeEC2Instance, Label: "EC2 인스턴스"},
+					{ID: model.TypeEC2Volume, Label: "EBS 볼륨"},
+				},
+			},
+			{
+				ID:    "elbv2",
+				Label: "ELBv2",
+				Types: []tui.ResourceType{
+					{ID: model.TypeELBv2LoadBalancer, Label: "로드 밸런서"},
+					{ID: model.TypeELBv2TargetGroup, Label: "타깃 그룹"},
+				},
+			},
 		},
 		Identify: func(_ context.Context, profile, _ string) (awsclient.Identity, error) {
 			return awsclient.Identity{AccountID: "123456789012", ARN: "arn:aws:sts::123456789012:user/" + profile}, nil
@@ -321,21 +336,20 @@ func TestResourceTypeSelectionFiltersCollect(t *testing.T) {
 	m = step(m, keyMsg("enter")) // 리전
 	m = send(m, keyMsg("enter")) // 타입 선택 화면
 
-	// 첫 타입(ec2:instance)을 space로 체크하고 조회.
+	// 첫 그룹(EC2)을 space로 체크하면 그룹의 내부 타입이 모두 전달되어야 한다.
 	m = send(m, keyMsg("space"))
 	m = step(m, keyMsg("enter"))
 
-	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
-		t.Errorf("선택한 타입만 넘어가야 한다, got %v", gotTypes)
+	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	if !slices.Equal(gotTypes, want) {
+		t.Errorf("선택한 그룹의 타입이 모두 넘어가야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 
 func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
 	t.Parallel()
 
-	// space로 아무것도 체크하지 않고 enter만 누르면, 커서에 있는 타입 하나만 조회되어야
-	// 한다. "EC2에 커서를 두고 enter를 눌렀는데 전체(모든 타입)가 나온다"는 회귀를
-	// 방어한다. 커서는 첫 항목(ec2:instance)에 있다.
+	// space 없이 enter하면 커서에 있는 첫 그룹(EC2)의 내부 타입을 모두 조회한다.
 	var gotTypes []string
 
 	deps := okDeps(sampleResources())
@@ -350,8 +364,9 @@ func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
 	m = send(m, keyMsg("enter")) // 타입 선택 화면
 	m = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서의 타입 하나
 
-	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
-		t.Errorf("체크 없이 enter는 커서의 타입 하나여야 한다, got %v", gotTypes)
+	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	if !slices.Equal(gotTypes, want) {
+		t.Errorf("체크 없이 enter는 커서 그룹의 타입 전체여야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 
@@ -379,8 +394,13 @@ func TestViewRendersEveryScreenWithoutPanic(t *testing.T) {
 		}
 
 		m = step(m, keyMsg("enter")) // 프로필 → 리전 (신원확인 Cmd)
-		m = send(m, keyMsg("enter")) // 리전 → 타입 선택 (Cmd 없음)
-		m = step(m, keyMsg("enter")) // 타입 → 목록 (수집 Cmd)
+		m = send(m, keyMsg("enter")) // 리전 → 리소스 선택 (Cmd 없음)
+		m = step(m, keyMsg("enter")) // 리소스 → 목록 (수집 Cmd)
+		m = send(m, keyMsg("t"))
+		if m.Screen() != tui.ScreenResourceKind || m.View() == "" {
+			t.Errorf("ascii=%v: 종류 필터 화면을 렌더링하지 못함", ascii)
+		}
+		m = send(m, keyMsg("esc"))
 		m = send(m, keyMsg("enter")) // 목록 → 상세
 
 		if out := m.View(); !strings.Contains(out, "web-alb") {
@@ -407,7 +427,7 @@ func TestBackNavigationKeepsTypeSelection(t *testing.T) {
 	m = step(m, keyMsg("enter")) // 리전
 	m = send(m, keyMsg("enter")) // 타입 선택 화면
 
-	// 첫 타입(ec2:instance)을 체크한다.
+	// 첫 그룹(EC2)을 체크한다.
 	m = send(m, keyMsg("space"))
 
 	// esc로 리전으로 갔다가 enter로 다시 타입 화면으로.
@@ -421,10 +441,11 @@ func TestBackNavigationKeepsTypeSelection(t *testing.T) {
 		t.Fatalf("리전에서 enter 후 = %v, want 타입 선택", m.Screen())
 	}
 
-	// 여기서 바로 조회하면, 앞서 고른 타입이 그대로 살아 있어야 한다.
+	// 여기서 바로 조회하면, 앞서 고른 그룹의 내부 타입이 그대로 살아 있어야 한다.
 	m = step(m, keyMsg("enter"))
-	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
-		t.Errorf("뒤로 갔다 와도 선택한 타입이 유지되어야 한다, got %v", gotTypes)
+	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	if !slices.Equal(gotTypes, want) {
+		t.Errorf("뒤로 갔다 와도 선택한 그룹이 유지되어야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 
@@ -444,9 +465,9 @@ func TestNewProfileResetsSelection(t *testing.T) {
 
 	m := newTestModel(t, deps)
 	m = step(m, keyMsg("enter")) // 리전
-	m = send(m, keyMsg("enter")) // 타입 선택 화면
-	m = send(m, keyMsg("down"))  // 두 번째 타입(ec2:volume)으로 커서 이동
-	m = send(m, keyMsg("space")) // ec2:volume 체크
+	m = send(m, keyMsg("enter")) // 리소스 선택 화면
+	m = send(m, keyMsg("down"))  // 두 번째 그룹(ELBv2)으로 커서 이동
+	m = send(m, keyMsg("space")) // ELBv2 그룹 체크
 
 	// 프로필까지 뒤로: 타입 → 리전 → 프로필.
 	m = send(m, keyMsg("esc"))
@@ -455,14 +476,15 @@ func TestNewProfileResetsSelection(t *testing.T) {
 		t.Fatalf("두 번 esc 후 = %v, want 프로필", m.Screen())
 	}
 
-	// 프로필에서 다시 enter → 리전 → 타입 → 조회. 이전 volume 체크는 초기화됐으므로
-	// 커서(첫 항목 ec2:instance) 하나만 넘어가야 한다.
+	// 프로필에서 다시 enter → 리전 → 리소스 → 조회. 이전 ELBv2 선택은 초기화됐으므로
+	// 커서의 첫 그룹 EC2만 넘어가야 한다.
 	m = step(m, keyMsg("enter")) // 리전 (신원 확인 다시)
 	m = send(m, keyMsg("enter")) // 타입 화면
 	m = step(m, keyMsg("enter")) // 체크 없이 조회
 
-	if len(gotTypes) != 1 || gotTypes[0] != "ec2:instance" {
-		t.Errorf("새 프로필에서는 이전 선택이 비워지고 커서의 타입만 나와야 한다, got %v", gotTypes)
+	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	if !slices.Equal(gotTypes, want) {
+		t.Errorf("새 프로필에서는 이전 선택이 비워지고 첫 그룹만 나와야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 

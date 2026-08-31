@@ -60,12 +60,68 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 	}
 }
 
+func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
+	t.Parallel()
+
+	groups, err := Groups()
+	if err != nil {
+		t.Fatalf("Groups() 실패: %v", err)
+	}
+	wantIDs := []string{"ec2", "elbv2", "route53", "wafv2"}
+	gotIDs := make([]string, 0, len(groups))
+	for _, group := range groups {
+		gotIDs = append(gotIDs, group.ID)
+		if group.Label == "" || len(group.Types) == 0 {
+			t.Errorf("그룹 %q 메타데이터가 비어 있음: %+v", group.ID, group)
+		}
+	}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Errorf("그룹 순서 = %v, want %v", gotIDs, wantIDs)
+	}
+
+	wantEC2Types := []string{
+		model.TypeEC2Instance,
+		model.TypeEC2Volume,
+		model.TypeEC2NetworkInterface,
+		model.TypeEC2Address,
+	}
+	gotEC2Types := make([]string, 0, len(groups[0].Types))
+	for _, definition := range groups[0].Types {
+		gotEC2Types = append(gotEC2Types, definition.Type)
+	}
+	if !slices.Equal(gotEC2Types, wantEC2Types) {
+		t.Errorf("EC2 타입 = %v, want %v", gotEC2Types, wantEC2Types)
+	}
+
+	if got, want := groups[2].Types[0].Columns,
+		[]string{"타입", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
+		t.Errorf("Route 53 열 = %v, want %v", got, want)
+	}
+	if got, want := groups[3].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
+		t.Errorf("WAF 열 = %v, want %v", got, want)
+	}
+
+	groups[0].Types[0].Columns[0] = "changed"
+	groups[0].Types[0].SummaryColumns[0] = "changed"
+	fresh, err := Groups()
+	if err != nil {
+		t.Fatalf("두 번째 Groups() 실패: %v", err)
+	}
+	if fresh[0].Types[0].Columns[0] != "인스턴스 타입" {
+		t.Errorf("Columns 방어적 복사 실패: %v", fresh[0].Types[0].Columns)
+	}
+	if fresh[0].Types[0].SummaryColumns[0] != "인스턴스 타입" {
+		t.Errorf("SummaryColumns 방어적 복사 실패: %v", fresh[0].Types[0].SummaryColumns)
+	}
+}
+
 func TestDefinitionsReturnsCopies(t *testing.T) {
 	t.Parallel()
 
 	first := Definitions()
 	first[0].Type = "changed"
 	first[0].Columns[0] = "changed"
+	first[0].SummaryColumns[0] = "changed"
 
 	second := Definitions()
 	if second[0].Type != model.TypeEC2Instance {
@@ -73,6 +129,9 @@ func TestDefinitionsReturnsCopies(t *testing.T) {
 	}
 	if second[0].Columns[0] != "인스턴스 타입" {
 		t.Errorf("Columns[0] = %q, want %q", second[0].Columns[0], "인스턴스 타입")
+	}
+	if second[0].SummaryColumns[0] != "인스턴스 타입" {
+		t.Errorf("SummaryColumns[0] = %q, want %q", second[0].SummaryColumns[0], "인스턴스 타입")
 	}
 }
 
@@ -132,6 +191,50 @@ func TestBuildRegistrySelection(t *testing.T) {
 			t.Errorf("unknown = %v, want %v", unknown, want)
 		}
 	})
+}
+
+func TestValidateGroupsRejectsInvalidMetadata(t *testing.T) {
+	t.Parallel()
+
+	validDefinition := func(typ string) Definition {
+		return Definition{
+			Type:           typ,
+			Label:          "테스트",
+			Scope:          Regional,
+			Columns:        []string{"상태"},
+			SummaryColumns: []string{"상태"},
+			newCollector: func() collect.Collector {
+				return fakeCatalogCollector{typ: typ}
+			},
+		}
+	}
+
+	withoutSummary := validDefinition("test:other")
+	withoutSummary.SummaryColumns = nil
+
+	tests := []struct {
+		name   string
+		groups []Group
+		want   string
+	}{
+		{name: "빈 ID", groups: []Group{{Label: "테스트", Types: []Definition{validDefinition("test:item")}}}, want: "ID가 비어"},
+		{name: "중복 ID", groups: []Group{{ID: "test", Label: "테스트", Types: []Definition{validDefinition("test:a")}}, {ID: "test", Label: "다른 그룹", Types: []Definition{validDefinition("test:b")}}}, want: "그룹 ID 중복"},
+		{name: "빈 표시명", groups: []Group{{ID: "test", Types: []Definition{validDefinition("test:item")}}}, want: "표시명이 비어"},
+		{name: "빈 타입 목록", groups: []Group{{ID: "test", Label: "테스트"}}, want: "포함 타입이 없음"},
+		{name: "타입 중복 소속", groups: []Group{{ID: "one", Label: "하나", Types: []Definition{validDefinition("test:item")}}, {ID: "two", Label: "둘", Types: []Definition{validDefinition("test:item")}}}, want: "그룹 one에도 포함"},
+		{name: "혼합 그룹 요약 없음", groups: []Group{{ID: "test", Label: "테스트", Types: []Definition{validDefinition("test:item"), withoutSummary}}}, want: "주요 정보 열이 없음"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateGroups(tt.groups)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("err = %v, want contains %q", err, tt.want)
+			}
+		})
+	}
 }
 
 func TestValidateDefinitionsRejectsInvalidMetadata(t *testing.T) {

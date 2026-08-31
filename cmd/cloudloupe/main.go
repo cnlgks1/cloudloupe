@@ -115,6 +115,11 @@ func isInteractive() bool {
 // 지정할 수 있게 한다. LoadProfiles를 함수로 주입하는 이유가 이것이다. 경로를 바꿔가며
 // 다시 시도할 수 있어야 한다.
 func runTUI(ascii *bool, override awsclient.Override) error {
+	groups, err := resourceGroups()
+	if err != nil {
+		return err
+	}
+
 	deps := tui.Deps{
 		LoadProfiles: func(ov awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
 			loc, err := awsclient.ResolveWith(ov)
@@ -126,10 +131,10 @@ func runTUI(ascii *bool, override awsclient.Override) error {
 
 			return profiles, loc, err
 		},
-		ResourceTypes: resourceTypes(),
-		Identify:      app.Identify,
-		Collect:       app.Collect,
-		Explain:       awsclient.Explain,
+		ResourceGroups: groups,
+		Identify:       app.Identify,
+		Collect:        app.Collect,
+		Explain:        awsclient.Explain,
 	}
 
 	theme := tui.New(tui.DetectASCII(*ascii))
@@ -145,20 +150,29 @@ func runTUI(ascii *bool, override awsclient.Override) error {
 	return nil
 }
 
-// resourceTypes는 카탈로그의 지원 타입을 TUI 표시 모델로 변환한다.
-func resourceTypes() []tui.ResourceType {
-	definitions := catalog.Definitions()
-	out := make([]tui.ResourceType, 0, len(definitions))
-
-	for _, definition := range definitions {
-		out = append(out, tui.ResourceType{
-			ID:      definition.Type,
-			Label:   definition.Label,
-			Columns: definition.Columns,
-		})
+// resourceGroups는 카탈로그의 세부 타입을 서비스별 큰 선택 단위로 변환한다.
+func resourceGroups() ([]tui.ResourceGroup, error) {
+	groups, err := catalog.Groups()
+	if err != nil {
+		return nil, fmt.Errorf("리소스 그룹 구성: %w", err)
 	}
 
-	return out
+	out := make([]tui.ResourceGroup, 0, len(groups))
+
+	for _, group := range groups {
+		resourceGroup := tui.ResourceGroup{ID: group.ID, Label: group.Label}
+		for _, definition := range group.Types {
+			resourceGroup.Types = append(resourceGroup.Types, tui.ResourceType{
+				ID:             definition.Type,
+				Label:          definition.Label,
+				Columns:        definition.Columns,
+				SummaryColumns: definition.SummaryColumns,
+			})
+		}
+		out = append(out, resourceGroup)
+	}
+
+	return out, nil
 }
 
 // runCheck는 설정 위치를 진단한다.

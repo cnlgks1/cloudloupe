@@ -13,6 +13,10 @@ import (
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
+func testResourceGroups(types []ResourceType) []ResourceGroup {
+	return []ResourceGroup{{ID: "test", Label: "테스트", Types: types}}
+}
+
 func TestBuildTableRegionColumnPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -31,7 +35,7 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		}
 
 		showRegion := (Model{chosenRegions: []string{"ap-northeast-2"}}).shouldShowRegion()
-		table := buildTable(New(true), resources, resources, types, []string{model.TypeEC2Volume}, showRegion, 120, 20)
+		table := buildTable(New(true), resources, resources, testResourceGroups(types), []string{model.TypeEC2Volume}, showRegion, 120, 20)
 		assertTableShape(t, table, false)
 	})
 
@@ -43,7 +47,7 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		}
 
 		showRegion := (Model{chosenRegions: []string{"ap-northeast-2", "us-east-1"}}).shouldShowRegion()
-		table := buildTable(New(true), resources, resources, types, []string{model.TypeEC2Volume}, showRegion, 120, 20)
+		table := buildTable(New(true), resources, resources, testResourceGroups(types), []string{model.TypeEC2Volume}, showRegion, 120, 20)
 		assertTableShape(t, table, true)
 	})
 
@@ -57,7 +61,7 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		visible := all[:1]
 
 		showRegion := (Model{chosenRegions: []string{"ap-northeast-2", "us-east-1"}}).shouldShowRegion()
-		table := buildTable(New(true), visible, all, types, []string{model.TypeEC2Volume}, showRegion, 120, 20)
+		table := buildTable(New(true), visible, all, testResourceGroups(types), []string{model.TypeEC2Volume}, showRegion, 120, 20)
 		assertTableShape(t, table, true)
 
 		regionColumn := columnIndex(table, "리전")
@@ -81,7 +85,7 @@ func TestBuildTableKeepsColumnsWhenFilterHasNoRows(t *testing.T) {
 	}}
 	types := []ResourceType{{ID: model.TypeEC2Volume, Label: "EBS 볼륨", Columns: []string{"타입"}}}
 
-	table := buildTable(New(true), nil, all, types, []string{model.TypeEC2Volume}, false, 120, 20)
+	table := buildTable(New(true), nil, all, testResourceGroups(types), []string{model.TypeEC2Volume}, false, 120, 20)
 	if len(table.Rows()) != 0 {
 		t.Errorf("Rows() = %d, want 0", len(table.Rows()))
 	}
@@ -271,6 +275,121 @@ func updateFilterModel(m Model, msg tea.Msg) Model {
 	return next.(Model)
 }
 
+func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
+	t.Parallel()
+
+	groups := []ResourceGroup{{
+		ID:    "ec2",
+		Label: "EC2",
+		Types: []ResourceType{
+			{
+				ID:             model.TypeEC2Instance,
+				Label:          "인스턴스",
+				Columns:        []string{"인스턴스 타입"},
+				SummaryColumns: []string{"인스턴스 타입"},
+			},
+			{
+				ID:             model.TypeEC2Volume,
+				Label:          "볼륨",
+				Columns:        []string{"타입", "크기(GiB)"},
+				SummaryColumns: []string{"타입", "크기(GiB)"},
+			},
+		},
+	}}
+	resources := []model.Resource{
+		{Type: model.TypeEC2Instance, ID: "i-1", Name: "shared-web", Fields: []model.Field{{Key: "인스턴스 타입", Value: "t3.small"}}},
+		{Type: model.TypeEC2Volume, ID: "vol-1", Name: "shared-data", Fields: []model.Field{{Key: "타입", Value: "gp3"}, {Key: "크기(GiB)", Value: "100"}}},
+		{Type: model.TypeEC2Volume, ID: "vol-2", Name: "logs", Fields: []model.Field{{Key: "타입", Value: "gp3"}, {Key: "크기(GiB)", Value: "50"}}},
+	}
+	m := newResourceKindFilterModel(groups, resources)
+
+	if !strings.Contains(m.View(), "종류: 전체") || !strings.Contains(m.View(), "t: 변경") {
+		t.Fatalf("혼합 목록에 종류 필터 줄이 없음:\n%s", m.View())
+	}
+
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	if m.screen != ScreenResourceKind {
+		t.Fatalf("t 입력 후 화면 = %v, want 종류 필터", m.screen)
+	}
+	if got := m.kindTable.Rows(); len(got) != 3 ||
+		got[0][0] != "전체" || got[0][1] != "3" ||
+		got[1][0] != "인스턴스" || got[1][1] != "1" ||
+		got[2][0] != "볼륨" || got[2][1] != "2" {
+		t.Fatalf("종류 옵션 = %v", got)
+	}
+
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.screen != ScreenList || m.resourceKindFilter != "" || len(m.resourceRows) != 3 {
+		t.Fatalf("종류 필터 취소 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.resourceRows))
+	}
+
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.screen != ScreenList || m.resourceKindFilter != model.TypeEC2Volume || len(m.resourceRows) != 2 {
+		t.Fatalf("볼륨 적용 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.resourceRows))
+	}
+	for _, resource := range m.resourceRows {
+		if resource.Type != model.TypeEC2Volume {
+			t.Errorf("종류 필터 결과에 다른 타입이 포함됨: %s", resource.Type)
+		}
+	}
+	wantTitles := []string{"종류", "이름", "ID", "주요 정보"}
+	if got := columnTitles(m.resourceTable); !slices.Equal(got, wantTitles) {
+		t.Errorf("종류 필터 후 열 = %v, want %v", got, wantTitles)
+	}
+
+	// 종류=볼륨 상태에서 검색을 추가하면 두 조건을 모두 만족하는 행만 남는다.
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shared")})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if len(m.resourceRows) != 1 || m.resourceRows[0].ID != "vol-1" {
+		t.Errorf("종류+검색 결과 = %+v, want vol-1", m.resourceRows)
+	}
+
+	// 종류를 전체로 되돌려도 검색어는 유지되어 인스턴스와 볼륨 두 행이 보인다.
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyUp})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyUp})
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.resourceKindFilter != "" || len(m.resourceRows) != 2 {
+		t.Errorf("전체 종류+검색 결과 필터=%q rows=%d", m.resourceKindFilter, len(m.resourceRows))
+	}
+}
+
+func TestResourceKindFilterIsHiddenForSingleKind(t *testing.T) {
+	t.Parallel()
+
+	groups := []ResourceGroup{{
+		ID:    "ec2",
+		Label: "EC2",
+		Types: []ResourceType{{ID: model.TypeEC2Instance, Label: "인스턴스"}},
+	}}
+	resources := []model.Resource{{Type: model.TypeEC2Instance, ID: "i-1", Name: "web"}}
+	m := newResourceKindFilterModel(groups, resources)
+
+	if strings.Contains(m.View(), "t: 변경") {
+		t.Fatalf("단일 종류 목록에 종류 필터가 표시됨:\n%s", m.View())
+	}
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	if m.screen != ScreenList {
+		t.Errorf("단일 종류에서 t 입력 후 화면 = %v, want 목록", m.screen)
+	}
+}
+
+func newResourceKindFilterModel(groups []ResourceGroup, resources []model.Resource) Model {
+	m := newFilterFlowModel(resources)
+	m.deps.ResourceGroups = groups
+	m.chosenTypes = resourceGroupTypeIDs(groups[0])
+	m.resourceKinds = collectResourceKinds(groups, resources)
+	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows, groups,
+		m.chosenTypes, m.shouldShowRegion(), m.width, m.resourceListHeight())
+
+	return m
+}
+
 func TestTargetGroupTableRemovesRedundantColumnsAndAdjustsWidths(t *testing.T) {
 	t.Parallel()
 
@@ -304,7 +423,7 @@ func TestTargetGroupTableRemovesRedundantColumnsAndAdjustsWidths(t *testing.T) {
 		Columns: []string{"프로토콜", "포트", "타깃 종류", "타깃 수"},
 	}}
 
-	tableModel := buildTable(New(true), resources, resources, types,
+	tableModel := buildTable(New(true), resources, resources, testResourceGroups(types),
 		[]string{model.TypeELBv2TargetGroup}, false, 120, 20)
 	wantTitles := []string{"이름", "프로토콜", "포트", "타깃 종류", "타깃 수"}
 	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
@@ -321,6 +440,73 @@ func TestTargetGroupTableRemovesRedundantColumnsAndAdjustsWidths(t *testing.T) {
 	assertTableShape(t, tableModel, false)
 }
 
+func TestServiceGroupTableUsesFriendlyTypeAndSummary(t *testing.T) {
+	t.Parallel()
+
+	groups := []ResourceGroup{{
+		ID:    "ec2",
+		Label: "EC2",
+		Types: []ResourceType{
+			{
+				ID:             model.TypeEC2Instance,
+				Label:          "인스턴스",
+				Columns:        []string{"인스턴스 타입", "사설 IP", "공인 IP"},
+				SummaryColumns: []string{"인스턴스 타입", "사설 IP"},
+			},
+			{
+				ID:             model.TypeEC2Volume,
+				Label:          "볼륨",
+				Columns:        []string{"타입", "크기(GiB)", "가용 영역"},
+				SummaryColumns: []string{"타입", "크기(GiB)"},
+			},
+		},
+	}}
+	resources := []model.Resource{
+		{
+			Type:   model.TypeEC2Instance,
+			ID:     "i-123",
+			Name:   "web",
+			Status: "running",
+			Fields: []model.Field{
+				{Key: "인스턴스 타입", Value: "t3.small"},
+				{Key: "사설 IP", Value: "10.0.0.10"},
+			},
+		},
+		{
+			Type:   model.TypeEC2Volume,
+			ID:     "vol-123",
+			Name:   "data",
+			Status: "available",
+			Fields: []model.Field{
+				{Key: "타입", Value: "gp3"},
+				{Key: "크기(GiB)", Value: "100"},
+			},
+		},
+	}
+
+	tableModel := buildTable(New(true), resources, resources, groups,
+		[]string{model.TypeEC2Instance, model.TypeEC2Volume}, false, 140, 20)
+	wantTitles := []string{"종류", "이름", "ID", "상태", "주요 정보"}
+	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
+		t.Errorf("열 = %v, want %v", got, wantTitles)
+	}
+
+	rows := tableModel.Rows()
+	if got := rows[0][columnIndex(tableModel, "종류")]; got != "인스턴스" {
+		t.Errorf("인스턴스 종류 = %q, want %q", got, "인스턴스")
+	}
+	if got := rows[1][columnIndex(tableModel, "종류")]; got != "볼륨" {
+		t.Errorf("볼륨 종류 = %q, want %q", got, "볼륨")
+	}
+	if got := rows[0][columnIndex(tableModel, "주요 정보")]; got != "인스턴스 타입 t3.small · 사설 IP 10.0.0.10" {
+		t.Errorf("인스턴스 주요 정보 = %q", got)
+	}
+	if got := rows[1][columnIndex(tableModel, "주요 정보")]; got != "타입 gp3 · 크기(GiB) 100" {
+		t.Errorf("볼륨 주요 정보 = %q", got)
+	}
+	assertTableShape(t, tableModel, false)
+}
+
 func TestMixedResourceTableKeepsDisambiguatingColumns(t *testing.T) {
 	t.Parallel()
 
@@ -331,7 +517,7 @@ func TestMixedResourceTableKeepsDisambiguatingColumns(t *testing.T) {
 
 	tableModel := buildTable(New(true), resources, resources, nil,
 		[]string{model.TypeELBv2TargetGroup, model.TypeEC2Instance}, false, 100, 20)
-	wantTitles := []string{"타입", "이름", "ID", "상태"}
+	wantTitles := []string{"종류", "이름", "ID", "상태"}
 	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
 		t.Errorf("열 = %v, want %v", got, wantTitles)
 	}

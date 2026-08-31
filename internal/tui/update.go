@@ -57,6 +57,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyCollecting(msg)
 	case ScreenList:
 		return m.keyList(msg)
+	case ScreenResourceKind:
+		return m.keyResourceKind(msg)
 	case ScreenDetail:
 		return m.keyDetail(msg)
 	case ScreenError:
@@ -182,7 +184,7 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 	m.explicitTypeSelection = false
 	m.regions = awsclient.Regions(m.profileRegion())
 	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
-	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, nil, m.width, m.listHeight())
+	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
 	m.typeTable.SetCursor(0)
 	m.screen = ScreenRegion
 
@@ -244,7 +246,7 @@ func (m Model) keyRegion(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) gotoResourceType() Model {
 	if len(m.typeTable.Rows()) == 0 {
-		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, m.chosenTypes, m.width, m.listHeight())
+		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
 	}
 
 	m.screen = ScreenResourceType
@@ -261,23 +263,23 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.Toggle):
 		i := m.typeTable.Cursor()
-		if i >= 0 && i < len(m.deps.ResourceTypes) {
-			m.toggleType(m.deps.ResourceTypes[i].ID)
+		if i >= 0 && i < len(m.deps.ResourceGroups) {
+			m.toggleResourceGroup(m.deps.ResourceGroups[i])
 			m.replaceTypeOnEnter = false
 			m.explicitTypeSelection = len(m.chosenTypes) > 0
-			m.typeTable = buildTypeTable(m.theme, m.deps.ResourceTypes, m.chosenTypes, m.width, m.listHeight())
+			m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
 			m.typeTable.SetCursor(i)
 		}
 
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		// space로 만든 명시적 다중 선택이 없으면 항상 현재 커서 타입 하나를 조회한다.
-		// 이전 Enter 선택이 chosenTypes에 남아 있어도 새 커서 선택을 덮지 못하게 한다.
+		// space로 만든 명시적 다중 선택이 없으면 현재 커서의 서비스 그룹만 조회한다.
+		// chosenTypes에는 그룹 ID가 아니라 실제 수집기에 전달할 내부 타입 ID를 보관한다.
 		if m.replaceTypeOnEnter || !m.explicitTypeSelection || len(m.chosenTypes) == 0 {
 			i := m.typeTable.Cursor()
-			if i >= 0 && i < len(m.deps.ResourceTypes) {
-				m.chosenTypes = []string{m.deps.ResourceTypes[i].ID}
+			if i >= 0 && i < len(m.deps.ResourceGroups) {
+				m.chosenTypes = resourceGroupTypeIDs(m.deps.ResourceGroups[i])
 			}
 			m.explicitTypeSelection = false
 		}
@@ -289,16 +291,34 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.delegateToActiveList(msg)
 }
 
-func (m *Model) toggleType(id string) {
-	for i, t := range m.chosenTypes {
-		if t == id {
-			m.chosenTypes = append(m.chosenTypes[:i], m.chosenTypes[i+1:]...)
-
-			return
+func (m *Model) toggleResourceGroup(group ResourceGroup) {
+	if resourceGroupSelected(group, m.chosenTypes) {
+		remove := make(map[string]struct{}, len(group.Types))
+		for _, resourceType := range group.Types {
+			remove[resourceType.ID] = struct{}{}
 		}
+
+		kept := m.chosenTypes[:0]
+		for _, typ := range m.chosenTypes {
+			if _, exists := remove[typ]; !exists {
+				kept = append(kept, typ)
+			}
+		}
+		m.chosenTypes = kept
+
+		return
 	}
 
-	m.chosenTypes = append(m.chosenTypes, id)
+	selected := make(map[string]struct{}, len(m.chosenTypes))
+	for _, typ := range m.chosenTypes {
+		selected[typ] = struct{}{}
+	}
+	for _, resourceType := range group.Types {
+		if _, exists := selected[resourceType.ID]; exists {
+			continue
+		}
+		m.chosenTypes = append(m.chosenTypes, resourceType.ID)
+	}
 }
 
 func (m *Model) toggleRegion(code string) {
@@ -352,6 +372,8 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 
 	m.allResourceRows = append([]model.Resource(nil), msg.result.Resources...)
 	m.resourceRows = append([]model.Resource(nil), msg.result.Resources...)
+	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, m.allResourceRows)
+	m.resourceKindFilter = ""
 	m.showRegion = m.shouldShowRegion()
 	m.filtering = false
 	m.filterQuery = ""
@@ -360,7 +382,7 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 	m.filterInput.Blur()
 	m.listCaption = m.listTitle(msg.result)
 	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
-		m.deps.ResourceTypes, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
+		m.deps.ResourceGroups, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
 	m.screen = ScreenList
 
 	return m, nil
@@ -386,6 +408,13 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 
 		return m, m.filterInput.Focus()
+
+	case key.Matches(msg, m.keys.FilterKind) && m.hasResourceKindFilter():
+		m.kindTable = buildResourceKindTable(m.theme, m.resourceKinds, m.width, m.listHeight())
+		m.kindTable.SetCursor(m.resourceKindFilterCursor())
+		m.screen = ScreenResourceKind
+
+		return m, nil
 
 	case key.Matches(msg, m.keys.Back):
 		m.replaceTypeOnEnter = true
@@ -418,6 +447,39 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.delegateToActiveList(msg)
 }
 
+func (m Model) keyResourceKind(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.screen = ScreenList
+
+		return m, nil
+	case key.Matches(msg, m.keys.Enter):
+		cursor := m.kindTable.Cursor()
+		m.resourceKindFilter = ""
+		if cursor > 0 && cursor <= len(m.resourceKinds) {
+			m.resourceKindFilter = m.resourceKinds[cursor-1].ID
+		}
+		m.screen = ScreenList
+
+		return m.applyResourceFilter(), nil
+	}
+
+	return m.delegateToActiveList(msg)
+}
+
+func (m Model) resourceKindFilterCursor() int {
+	if m.resourceKindFilter == "" {
+		return 0
+	}
+	for i, kind := range m.resourceKinds {
+		if kind.ID == m.resourceKindFilter {
+			return i + 1 // 첫 행은 전체다.
+		}
+	}
+
+	return 0
+}
+
 // keyResourceFilter는 목록 필터 입력을 처리한다.
 func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
@@ -444,14 +506,68 @@ func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// applyResourceFilter는 현재 쿼리와 일치하는 행만 테이블에 반영한다.
+// applyResourceFilter는 현재 종류와 검색어를 모두 만족하는 행만 테이블에 반영한다.
 func (m Model) applyResourceFilter() Model {
-	m.resourceRows = filterResources(m.allResourceRows, m.filterQuery)
+	resources := filterResourcesByKind(m.allResourceRows, m.resourceKindFilter)
+	m.resourceRows = filterResources(resources, m.filterQuery)
 	m.resourceTable = buildTable(m.theme, m.resourceRows, m.allResourceRows,
-		m.deps.ResourceTypes, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
+		m.deps.ResourceGroups, m.chosenTypes, m.showRegion, m.width, m.resourceListHeight())
 	m.resourceTable.SetCursor(0)
 
 	return m
+}
+
+func filterResourcesByKind(resources []model.Resource, typeID string) []model.Resource {
+	if typeID == "" {
+		return append([]model.Resource(nil), resources...)
+	}
+
+	filtered := make([]model.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if resource.Type == typeID {
+			filtered = append(filtered, resource)
+		}
+	}
+
+	return filtered
+}
+
+func collectResourceKinds(groups []ResourceGroup, resources []model.Resource) []resourceKind {
+	counts := make(map[string]int)
+	for _, resource := range resources {
+		counts[resource.Type]++
+	}
+
+	seen := make(map[string]struct{}, len(counts))
+	kinds := make([]resourceKind, 0, len(counts))
+	for _, group := range groups {
+		for _, resourceType := range group.Types {
+			count := counts[resourceType.ID]
+			if count == 0 {
+				continue
+			}
+			if _, exists := seen[resourceType.ID]; exists {
+				continue
+			}
+			seen[resourceType.ID] = struct{}{}
+			kinds = append(kinds, resourceKind{ID: resourceType.ID, Label: resourceType.Label, Count: count})
+		}
+	}
+
+	// 외부 주입이나 새 타입 메타데이터 누락이 있어도 결과를 필터링할 수 있게 보존한다.
+	for _, resource := range resources {
+		if _, exists := seen[resource.Type]; exists {
+			continue
+		}
+		seen[resource.Type] = struct{}{}
+		kinds = append(kinds, resourceKind{
+			ID:    resource.Type,
+			Label: resourceTypeLabel(groups, resource.Type),
+			Count: counts[resource.Type],
+		})
+	}
+
+	return kinds
 }
 
 // filterResources는 공백으로 나눈 모든 검색어가 포함된 리소스만 반환한다.

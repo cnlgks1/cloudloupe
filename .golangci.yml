@@ -14,6 +14,7 @@ linters:
     - durationcheck
     - errorlint # == 와 타입 단정 대신 errors.Is/As
     - exhaustive # 리소스 타입과 상태 enum에 대한 switch
+    - gocritic # 의심스러운 대입과 조건식 같은 diagnostic 검사만 사용한다
     - makezero
     - nilerr
     - noctx # context 없는 HTTP 요청 금지
@@ -32,13 +33,10 @@ linters:
 
     # 스타일과 가독성
     - dupword
-    - goconst
-    - gocritic
     - godot
     - misspell
     - nakedret
     - nolintlint
-    - perfsprint
     - predeclared
     - revive
     - unconvert
@@ -52,21 +50,12 @@ linters:
     exhaustive:
       default-signifies-exhaustive: true
 
-    goconst:
-      min-len: 3
-      min-occurrences: 4
-      ignore-tests: true
-
+    # gocritic의 style/performance 전체 태그는 프로파일 근거 없는 대규모 리팩터링을
+    # 요구하므로 CI 차단 조건으로 쓰지 않는다. 정확성에 직접 관계된 diagnostic 태그만
+    # 유지한다.
     gocritic:
       enabled-tags:
         - diagnostic
-        - style
-        - performance
-      disabled-checks:
-        # 생성자 시그니처에서 파라미터 타입을 합치면 오히려 읽기 나빠진다.
-        - paramTypeCombine
-        # AWS 상태를 다루는 긴 if/else 사슬이 switch보다 명확한 경우가 있다.
-        - ifElseChain
 
     govet:
       enable:

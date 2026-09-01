@@ -338,7 +338,7 @@ func TestResourceTypeSelectionFiltersCollect(t *testing.T) {
 
 	// 첫 그룹(EC2)을 space로 체크하면 그룹의 내부 타입이 모두 전달되어야 한다.
 	m = send(m, keyMsg("space"))
-	m = step(m, keyMsg("enter"))
+	_ = step(m, keyMsg("enter"))
 
 	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
 	if !slices.Equal(gotTypes, want) {
@@ -362,7 +362,7 @@ func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
 	m := newTestModel(t, deps)
 	m = step(m, keyMsg("enter")) // 리전
 	m = send(m, keyMsg("enter")) // 타입 선택 화면
-	m = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서의 타입 하나
+	_ = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서의 타입 하나
 
 	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
 	if !slices.Equal(gotTypes, want) {
@@ -376,7 +376,9 @@ func TestViewIsPure(t *testing.T) {
 	// View를 여러 번 호출해도 같아야 한다. 상태를 바꾸면 안 된다(원칙 7).
 	m := newTestModel(t, okDeps(sampleResources()))
 
-	if m.View() != m.View() {
+	first := m.View()
+	second := m.View()
+	if first != second {
 		t.Error("View가 호출마다 다르다 — 순수하지 않다")
 	}
 }
@@ -442,7 +444,7 @@ func TestBackNavigationKeepsTypeSelection(t *testing.T) {
 	}
 
 	// 여기서 바로 조회하면, 앞서 고른 그룹의 내부 타입이 그대로 살아 있어야 한다.
-	m = step(m, keyMsg("enter"))
+	_ = step(m, keyMsg("enter"))
 	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
 	if !slices.Equal(gotTypes, want) {
 		t.Errorf("뒤로 갔다 와도 선택한 그룹이 유지되어야 한다, got %v, want %v", gotTypes, want)
@@ -480,7 +482,7 @@ func TestNewProfileResetsSelection(t *testing.T) {
 	// 커서의 첫 그룹 EC2만 넘어가야 한다.
 	m = step(m, keyMsg("enter")) // 리전 (신원 확인 다시)
 	m = send(m, keyMsg("enter")) // 타입 화면
-	m = step(m, keyMsg("enter")) // 체크 없이 조회
+	_ = step(m, keyMsg("enter")) // 체크 없이 조회
 
 	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
 	if !slices.Equal(gotTypes, want) {
@@ -513,7 +515,7 @@ func TestArrowKeysNavigateList(t *testing.T) {
 	m = send(m, keyMsg("up")) // 순이동 확인: 아래 2 위 1 = 한 칸 아래
 	m = send(m, keyMsg("space"))
 	m = send(m, keyMsg("enter")) // 타입
-	m = step(m, keyMsg("enter")) // 조회
+	_ = step(m, keyMsg("enter")) // 조회
 
 	if len(gotRegions) != 1 {
 		t.Fatalf("화살표 이동 후 고른 리전 1개가 넘어가야 한다, got %v", gotRegions)
@@ -546,7 +548,7 @@ func TestArrowSelectsRegionUnderCursor(t *testing.T) {
 	m = send(m, keyMsg("down"))
 	m = send(m, keyMsg("space"))
 	m = send(m, keyMsg("enter")) // 타입 화면
-	m = step(m, keyMsg("enter")) // 조회
+	_ = step(m, keyMsg("enter")) // 조회
 
 	if len(gotRegions) != 1 {
 		t.Fatalf("화살표로 내려 고른 리전 1개가 조회로 넘어가야 한다, got %v", gotRegions)
@@ -639,7 +641,7 @@ func TestConfigPathSubmitsBothPaths(t *testing.T) {
 	m = send(m, keyMsg("/etc/aws/creds"))
 
 	// enter로 적용.
-	m = send(m, keyMsg("enter"))
+	_ = send(m, keyMsg("enter"))
 
 	if gotOverride.ConfigPath != "/etc/aws/config" {
 		t.Errorf("ConfigPath = %q, want /etc/aws/config", gotOverride.ConfigPath)
@@ -672,7 +674,7 @@ func TestRegionEnterReplacesPreviousBareSelectionAfterBack(t *testing.T) {
 	m = send(m, keyMsg("left"))  // 타입 → 리전
 	m = send(m, keyMsg("down"))  // 두 번째 리전으로 이동
 	m = send(m, keyMsg("enter")) // 두 번째 리전 선택 → 타입
-	m = step(m, keyMsg("enter")) // 조회
+	_ = step(m, keyMsg("enter")) // 조회
 
 	if got, want := gotRegions, []string{regions[1].Code}; !slices.Equal(got, want) {
 		t.Errorf("재선택 후 조회 리전 = %v, want %v", got, want)
@@ -706,7 +708,7 @@ func TestRegionBackPreservesExplicitMultiSelection(t *testing.T) {
 	m = send(m, keyMsg("down"), keyMsg("space"))
 	m = send(m, keyMsg("up"), keyMsg("space")) // 같은 집합을 역순으로 완성한다.
 	m = send(m, keyMsg("enter"))
-	m = step(m, keyMsg("enter"))
+	_ = step(m, keyMsg("enter"))
 
 	wantRegions := []string{regions[1].Code, regions[0].Code}
 	if !slices.Equal(gotRegions, wantRegions) {
@@ -747,7 +749,7 @@ func TestChangingRegionResetsResourceSelection(t *testing.T) {
 
 	m = send(m, keyMsg("r"))
 	m = send(m, keyMsg("down"), keyMsg("enter")) // 다른 리전 → 타입
-	m = step(m, keyMsg("enter"))                 // 초기화된 첫 타입으로 두 번째 조회
+	_ = step(m, keyMsg("enter"))                 // 초기화된 첫 타입으로 두 번째 조회
 
 	if len(calls) != 2 {
 		t.Fatalf("Collect 호출 = %d, want 2", len(calls))
@@ -778,7 +780,7 @@ func TestConfirmingSameRegionPreservesResourceSelection(t *testing.T) {
 	m = send(m, keyMsg("enter"))
 	m = send(m, keyMsg("down"), keyMsg("space")) // ELB를 명시적으로 선택한다.
 	m = send(m, keyMsg("left"), keyMsg("enter")) // 같은 리전을 다시 확정한다.
-	m = step(m, keyMsg("enter"))
+	_ = step(m, keyMsg("enter"))
 
 	want := []string{model.TypeELBv2LoadBalancer, model.TypeELBv2TargetGroup}
 	if !slices.Equal(gotTypes, want) {
@@ -805,7 +807,7 @@ func TestChangingExplicitMultiRegionSelectionResetsResourceSelection(t *testing.
 	m = send(m, keyMsg("space"), keyMsg("down"), keyMsg("space"), keyMsg("enter"))
 	m = send(m, keyMsg("down"), keyMsg("space"))                  // ELB를 명시적으로 선택한다.
 	m = send(m, keyMsg("left"), keyMsg("space"), keyMsg("enter")) // 두 번째 리전을 해제한다.
-	m = step(m, keyMsg("enter"))
+	_ = step(m, keyMsg("enter"))
 
 	if got, want := gotRegions, []string{regions[0].Code}; !slices.Equal(got, want) {
 		t.Errorf("다중 선택 변경 후 조회 리전 = %v, want %v", got, want)

@@ -3,9 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+  # 릴리스 워크플로가 태그에서 이 전체 검증을 호출하고 성공한 뒤에만 자산을 게시한다.
+  workflow_call:
 
 permissions:
   contents: read
@@ -98,8 +99,12 @@ jobs:
       - name: 바이너리 스모크 테스트
         shell: bash
         run: |
-          go build -trimpath -o cloudloupe ./cmd/cloudloupe
-          ./cloudloupe --version
+          exe=cloudloupe
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            exe=cloudloupe.exe
+          fi
+          go build -trimpath -o "$exe" ./cmd/cloudloupe
+          "./$exe" --version
 
   race:
     name: 레이스 검출

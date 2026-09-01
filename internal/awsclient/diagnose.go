@@ -375,7 +375,7 @@ func alternativeConfigPaths(loc Locations) []string {
 }
 
 func readable(path string) error {
-	f, err := os.Open(path) //nolint:gosec // 사용자 자신의 AWS 설정 파일이다
+	f, err := os.Open(path)
 	if err != nil {
 		return err //nolint:wrapcheck // 호출자가 문맥을 붙인다
 	}

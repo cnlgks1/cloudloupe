@@ -207,9 +207,9 @@ func TestDiagnoseReportsSymlinkTarget(t *testing.T) {
 
 	// dotfile 관리 도구를 쓰면 흔한 구성이다. 문제는 아니지만 어디를 가리키는지 보여야 한다.
 	home := t.TempDir()
-	real := filepath.Join(t.TempDir(), "config")
+	targetPath := filepath.Join(t.TempDir(), "config")
 
-	if err := os.WriteFile(real, []byte("[default]\n"), 0o600); err != nil {
+	if err := os.WriteFile(targetPath, []byte("[default]\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -218,7 +218,7 @@ func TestDiagnoseReportsSymlinkTarget(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	if err := os.Symlink(real, filepath.Join(dir, "config")); err != nil {
+	if err := os.Symlink(targetPath, filepath.Join(dir, "config")); err != nil {
 		t.Fatalf("Symlink: %v", err)
 	}
 

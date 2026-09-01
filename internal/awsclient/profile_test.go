@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -284,6 +285,10 @@ func TestLoadProfilesFromRejectsUnreadableFile(t *testing.T) {
 
 	// 존재하지만 읽을 수 없는 파일은 진짜 에러이고, 파일이 없는 경우와 구별되며 조용히
 	// 삼켜져서는 안 된다.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows에서는 권한 비트로 읽기를 막을 수 없다")
+	}
+
 	if os.Getuid() == 0 {
 		t.Skip("root로 실행 중이라 권한 비트가 적용되지 않는다")
 	}

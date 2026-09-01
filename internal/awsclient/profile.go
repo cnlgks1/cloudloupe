@@ -121,7 +121,7 @@ func LoadProfilesFrom(configPath, credentialsPath string) ([]Profile, error) {
 
 // readInto는 파일 하나의 프로필을 acc에 병합하고, 그 파일이 존재했는지를 함께 알린다.
 func readInto(acc map[string]*Profile, path string, source Source) (bool, error) {
-	f, err := os.Open(path) //nolint:gosec // 사용자 자신의 AWS 설정 위치다
+	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}

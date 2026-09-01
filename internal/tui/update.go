@@ -33,28 +33,25 @@ type collectDoneMsg struct {
 
 // handleKey는 키 입력을 화면별로 처리한다.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// 경로 입력 중에는 q를 종료로 가로채지 않는다.
-	if m.screen == ScreenConfigPath {
-		return m.keyConfigPath(msg)
-	}
-
 	// ctrl+c는 입력 중이어도 즉시 종료한다.
 	if msg.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
 
-	// 필터 입력 중에는 q, p, R 같은 문자도 검색어로 전달한다.
+	// 필터 입력 중에는 q, p, r 같은 문자도 검색어로 전달한다.
 	if m.screen == ScreenList && m.filtering {
 		return m.keyResourceFilter(msg)
 	}
 
 	// q는 상세 화면에서는 이전 목록으로 돌아가고, 그 외 화면에서는 종료한다.
 	if key.Matches(msg, m.keys.Quit) &&
-		m.screen != ScreenDetail && m.screen != ScreenCollectErrorDetail {
+		m.screen != ScreenConfigPath && m.screen != ScreenDetail && m.screen != ScreenCollectErrorDetail {
 		return m, tea.Quit
 	}
 
 	switch m.screen {
+	case ScreenConfigPath:
+		return m.keyConfigPath(msg)
 	case ScreenProfile:
 		return m.keyProfile(msg)
 	case ScreenRegion:
@@ -147,7 +144,9 @@ func (m Model) keyProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.loading = p.Name + " 자격증명 확인 중..."
 			m.screen = ScreenIdentity
 
-			return m, m.identifyCmd(p)
+			cmd := m.identifyCmd(p)
+
+			return m, cmd
 		}
 
 		return m, nil

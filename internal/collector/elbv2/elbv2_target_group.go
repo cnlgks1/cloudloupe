@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -102,7 +103,7 @@ func targetGroupToResource(scope collect.Scope, tg elbv2types.TargetGroup, healt
 		{Key: "포트", Value: displayInt32(aws.ToInt32(tg.Port))},
 		{Key: "타깃 종류", Value: string(tg.TargetType)},
 		{Key: "VPC", Value: displayString(aws.ToString(tg.VpcId))},
-		{Key: "타깃 수", Value: displayInt32(int32(len(health)))},
+		{Key: "타깃 수", Value: strconv.Itoa(len(health))},
 	}
 
 	r.Related = targetGroupRelations(tg, health)

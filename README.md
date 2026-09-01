@@ -55,7 +55,7 @@ cloudloupe는 AWS 리소스를 생성하거나 수정하거나 삭제할 **수 �
 
 ## 설치
 
-아직 릴리스가 없습니다. 지금은 소스에서 빌드하는 방법만 동작합니다.
+아직 첫 공개 릴리스 태그는 없습니다. 지금 바로 동작하는 방법은 소스 빌드입니다.
 
 ```sh
 git clone https://github.com/cnlgks1/cloudloupe.git
@@ -64,20 +64,57 @@ make build
 ./cloudloupe
 ```
 
-첫 릴리스 이후에는 아래 방법이 추가됩니다. 태그를 붙이기 전까지는 동작하지 않습니다.
+저장소를 공개하고 `v0.1.0` 같은 태그를 push하면 GitHub Actions가 전체 CI를 통과한 뒤 macOS,
+Linux, Windows용 GitHub Release와 `checksums.txt`를 자동으로 게시합니다. 그때부터 아래 설치
+방법이 동작합니다.
+
+### macOS, Linux, Ubuntu, WSL
+
+설치 스크립트를 먼저 내려받아 확인한 뒤 실행하는 방법을 권장합니다. 운영체제와 CPU를 자동으로
+찾고, 릴리스의 SHA-256 체크섬을 검증한 뒤 기본적으로 `~/.local/bin/cloudloupe`에 설치합니다.
 
 ```sh
-brew install cnlgks1/tap/cloudloupe                                # 릴리스 후
-go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest     # 태그 후
+curl -fsSLO https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh
+less install.sh
+sh install.sh
 ```
 
-저장소가 비공개인 동안에는 `go install`이 모듈 프록시를 통과하지 못합니다. 프록시를 우회하고
-git 인증을 쓰도록 알려줘야 합니다.
+특정 버전이나 다른 설치 경로도 지정할 수 있습니다.
+
+```sh
+CLOUDLOUPE_VERSION=v0.1.0 sh install.sh
+CLOUDLOUPE_INSTALL_DIR="$HOME/bin" sh install.sh
+```
+
+한 줄 설치가 필요하면 다음과 같이 실행할 수 있지만, 먼저 스크립트를 읽는 편이 더 안전합니다.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh | sh
+```
+
+### Go 도구 체인
+
+```sh
+go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
+```
+
+저장소가 비공개인 동안에는 모듈 프록시를 우회하고 git 인증을 사용해야 합니다.
 
 ```sh
 export GOPRIVATE=github.com/cnlgks1/*
 go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
 ```
+
+### Windows
+
+[GitHub Releases](https://github.com/cnlgks1/cloudloupe/releases)에서 CPU에 맞는
+`cloudloupe_windows_amd64.zip` 또는 `cloudloupe_windows_arm64.zip`과 `checksums.txt`를
+받아 SHA-256을 확인한 뒤 `cloudloupe.exe`를 PATH에 있는 디렉터리에 둡니다. PowerShell에서는
+`Get-FileHash .\cloudloupe_windows_amd64.zip -Algorithm SHA256`으로 확인할 수 있습니다.
+
+Homebrew는 별도 `homebrew-tap` 저장소와 그 저장소에 쓸 토큰이 필요합니다. GitHub Release가
+실제로 게시된 뒤 tap을 연결하며, 그전에는 동작하지 않는 `brew install` 명령을 안내하지
+않습니다.
 
 ## 지원 플랫폼
 
@@ -241,7 +278,7 @@ cloudloupe는 조사하는 서비스에 대한 읽기 권한이 필요합니다.
 | 3    | 관계 그래프 코어와 ALB → Listener → TG, Route 53 → ALB 식별자 연결                 | 진행 중 |
 | 4    | 근거와 신뢰도를 갖춘 미사용 후보 탐지. CloudWatch와 CloudTrail을 결합              | 예정 |
 | 5    | JSON / CSV / Markdown 리포트                                                         | 예정 |
-| 6    | GoReleaser 릴리스 파이프라인, Homebrew tap, 체크섬                                 | 예정 |
+| 6    | GoReleaser 기반 GitHub Release·체크섬과 설치 스크립트, Homebrew tap 연결               | 진행 중 |
 
 판정 결과를 근거 없이 단정해서 내놓지 않습니다. 각 항목에는 **확정**, **추정**,
 **확인 필요** 중 하나의 신뢰도와 그 판단에 사용한 API 응답 및 지표가 함께 붙습니다.

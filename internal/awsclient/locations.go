@@ -12,8 +12,9 @@ import (
 // 이름과 우선순위는 AWS CLI 및 SDK와 같다. 그래야 `aws` 명령이 보는 것과 cloudloupe가
 // 보는 것이 어긋나지 않는다.
 const (
-	EnvConfigFile      = "AWS_CONFIG_FILE"
-	EnvCredentialsFile = "AWS_SHARED_CREDENTIALS_FILE"
+	EnvConfigFile = "AWS_CONFIG_FILE"
+	// EnvCredentialsFile은 AWS 환경 변수 이름이며 자격증명 값이 아니다.
+	EnvCredentialsFile = "AWS_SHARED_CREDENTIALS_FILE" //nolint:gosec // AWS 환경 변수 이름이며 비밀값이 아니다.
 	EnvProfile         = "AWS_PROFILE"
 	EnvDefaultProfile  = "AWS_DEFAULT_PROFILE"
 	EnvRegion          = "AWS_REGION"

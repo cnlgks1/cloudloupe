@@ -27,10 +27,15 @@ const (
 func Identify(ctx context.Context, profile, region string) (awsclient.Identity, error) {
 	cfg, err := awsclient.Config(ctx, profile, region)
 	if err != nil {
-		return awsclient.Identity{}, err
+		return awsclient.Identity{}, fmt.Errorf("AWS 설정 로드 (%s/%s): %w", profile, region, err)
 	}
 
-	return awsclient.WhoAmI(ctx, awsclient.STSFromConfig(cfg))
+	identity, err := awsclient.WhoAmI(ctx, awsclient.STSFromConfig(cfg))
+	if err != nil {
+		return awsclient.Identity{}, fmt.Errorf("호출 주체 확인 (%s/%s): %w", profile, region, err)
+	}
+
+	return identity, nil
 }
 
 type collectDeps struct {

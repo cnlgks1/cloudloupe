@@ -64,8 +64,8 @@ func TestRunCollectsFromAllCollectors(t *testing.T) {
 	t.Parallel()
 
 	reg := collect.NewRegistry()
-	reg.Add(&fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}})
-	reg.Add(&fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-1")}})
+	addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}})
+	addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-1")}})
 
 	jobs := collect.Plan(reg, []collect.Scope{{Profile: "p", Region: "ap-northeast-2"}})
 
@@ -86,9 +86,9 @@ func TestRunPartialFailureKeepsSuccesses(t *testing.T) {
 	// 이 프로젝트에서 가장 중요한 동작. 한 수집기가 실패해도 나머지 결과는 살아야 한다.
 	// 한 리전의 권한 부족이 전체 조회를 버리게 하면 도구가 쓸모없어진다.
 	reg := collect.NewRegistry()
-	reg.Add(&fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}})
-	reg.Add(&fakeCollector{typ: model.TypeWAFv2WebACL, err: errors.New("AccessDeniedException")})
-	reg.Add(&fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-1")}})
+	addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}})
+	addCollector(t, reg, &fakeCollector{typ: model.TypeWAFv2WebACL, err: errors.New("AccessDeniedException")})
+	addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-1")}})
 
 	jobs := collect.Plan(reg, []collect.Scope{{Profile: "prod", Region: "eu-west-1"}})
 	result := collect.Runner{}.Run(context.Background(), jobs)
@@ -119,7 +119,7 @@ func TestRunRespectsConcurrencyLimit(t *testing.T) {
 
 	reg := collect.NewRegistry()
 	for i := range 20 {
-		reg.Add(&fakeCollector{
+		addCollector(t, reg, &fakeCollector{
 			typ:     fmt.Sprintf("test:type%d", i),
 			delay:   20 * time.Millisecond,
 			running: &running,
@@ -149,7 +149,7 @@ func TestRunCleansUpAllGoroutines(t *testing.T) {
 
 	for i := range 10 {
 		wg.Add(1)
-		reg.Add(&fakeCollector{
+		addCollector(t, reg, &fakeCollector{
 			typ:     fmt.Sprintf("test:type%d", i),
 			running: &active,
 			peak:    new(int32),
@@ -170,7 +170,7 @@ func TestRunHonorsCancellation(t *testing.T) {
 
 	reg := collect.NewRegistry()
 	for i := range 10 {
-		reg.Add(&fakeCollector{typ: fmt.Sprintf("test:type%d", i), delay: time.Second})
+		addCollector(t, reg, &fakeCollector{typ: fmt.Sprintf("test:type%d", i), delay: time.Second})
 	}
 
 	jobs := collect.Plan(reg, []collect.Scope{{Profile: "p", Region: "r"}})
@@ -202,9 +202,9 @@ func TestRunIsDeterministic(t *testing.T) {
 	// 흔들려 스냅샷 diff가 무의미해진다.
 	build := func() *collect.Registry {
 		reg := collect.NewRegistry()
-		reg.Add(&fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-b"), res(model.TypeEC2Volume, "vol-a")}, delay: time.Millisecond})
-		reg.Add(&fakeCollector{typ: model.TypeELBv2LoadBalancer, res: []model.Resource{res(model.TypeELBv2LoadBalancer, "alb")}})
-		reg.Add(&fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}, delay: 2 * time.Millisecond})
+		addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Volume, res: []model.Resource{res(model.TypeEC2Volume, "vol-b"), res(model.TypeEC2Volume, "vol-a")}, delay: time.Millisecond})
+		addCollector(t, reg, &fakeCollector{typ: model.TypeELBv2LoadBalancer, res: []model.Resource{res(model.TypeELBv2LoadBalancer, "alb")}})
+		addCollector(t, reg, &fakeCollector{typ: model.TypeEC2Instance, res: []model.Resource{res(model.TypeEC2Instance, "i-1")}, delay: 2 * time.Millisecond})
 
 		return reg
 	}
@@ -247,8 +247,8 @@ func TestPlanCreatesJobPerScopePerCollector(t *testing.T) {
 	t.Parallel()
 
 	reg := collect.NewRegistry()
-	reg.Add(&fakeCollector{typ: "a"})
-	reg.Add(&fakeCollector{typ: "b"})
+	addCollector(t, reg, &fakeCollector{typ: "a"})
+	addCollector(t, reg, &fakeCollector{typ: "b"})
 
 	scopes := []collect.Scope{
 		{Profile: "p", Region: "ap-northeast-2"},

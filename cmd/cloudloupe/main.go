@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
 
 	"github.com/cnlgks1/cloudloupe/internal/app"
@@ -62,7 +62,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return err
+		return fmt.Errorf("플래그 해석: %w", err)
 	}
 
 	if *showVersion {
@@ -124,12 +124,15 @@ func runTUI(ascii *bool, override awsclient.Override) error {
 		LoadProfiles: func(ov awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error) {
 			loc, err := awsclient.ResolveWith(ov)
 			if err != nil {
-				return nil, loc, err
+				return nil, loc, fmt.Errorf("AWS 설정 위치 해석: %w", err)
 			}
 
 			profiles, err := loc.LoadProfiles()
+			if err != nil {
+				return nil, loc, fmt.Errorf("AWS 프로필 로드: %w", err)
+			}
 
-			return profiles, loc, err
+			return profiles, loc, nil
 		},
 		ResourceGroups: groups,
 		Identify:       app.Identify,
@@ -185,7 +188,7 @@ func resourceGroups() ([]tui.ResourceGroup, error) {
 func runCheck(w io.Writer) error {
 	loc, err := awsclient.Resolve()
 	if err != nil {
-		return err
+		return fmt.Errorf("AWS 설정 위치 해석: %w", err)
 	}
 
 	// 프로필 읽기 실패는 진단 대상이지 진단 실패가 아니다. 읽지 못했다는 사실 자체가
@@ -248,7 +251,7 @@ func listProfiles(w io.Writer, format string) error {
 	// 한다. "내 프로필이 안 보인다"의 원인은 거의 항상 예상과 다른 파일을 읽은 것이다.
 	loc, err := awsclient.Resolve()
 	if err != nil {
-		return err
+		return fmt.Errorf("AWS 설정 위치 해석: %w", err)
 	}
 
 	profiles, err := loc.LoadProfiles()
@@ -258,7 +261,7 @@ func listProfiles(w io.Writer, format string) error {
 	}
 
 	if err != nil {
-		return err
+		return fmt.Errorf("AWS 프로필 로드: %w", err)
 	}
 
 	if format == "json" {

@@ -101,7 +101,7 @@ func (c webACLCollector) webACLToResource(ctx context.Context, scope collect.Sco
 		Scope: wafv2types.ScopeRegional,
 	})
 	if err == nil && detail.WebACL != nil {
-		ruleCount = displayInt32(int32(len(detail.WebACL.Rules)))
+		ruleCount = strconv.Itoa(len(detail.WebACL.Rules))
 	}
 
 	r.Fields = []model.Field{
@@ -124,9 +124,4 @@ func displayString(s string) string {
 	}
 
 	return s
-}
-
-// displayInt32는 int32를 표시용 문자열로 바꾼다.
-func displayInt32(n int32) string {
-	return strconv.Itoa(int(n))
 }

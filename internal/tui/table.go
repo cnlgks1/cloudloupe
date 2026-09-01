@@ -293,7 +293,7 @@ func resourceSummary(groups []ResourceGroup, resource model.Resource) string {
 // 같은 타입의 모든 리소스 Fields 합집합을 처음 나타난 순서로 사용한다. 첫 행 하나만 보고
 // 스키마를 정하지 않으므로 조건부 필드도 사라지지 않는다.
 func fieldColumnKeys(resources []model.Resource, groups []ResourceGroup, selectedTypes []string) []string {
-	resourceType := ""
+	var resourceType string
 	switch {
 	case len(selectedTypes) == 1:
 		resourceType = selectedTypes[0]

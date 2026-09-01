@@ -109,6 +109,7 @@ tidy-check: ## go.mod나 go.sum이 바뀔 상태면 실패
 
 .PHONY: cross
 cross: ## 모든 릴리스 대상으로 크로스 컴파일
+	@mkdir -p build
 	@for platform in $(CROSS_PLATFORMS); do \
 		os=$${platform%/*}; arch=$${platform#*/}; \
 		ext=""; [ "$$os" = "windows" ] && ext=".exe"; \

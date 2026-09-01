@@ -107,8 +107,8 @@ type Model struct {
 	credsInput  textinput.Model
 	pathFocus   int
 
-	// 일반 선택 테이블은 위젯 커서로 원본을 찾는다. 리소스 테이블은 대용량 결과 전체를
-	// 위젯에 넣지 않고 filteredIndexes의 전역 커서와 화면 높이만큼의 행 캐시를 따로 둔다.
+	// 일반 선택 테이블은 위젯 커서로 원본을 찾는다. 리소스 목록은 원본과 파생 인덱스,
+	// 가상 viewport를 구체 서브모델 하나에서 함께 관리한다.
 	profileTable table.Model
 	regionTable  table.Model
 	typeTable    table.Model
@@ -117,24 +117,16 @@ type Model struct {
 	detail       viewport.Model
 	spinner      spinner.Model
 
-	resourceTable       table.Model
-	resources           []model.Resource
-	resourceData        resourceTableData
-	filteredIndexes     []int
-	visibleResourceRows []table.Row
-	resourceCursor      int
-	resourceWindowStart int
-	// resourceTableHeight는 마지막으로 위젯에 적용한 헤더 포함 전체 높이다.
-	resourceTableHeight int
-	listCaption         string
-	filterInput         textinput.Model
-	filtering           bool
-	filterQuery         string
-	previousFilter      string
-	resourceKinds       []resourceKind
-	resourceKindFilter  string
-	collectErrors       []model.CollectError
-	showRegion          bool
+	resourceList       resourceListModel
+	listCaption        string
+	filterInput        textinput.Model
+	filtering          bool
+	filterQuery        string
+	previousFilter     string
+	resourceKinds      []resourceKind
+	resourceKindFilter string
+	collectErrors      []model.CollectError
+	showRegion         bool
 
 	chosenProfile    string
 	identity         awsclient.Identity
@@ -391,7 +383,7 @@ func (m Model) resourceListView() string {
 			m.theme.Faint.Render("  t: 변경")
 		if m.resourceKindFilter != "" && m.filterQuery == "" {
 			kindLine += "  " + m.theme.Faint.Render(
-				fmt.Sprintf("결과 %d/%d개", len(m.filteredIndexes), len(m.resources)))
+				fmt.Sprintf("결과 %d/%d개", m.resourceList.filteredCount(), m.resourceList.totalCount()))
 		}
 		lines = append(lines, kindLine)
 		help = append([][2]string{{"t", "종류 필터"}}, help...)
@@ -406,11 +398,12 @@ func (m Model) resourceListView() string {
 		}
 	} else if m.filterQuery != "" {
 		filterLine = fmt.Sprintf("/ %s  %s", m.filterQuery,
-			m.theme.Faint.Render(fmt.Sprintf("결과 %d/%d개", len(m.filteredIndexes), len(m.resources))))
+			m.theme.Faint.Render(fmt.Sprintf("결과 %d/%d개",
+				m.resourceList.filteredCount(), m.resourceList.totalCount())))
 	}
 	lines = append(lines, filterLine)
 
-	return strings.Join(lines, "\n") + "\n" + m.resourceTable.View() + m.helpBar(help...)
+	return strings.Join(lines, "\n") + "\n" + m.resourceList.View() + m.helpBar(help...)
 }
 
 func (m Model) hasResourceKindFilter() bool {
@@ -480,73 +473,12 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.errorTable.SetCursor(cursor)
 	}
 
-	if len(m.resourceData.titles) > 0 || m.screen == ScreenList || m.screen == ScreenResourceKind {
-		columns := layoutResourceColumns(
-			m.resourceData.titles, m.resourceData.preferredWidths, msg.Width)
-		if !sameTableColumns(m.resourceTable.Columns(), columns) {
-			m.resourceTable.SetColumns(columns)
-		}
-		height := m.resourceListHeight()
-		if m.resourceTableHeight != height {
-			m.resourceTable.SetHeight(height)
-			m.resourceTableHeight = height
-			m.syncResourceTableWindow()
-		}
-	}
+	m.resourceList.resize(msg.Width, m.resourceListHeight())
 
 	m.detail.Width = msg.Width
 	m.detail.Height = h
 
 	return m
-}
-
-func (m *Model) syncResourceTableWindow() {
-	count := len(m.filteredIndexes)
-	if count == 0 {
-		m.resourceCursor = 0
-		m.resourceWindowStart = 0
-		m.visibleResourceRows = m.visibleResourceRows[:0]
-		m.resourceTable.SetRows(m.visibleResourceRows)
-
-		return
-	}
-
-	m.resourceCursor = min(max(m.resourceCursor, 0), count-1)
-	windowSize := min(max(0, m.resourceTableHeight-1), count)
-	if windowSize == 0 {
-		m.resourceWindowStart = m.resourceCursor
-		m.visibleResourceRows = m.visibleResourceRows[:0]
-		m.resourceTable.SetRows(m.visibleResourceRows)
-
-		return
-	}
-
-	previousStart := m.resourceWindowStart
-	m.resourceWindowStart = min(max(m.resourceWindowStart, 0), count-windowSize)
-	if m.resourceCursor < m.resourceWindowStart {
-		m.resourceWindowStart = m.resourceCursor
-	} else if m.resourceCursor >= m.resourceWindowStart+windowSize {
-		m.resourceWindowStart = m.resourceCursor - windowSize + 1
-	}
-	m.resourceWindowStart = min(max(m.resourceWindowStart, 0), count-windowSize)
-
-	if previousStart != m.resourceWindowStart || len(m.visibleResourceRows) != windowSize {
-		m.visibleResourceRows = m.visibleResourceRows[:0]
-		end := m.resourceWindowStart + windowSize
-		for _, resourceIndex := range m.filteredIndexes[m.resourceWindowStart:end] {
-			if resourceIndex >= 0 && resourceIndex < len(m.resourceData.rows) {
-				m.visibleResourceRows = append(m.visibleResourceRows, m.resourceData.rows[resourceIndex])
-			} else {
-				m.visibleResourceRows = append(m.visibleResourceRows, nil)
-			}
-		}
-		m.resourceTable.SetRows(m.visibleResourceRows)
-	}
-
-	localCursor := m.resourceCursor - m.resourceWindowStart
-	if m.resourceTable.Cursor() != localCursor {
-		m.resourceTable.SetCursor(localCursor)
-	}
 }
 
 func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {

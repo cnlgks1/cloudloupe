@@ -457,18 +457,10 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 		m.cancel()
 		m.cancel = nil
 	}
-	m.resources = msg.result.Resources
-	m.resourceData = msg.data
-	m.filteredIndexes = make([]int, len(m.resources))
-	for i := range m.filteredIndexes {
-		m.filteredIndexes[i] = i
-	}
-	m.visibleResourceRows = nil
-	m.resourceCursor = 0
-	m.resourceWindowStart = 0
-	m.resourceTableHeight = m.resourceListHeight()
-	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, m.resources)
+	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, msg.result.Resources)
 	m.resourceKindFilter = ""
+	m.resourceList.setResources(
+		m.theme, msg.result.Resources, msg.data, m.width, m.resourceListHeight())
 	m.collectErrors = append([]model.CollectError(nil), msg.result.Errors...)
 	m.errorTable = buildCollectErrorTable(
 		m.theme, m.collectErrors, m.deps.ResourceGroups, m.width, m.listHeight())
@@ -479,9 +471,6 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 	m.filterInput.SetValue("")
 	m.filterInput.Blur()
 	m.listCaption = m.listTitle(msg.result)
-	m.resourceTable = newResourceTable(
-		m.theme, m.resourceData, nil, m.width, m.resourceTableHeight)
-	m.syncResourceTableWindow()
 	m.screen = ScreenList
 
 	return m, nil
@@ -541,55 +530,20 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		if m.resourceCursor >= 0 && m.resourceCursor < len(m.filteredIndexes) {
-			resourceIndex := m.filteredIndexes[m.resourceCursor]
-			if resourceIndex < 0 || resourceIndex >= len(m.resources) {
-				return m, nil
-			}
-			m.detail.SetContent(renderDetail(m.theme, m.resources[resourceIndex]))
-			m.detail.GotoTop()
-			m.screen = ScreenDetail
-
+		resource, ok := m.resourceList.selected()
+		if !ok {
 			return m, nil
 		}
+		m.detail.SetContent(renderDetail(m.theme, resource))
+		m.detail.GotoTop()
+		m.screen = ScreenDetail
+
+		return m, nil
 	}
 
-	return m.moveResourceCursor(msg), nil
-}
+	m.resourceList.moveCursor(msg)
 
-// moveResourceCursor는 리소스 전체 결과 기준 커서를 이동하고 화면 크기 캐시 구간을 맞춘다.
-func (m Model) moveResourceCursor(msg tea.KeyMsg) Model {
-	if len(m.filteredIndexes) == 0 {
-		return m
-	}
-
-	viewportHeight := max(0, m.resourceTableHeight-1)
-	next := m.resourceCursor
-	switch {
-	case key.Matches(msg, m.resourceTable.KeyMap.LineUp):
-		next--
-	case key.Matches(msg, m.resourceTable.KeyMap.LineDown):
-		next++
-	case key.Matches(msg, m.resourceTable.KeyMap.PageUp):
-		next -= viewportHeight
-	case key.Matches(msg, m.resourceTable.KeyMap.PageDown):
-		next += viewportHeight
-	case key.Matches(msg, m.resourceTable.KeyMap.HalfPageUp):
-		next -= viewportHeight / 2
-	case key.Matches(msg, m.resourceTable.KeyMap.HalfPageDown):
-		next += viewportHeight / 2
-	case key.Matches(msg, m.resourceTable.KeyMap.GotoTop):
-		next = 0
-	case key.Matches(msg, m.resourceTable.KeyMap.GotoBottom):
-		next = len(m.filteredIndexes) - 1
-	default:
-		return m
-	}
-
-	m.resourceCursor = min(max(next, 0), len(m.filteredIndexes)-1)
-	m.syncResourceTableWindow()
-
-	return m
+	return m, nil
 }
 
 func (m Model) keyResourceKind(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -651,26 +605,9 @@ func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// applyResourceFilter는 캐시된 검색 문자열과 원본 인덱스로 종류·검색 조건을 적용한다.
+// applyResourceFilter는 화면의 종류·검색 조건을 목록 서브모델에 적용한다.
 func (m Model) applyResourceFilter() Model {
-	tokens := strings.Fields(strings.ToLower(m.filterQuery))
-	m.filteredIndexes = m.filteredIndexes[:0]
-
-	for i, resource := range m.resources {
-		if m.resourceKindFilter != "" && resource.Type != m.resourceKindFilter {
-			continue
-		}
-		if i >= len(m.resourceData.searchTexts) || !searchTextMatches(m.resourceData.searchTexts[i], tokens) {
-			continue
-		}
-
-		m.filteredIndexes = append(m.filteredIndexes, i)
-	}
-
-	m.resourceCursor = 0
-	m.resourceWindowStart = 0
-	m.visibleResourceRows = m.visibleResourceRows[:0]
-	m.syncResourceTableWindow()
+	m.resourceList.applyFilter(m.resourceKindFilter, m.filterQuery)
 
 	return m
 }

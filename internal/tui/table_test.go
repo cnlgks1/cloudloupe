@@ -133,13 +133,12 @@ func TestResourceListViewUsesDedicatedFilterLine(t *testing.T) {
 	m := Model{
 		theme:       New(true),
 		listCaption: "리소스 2개",
-		resources:   resources,
 	}
-	m.resourceData, _ = buildResourceData(context.Background(), resources, nil, nil, false)
-	m.filteredIndexes = []int{0, 1}
-	m.resourceTableHeight = 10
-	m.resourceTable = newResourceTable(m.theme, m.resourceData, nil, 100, m.resourceTableHeight)
-	m.syncResourceTableWindow()
+	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false)
+	if !prepared {
+		t.Fatal("목록 데이터를 준비하지 못함")
+	}
+	m.resourceList.setResources(m.theme, resources, data, 100, 10)
 
 	lines := strings.Split(m.resourceListView(), "\n")
 	if len(lines) < 3 {
@@ -237,13 +236,13 @@ func TestResourceFilterUpdateFlow(t *testing.T) {
 		m := newFilterFlowModel(resources)
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("production")})
-		if len(m.filteredIndexes) != 1 || m.resources[m.filteredIndexes[0]].ID != "i-web" {
-			t.Errorf("실시간 필터 인덱스 = %v, want i-web", m.filteredIndexes)
+		if len(m.resourceList.filteredIndexes) != 1 || m.resourceList.resources[m.resourceList.filteredIndexes[0]].ID != "i-web" {
+			t.Errorf("실시간 필터 인덱스 = %v, want i-web", m.resourceList.filteredIndexes)
 		}
 
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
-		if m.filtering || m.filterQuery != "" || len(m.filteredIndexes) != 2 {
-			t.Errorf("취소 후 상태 filtering=%v query=%q rows=%d", m.filtering, m.filterQuery, len(m.filteredIndexes))
+		if m.filtering || m.filterQuery != "" || len(m.resourceList.filteredIndexes) != 2 {
+			t.Errorf("취소 후 상태 filtering=%v query=%q rows=%d", m.filtering, m.filterQuery, len(m.resourceList.filteredIndexes))
 		}
 	})
 
@@ -272,8 +271,8 @@ func TestResourceFilterUpdateFlow(t *testing.T) {
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("no-such-resource")})
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
 		m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
-		if m.screen != ScreenList || len(m.filteredIndexes) != 0 {
-			t.Errorf("0건 Enter 후 화면=%v rows=%d", m.screen, len(m.filteredIndexes))
+		if m.screen != ScreenList || len(m.resourceList.filteredIndexes) != 0 {
+			t.Errorf("0건 Enter 후 화면=%v rows=%d", m.screen, len(m.resourceList.filteredIndexes))
 		}
 	})
 }
@@ -288,21 +287,17 @@ func newFilterFlowModel(resources []model.Resource) Model {
 		screen:        ScreenList,
 		width:         100,
 		height:        24,
-		resources:     append([]model.Resource(nil), resources...),
 		filterInput:   input,
 		detail:        viewport.New(100, 19),
 		chosenRegions: []string{"ap-northeast-2"},
 	}
-	m.resourceData, _ = buildResourceData(
-		context.Background(), m.resources, nil, m.chosenTypes, m.shouldShowRegion())
-	m.filteredIndexes = make([]int, len(m.resources))
-	for i := range m.filteredIndexes {
-		m.filteredIndexes[i] = i
+	resources = append([]model.Resource(nil), resources...)
+	data, prepared := buildResourceData(
+		context.Background(), resources, nil, m.chosenTypes, m.shouldShowRegion())
+	if !prepared {
+		panic("테스트 리소스 데이터를 준비하지 못함")
 	}
-	m.resourceTableHeight = m.resourceListHeight()
-	m.resourceTable = newResourceTable(
-		m.theme, m.resourceData, nil, m.width, m.resourceTableHeight)
-	m.syncResourceTableWindow()
+	m.resourceList.setResources(m.theme, resources, data, m.width, m.resourceListHeight())
 
 	return m
 }
@@ -358,25 +353,25 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.screen != ScreenList || m.resourceKindFilter != "" || len(m.filteredIndexes) != 3 {
-		t.Fatalf("종류 필터 취소 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.filteredIndexes))
+	if m.screen != ScreenList || m.resourceKindFilter != "" || len(m.resourceList.filteredIndexes) != 3 {
+		t.Fatalf("종류 필터 취소 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.resourceList.filteredIndexes))
 	}
 
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.screen != ScreenList || m.resourceKindFilter != model.TypeEC2Volume || len(m.filteredIndexes) != 2 {
-		t.Fatalf("볼륨 적용 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.filteredIndexes))
+	if m.screen != ScreenList || m.resourceKindFilter != model.TypeEC2Volume || len(m.resourceList.filteredIndexes) != 2 {
+		t.Fatalf("볼륨 적용 후 화면=%v 필터=%q rows=%d", m.screen, m.resourceKindFilter, len(m.resourceList.filteredIndexes))
 	}
-	for _, index := range m.filteredIndexes {
-		resource := m.resources[index]
+	for _, index := range m.resourceList.filteredIndexes {
+		resource := m.resourceList.resources[index]
 		if resource.Type != model.TypeEC2Volume {
 			t.Errorf("종류 필터 결과에 다른 타입이 포함됨: %s", resource.Type)
 		}
 	}
 	wantTitles := []string{"종류", "이름", "ID", "주요 정보"}
-	if got := columnTitles(m.resourceTable); !slices.Equal(got, wantTitles) {
+	if got := columnTitles(m.resourceList.table); !slices.Equal(got, wantTitles) {
 		t.Errorf("종류 필터 후 열 = %v, want %v", got, wantTitles)
 	}
 
@@ -384,8 +379,8 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shared")})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if len(m.filteredIndexes) != 1 || m.resources[m.filteredIndexes[0]].ID != "vol-1" {
-		t.Errorf("종류+검색 결과 인덱스 = %v, want vol-1", m.filteredIndexes)
+	if len(m.resourceList.filteredIndexes) != 1 || m.resourceList.resources[m.resourceList.filteredIndexes[0]].ID != "vol-1" {
+		t.Errorf("종류+검색 결과 인덱스 = %v, want vol-1", m.resourceList.filteredIndexes)
 	}
 
 	// 종류를 전체로 되돌려도 검색어는 유지되어 인스턴스와 볼륨 두 행이 보인다.
@@ -393,8 +388,8 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyUp})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyUp})
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.resourceKindFilter != "" || len(m.filteredIndexes) != 2 {
-		t.Errorf("전체 종류+검색 결과 필터=%q rows=%d", m.resourceKindFilter, len(m.filteredIndexes))
+	if m.resourceKindFilter != "" || len(m.resourceList.filteredIndexes) != 2 {
+		t.Errorf("전체 종류+검색 결과 필터=%q rows=%d", m.resourceKindFilter, len(m.resourceList.filteredIndexes))
 	}
 }
 
@@ -423,12 +418,12 @@ func newResourceKindFilterModel(groups []ResourceGroup, resources []model.Resour
 	m.deps.ResourceGroups = groups
 	m.chosenTypes = resourceGroupTypeIDs(groups[0])
 	m.resourceKinds = collectResourceKinds(groups, resources)
-	m.resourceData, _ = buildResourceData(
-		context.Background(), m.resources, groups, m.chosenTypes, m.shouldShowRegion())
-	m.visibleResourceRows = nil
-	m.resourceTable = newResourceTable(
-		m.theme, m.resourceData, nil, m.width, m.resourceTableHeight)
-	m.syncResourceTableWindow()
+	data, prepared := buildResourceData(
+		context.Background(), resources, groups, m.chosenTypes, m.shouldShowRegion())
+	if !prepared {
+		panic("종류 필터 테스트 데이터를 준비하지 못함")
+	}
+	m.resourceList.setResources(m.theme, resources, data, m.width, m.resourceListHeight())
 
 	return m
 }
@@ -606,7 +601,7 @@ func TestResourceCursorNavigation(t *testing.T) {
 		resources[i] = model.Resource{ID: fmt.Sprintf("id-%03d", i), Name: fmt.Sprintf("resource-%03d", i)}
 	}
 
-	viewportHeight := newFilterFlowModel(resources).resourceTableHeight - 1
+	viewportHeight := newFilterFlowModel(resources).resourceList.tableHeight - 1
 	tests := []struct {
 		name  string
 		start int
@@ -634,17 +629,18 @@ func TestResourceCursorNavigation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newFilterFlowModel(resources)
-			m.resourceCursor = tt.start
-			m.syncResourceTableWindow()
+			for range tt.start {
+				m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
+			}
 			m = updateFilterModel(m, tt.msg)
 
-			if m.resourceCursor != tt.want {
-				t.Fatalf("전역 커서 = %d, want %d", m.resourceCursor, tt.want)
+			if m.resourceList.cursor != tt.want {
+				t.Fatalf("전역 커서 = %d, want %d", m.resourceList.cursor, tt.want)
 			}
-			if got, want := m.resourceTable.Cursor(), m.resourceCursor-m.resourceWindowStart; got != want {
+			if got, want := m.resourceList.table.Cursor(), m.resourceList.cursor-m.resourceList.windowStart; got != want {
 				t.Errorf("로컬 커서 = %d, want %d", got, want)
 			}
-			if got := len(m.resourceTable.Rows()); got > viewportHeight {
+			if got := len(m.resourceList.table.Rows()); got > viewportHeight {
 				t.Errorf("캐시 행 수 = %d, want <= %d", got, viewportHeight)
 			}
 		})
@@ -655,67 +651,67 @@ func TestResourceTableHandles100KWithViewportCacheAndGlobalIndexes(t *testing.T)
 	resources := resourceSet100K()
 	m := newFilterFlowModel(resources)
 
-	rowCell := &m.resourceData.rows[99999][0]
-	preferredWidths := append([]int(nil), m.resourceData.preferredWidths...)
-	viewportHeight := m.resourceTableHeight - 1
-	if got := len(m.resourceTable.Rows()); got != viewportHeight {
+	rowCell := &m.resourceList.data.rows[99999][0]
+	preferredWidths := append([]int(nil), m.resourceList.data.preferredWidths...)
+	viewportHeight := m.resourceList.tableHeight - 1
+	if got := len(m.resourceList.table.Rows()); got != viewportHeight {
 		t.Fatalf("초기 캐시 행 수 = %d, want %d", got, viewportHeight)
 	}
-	if got := len(m.filteredIndexes); got != len(resources) {
+	if got := len(m.resourceList.filteredIndexes); got != len(resources) {
 		t.Fatalf("초기 필터 인덱스 수 = %d, want %d", got, len(resources))
 	}
 
 	m.filterQuery = "resource-"
 	m = m.applyResourceFilter()
-	if got := len(m.filteredIndexes); got != len(resources) {
+	if got := len(m.resourceList.filteredIndexes); got != len(resources) {
 		t.Fatalf("광범위 필터 인덱스 수 = %d, want %d", got, len(resources))
 	}
-	if got := len(m.resourceTable.Rows()); got > viewportHeight {
+	if got := len(m.resourceList.table.Rows()); got > viewportHeight {
 		t.Fatalf("광범위 필터 캐시 행 수 = %d, want <= %d", got, viewportHeight)
 	}
-	if m.resourceCursor != 0 || m.resourceWindowStart != 0 {
-		t.Fatalf("필터 후 cursor/window = %d/%d, want 0/0", m.resourceCursor, m.resourceWindowStart)
+	if m.resourceList.cursor != 0 || m.resourceList.windowStart != 0 {
+		t.Fatalf("필터 후 cursor/window = %d/%d, want 0/0", m.resourceList.cursor, m.resourceList.windowStart)
 	}
 
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyPgDown})
-	if m.resourceCursor != viewportHeight {
-		t.Fatalf("page down 후 전역 커서 = %d, want %d", m.resourceCursor, viewportHeight)
+	if m.resourceList.cursor != viewportHeight {
+		t.Fatalf("page down 후 전역 커서 = %d, want %d", m.resourceList.cursor, viewportHeight)
 	}
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnd})
-	if m.resourceCursor != len(resources)-1 {
-		t.Fatalf("end 후 전역 커서 = %d, want %d", m.resourceCursor, len(resources)-1)
+	if m.resourceList.cursor != len(resources)-1 {
+		t.Fatalf("end 후 전역 커서 = %d, want %d", m.resourceList.cursor, len(resources)-1)
 	}
 
 	m = m.resize(tea.WindowSizeMsg{Width: 160, Height: 40})
-	resizedViewportHeight := m.resourceTableHeight - 1
-	if m.resourceCursor != len(resources)-1 {
-		t.Errorf("resize 후 전역 커서 = %d, want %d", m.resourceCursor, len(resources)-1)
+	resizedViewportHeight := m.resourceList.tableHeight - 1
+	if m.resourceList.cursor != len(resources)-1 {
+		t.Errorf("resize 후 전역 커서 = %d, want %d", m.resourceList.cursor, len(resources)-1)
 	}
-	if got := len(m.resourceTable.Rows()); got > resizedViewportHeight {
+	if got := len(m.resourceList.table.Rows()); got > resizedViewportHeight {
 		t.Errorf("resize 후 캐시 행 수 = %d, want <= %d", got, resizedViewportHeight)
 	}
-	if got, want := m.resourceTable.Cursor(), m.resourceCursor-m.resourceWindowStart; got != want {
+	if got, want := m.resourceList.table.Cursor(), m.resourceList.cursor-m.resourceList.windowStart; got != want {
 		t.Errorf("resize 후 로컬 커서 = %d, want %d", got, want)
 	}
-	if &m.resourceData.rows[99999][0] != rowCell {
+	if &m.resourceList.data.rows[99999][0] != rowCell {
 		t.Fatal("resize가 캐시된 행을 재생성함")
 	}
-	if !slices.Equal(m.resourceData.preferredWidths, preferredWidths) {
-		t.Errorf("resize 후 선호 폭 = %v, want %v", m.resourceData.preferredWidths, preferredWidths)
+	if !slices.Equal(m.resourceList.data.preferredWidths, preferredWidths) {
+		t.Errorf("resize 후 선호 폭 = %v, want %v", m.resourceList.data.preferredWidths, preferredWidths)
 	}
 
 	m.resourceKindFilter = model.TypeEC2Volume
 	m.filterQuery = "needle-99999"
 	m = m.applyResourceFilter()
-	if len(m.filteredIndexes) != 1 || m.filteredIndexes[0] != 99999 {
-		t.Fatalf("희소 필터 인덱스 = %v, want [99999]", m.filteredIndexes)
+	if len(m.resourceList.filteredIndexes) != 1 || m.resourceList.filteredIndexes[0] != 99999 {
+		t.Fatalf("희소 필터 인덱스 = %v, want [99999]", m.resourceList.filteredIndexes)
 	}
-	if got := m.resourceTable.Rows(); len(got) != 1 || &got[0][0] != rowCell {
+	if got := m.resourceList.table.Rows(); len(got) != 1 || &got[0][0] != rowCell {
 		t.Fatal("희소 필터가 캐시된 table.Row를 재사용하지 않음")
 	}
-	if m.resourceCursor != 0 || m.resourceWindowStart != 0 || m.resourceTable.Cursor() != 0 {
+	if m.resourceList.cursor != 0 || m.resourceList.windowStart != 0 || m.resourceList.table.Cursor() != 0 {
 		t.Errorf("희소 필터 후 cursor/window/local = %d/%d/%d, want 0/0/0",
-			m.resourceCursor, m.resourceWindowStart, m.resourceTable.Cursor())
+			m.resourceList.cursor, m.resourceList.windowStart, m.resourceList.table.Cursor())
 	}
 
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -762,16 +758,16 @@ func BenchmarkResourceTable100K(b *testing.B) {
 		b.ResetTimer()
 		for i := range b.N {
 			if i%2 == 0 {
-				m = m.moveResourceCursor(pageDown)
+				m.resourceList.moveCursor(pageDown)
 			} else {
-				m = m.moveResourceCursor(pageUp)
+				m.resourceList.moveCursor(pageUp)
 			}
 		}
 	})
 
 	b.Run("resize", func(b *testing.B) {
 		m := newFilterFlowModel(resources)
-		m = m.moveResourceCursor(tea.KeyMsg{Type: tea.KeyEnd})
+		m.resourceList.moveCursor(tea.KeyMsg{Type: tea.KeyEnd})
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := range b.N {
@@ -814,14 +810,14 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 	stale := collectDoneMsg{requestID: 1, result: collect.Result{Resources: resources}, data: data}
 	next, _ := m.onCollectDone(stale)
 	m = next.(Model)
-	if m.screen != ScreenCollecting || len(m.resources) != 0 {
+	if m.screen != ScreenCollecting || len(m.resourceList.resources) != 0 {
 		t.Fatal("이전 수집의 늦은 완료 메시지를 수락함")
 	}
 
 	canceled := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources, Canceled: true}, data: data, canceled: true}
 	next, _ = m.onCollectDone(canceled)
 	m = next.(Model)
-	if m.screen != ScreenResourceType || len(m.resources) != 0 {
+	if m.screen != ScreenResourceType || len(m.resourceList.resources) != 0 {
 		t.Fatal("취소된 현재 수집에서 타입 선택 화면으로 복귀하지 않음")
 	}
 
@@ -829,8 +825,8 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 	current := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources}, data: data}
 	next, _ = m.onCollectDone(current)
 	m = next.(Model)
-	if m.screen != ScreenList || len(m.resources) != 1 || m.resources[0].ID != "i-current" {
-		t.Fatalf("현재 수집 완료를 적용하지 못함: 화면=%v resources=%v", m.screen, m.resources)
+	if m.screen != ScreenList || len(m.resourceList.resources) != 1 || m.resourceList.resources[0].ID != "i-current" {
+		t.Fatalf("현재 수집 완료를 적용하지 못함: 화면=%v resources=%v", m.screen, m.resourceList.resources)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -142,3 +142,39 @@ func assertJobCounts(t *testing.T, jobs []collect.Job, wantRegional, wantGlobal 
 			regional, global, wantRegional, wantGlobal)
 	}
 }
+
+func TestCollectWithSeparatesCancellation(t *testing.T) {
+	t.Run("신원 확인 취소", func(t *testing.T) {
+		deps := collectDeps{
+			identify: func(context.Context, string, string) (awsclient.Identity, error) {
+				return awsclient.Identity{}, context.Canceled
+			},
+		}
+
+		result := collectWith(context.Background(), "prod", []string{"ap-northeast-2"}, nil, deps)
+		if !result.Canceled || len(result.Errors) != 0 {
+			t.Errorf("Result = %+v, want 취소 상태와 오류 0건", result)
+		}
+	})
+
+	t.Run("설정 로드 취소", func(t *testing.T) {
+		deps := collectDeps{
+			identify: successfulIdentity,
+			config: func(context.Context, string, string) (aws.Config, error) {
+				return aws.Config{}, context.Canceled
+			},
+			run: func(_ context.Context, jobs []collect.Job) collect.Result {
+				if len(jobs) != 0 {
+					t.Errorf("취소 후 Jobs = %d, want 0", len(jobs))
+				}
+
+				return collect.Result{}
+			},
+		}
+
+		result := collectWith(context.Background(), "prod", []string{"ap-northeast-2"}, nil, deps)
+		if !result.Canceled || len(result.Errors) != 0 {
+			t.Errorf("Result = %+v, want 취소 상태와 오류 0건", result)
+		}
+	})
+}

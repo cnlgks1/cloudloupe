@@ -37,7 +37,9 @@ const (
 	ScreenList
 	ScreenResourceKind // 수집 결과 안의 세부 종류 필터 선택
 	ScreenDetail
-	ScreenError
+	ScreenCollectErrors      // 부분 수집 오류 목록
+	ScreenCollectErrorDetail // 부분 수집 오류 원본 상세
+	ScreenError              // 프로필·신원 확인 단계의 치명적 오류
 )
 
 // Deps는 TUI가 바깥 세계와 상호작용하는 데 필요한 함수들이다.
@@ -111,6 +113,7 @@ type Model struct {
 	regionTable  table.Model
 	typeTable    table.Model
 	kindTable    table.Model
+	errorTable   table.Model
 	detail       viewport.Model
 	spinner      spinner.Model
 
@@ -130,6 +133,7 @@ type Model struct {
 	previousFilter      string
 	resourceKinds       []resourceKind
 	resourceKindFilter  string
+	collectErrors       []model.CollectError
 	showRegion          bool
 
 	chosenProfile string
@@ -153,8 +157,9 @@ type Model struct {
 	// cancel은 진행 중인 백그라운드 작업(신원 확인, 수집)을 취소한다. esc로 호출된다.
 	cancel context.CancelFunc
 
-	// collectSequence는 취소된 이전 수집의 늦은 완료 메시지를 구별한다.
-	collectSequence uint64
+	// collectSequence와 identitySequence는 취소된 이전 작업의 늦은 완료 메시지를 구별한다.
+	collectSequence  uint64
+	identitySequence uint64
 }
 
 // keyMap은 키 바인딩을 한곳에 모은다. 키 문자열을 Update에 흩뿌리지 않기 위함이다.
@@ -171,6 +176,7 @@ type keyMap struct {
 	SwitchProfile key.Binding
 	SwitchRegion  key.Binding
 	FilterKind    key.Binding
+	ShowErrors    key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -182,6 +188,7 @@ func defaultKeys() keyMap {
 		SwitchProfile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "프로필 전환")),
 		SwitchRegion:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "리전 전환")),
 		FilterKind:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "종류 필터")),
+		ShowErrors:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "오류 보기")),
 	}
 }
 
@@ -335,6 +342,17 @@ func (m Model) View() string {
 			[2]string{"↑↓/jk", "스크롤"},
 			[2]string{"esc/←/q", "목록으로"},
 		)
+	case ScreenCollectErrors:
+		return m.screenWithHelp("수집 오류", m.errorTable,
+			[2]string{"↑↓/jk", "이동"},
+			[2]string{"enter/→", "원본 상세"},
+			[2]string{"esc/←", "리소스 목록"},
+		)
+	case ScreenCollectErrorDetail:
+		return m.detail.View() + m.helpBar(
+			[2]string{"↑↓/jk", "스크롤"},
+			[2]string{"esc/←/q", "오류 목록"},
+		)
 	case ScreenError:
 		return m.errorView()
 	default:
@@ -355,6 +373,10 @@ func (m Model) resourceListView() string {
 		{"R", "리전 전환"},
 		{"esc", "뒤로"},
 		{"q", "종료"},
+	}
+
+	if len(m.collectErrors) > 0 {
+		help = append([][2]string{{"e", "오류 보기"}}, help...)
 	}
 
 	lines := []string{
@@ -449,6 +471,13 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.kindTable.SetCursor(cursor)
 	}
 
+	if len(m.collectErrors) > 0 && len(m.errorTable.Rows()) > 0 {
+		cursor := m.errorTable.Cursor()
+		m.errorTable = buildCollectErrorTable(
+			m.theme, m.collectErrors, m.deps.ResourceGroups, msg.Width, h)
+		m.errorTable.SetCursor(cursor)
+	}
+
 	if len(m.resourceData.titles) > 0 || m.screen == ScreenList || m.screen == ScreenResourceKind {
 		columns := layoutResourceColumns(
 			m.resourceData.titles, m.resourceData.preferredWidths, msg.Width)
@@ -530,9 +559,11 @@ func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.typeTable, cmd = m.typeTable.Update(msg)
 	case ScreenResourceKind:
 		m.kindTable, cmd = m.kindTable.Update(msg)
+	case ScreenCollectErrors:
+		m.errorTable, cmd = m.errorTable.Update(msg)
 	case ScreenList:
 		// 리소스 목록 이동은 전역 커서와 캐시 window를 함께 갱신하므로 위젯에 위임하지 않는다.
-	case ScreenDetail:
+	case ScreenDetail, ScreenCollectErrorDetail:
 		m.detail, cmd = m.detail.Update(msg)
 	case ScreenConfigPath, ScreenIdentity, ScreenCollecting, ScreenError:
 		// 로딩·에러·경로입력 화면은 테이블에 위임할 것이 없다.
@@ -700,6 +731,30 @@ func selectedResourceGroupLabels(groups []ResourceGroup, chosenTypes []string) [
 	}
 
 	return labels
+}
+
+func renderCollectErrorDetail(
+	theme Theme,
+	groups []ResourceGroup,
+	collectErr model.CollectError,
+) string {
+	explanation := orDashUI(collectErr.Explanation)
+
+	return strings.Join([]string{
+		theme.Error.Render("수집 오류"),
+		"",
+		fmt.Sprintf("%-16s %s", "리소스 종류", resourceTypeLabel(groups, collectErr.Type)),
+		fmt.Sprintf("%-16s %s", "타입 ID", collectErr.Type),
+		fmt.Sprintf("%-16s %s", "프로필", orDashUI(collectErr.Profile)),
+		fmt.Sprintf("%-16s %s", "리전", orDashUI(collectErr.Region)),
+		fmt.Sprintf("%-16s %s", "AWS 오류 코드", orDashUI(collectErr.Code)),
+		"",
+		theme.Title.Render("설명"),
+		explanation,
+		"",
+		theme.Title.Render("원본 오류"),
+		collectErr.Message,
+	}, "\n")
 }
 
 // renderDetail은 리소스 상세를 문자열로 만든다. Fields는 순서 있는 슬라이스이므로

@@ -186,10 +186,12 @@ func TestRunHonorsCancellation(t *testing.T) {
 		t.Errorf("취소됐는데 %v나 걸렸다", elapsed)
 	}
 
-	// 취소된 Job은 에러로 기록되어야 한다. 조용히 사라지면 사용자가 왜 결과가
-	// 비었는지 알 수 없다.
-	if len(result.Errors) == 0 {
-		t.Error("취소된 Job이 에러로 기록되지 않았다")
+	// 사용자 취소는 AWS 실패가 아니므로 오류 목록에 넣지 않고 별도 상태로 보고한다.
+	if !result.Canceled {
+		t.Error("취소된 실행의 Canceled가 false다")
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("사용자 취소가 수집 오류로 기록됐다: %+v", result.Errors)
 	}
 }
 
@@ -258,5 +260,48 @@ func TestPlanCreatesJobPerScopePerCollector(t *testing.T) {
 	// 범위 2개 × 수집기 2개 = 4개.
 	if len(jobs) != 4 {
 		t.Errorf("Job %d개, want 4", len(jobs))
+	}
+}
+
+func TestRunSeparatesJoinedCancellationAndClassifiesFailure(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("request limit exceeded")
+	collector := &fakeCollector{
+		typ: model.TypeEC2Instance,
+		err: errors.Join(context.Canceled, failure),
+	}
+	job := collect.Job{
+		Collector: collector,
+		Request: collect.Request{Scope: collect.Scope{
+			Profile: "prod",
+			Region:  "ap-northeast-2",
+		}},
+	}
+
+	result := collect.Runner{Classify: func(err error) collect.ErrorDetails {
+		if !errors.Is(err, failure) {
+			t.Errorf("Classify err = %v, want 실제 AWS 오류", err)
+		}
+
+		return collect.ErrorDetails{
+			Code:        "ThrottlingException",
+			Explanation: "AWS API 요청 한도를 초과했습니다.",
+		}
+	}}.Run(context.Background(), []collect.Job{job})
+
+	if !result.Canceled {
+		t.Error("errors.Join에 포함된 사용자 취소를 상태로 분리하지 않음")
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("Errors = %+v, want 실제 오류 1건", result.Errors)
+	}
+
+	got := result.Errors[0]
+	if got.Code != "ThrottlingException" || got.Explanation != "AWS API 요청 한도를 초과했습니다." {
+		t.Errorf("분류 결과 = %+v", got)
+	}
+	if got.Message != failure.Error() {
+		t.Errorf("Message = %q, want %q", got.Message, failure.Error())
 	}
 }

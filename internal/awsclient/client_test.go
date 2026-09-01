@@ -147,3 +147,17 @@ func TestExplainUnknownErrorPassesThrough(t *testing.T) {
 		t.Errorf("Explain() = %q", got)
 	}
 }
+
+func TestClassifyErrorExtractsWrappedThrottlingCode(t *testing.T) {
+	t.Parallel()
+
+	err := errors.Join(errors.New("describe resources"), apiError{code: "ThrottlingException", msg: "rate exceeded"})
+
+	got := awsclient.ClassifyError(err)
+	if got.Code != "ThrottlingException" {
+		t.Errorf("Code = %q, want %q", got.Code, "ThrottlingException")
+	}
+	if !strings.Contains(got.Explanation, "요청 한도") {
+		t.Errorf("Explanation = %q, want 요청 한도 설명", got.Explanation)
+	}
+}

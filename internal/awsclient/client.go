@@ -80,35 +80,55 @@ func STSFromConfig(cfg aws.Config) *sts.Client {
 	return sts.NewFromConfig(cfg)
 }
 
-// Explain은 AWS 에러를 사용자가 읽을 수 있는 한국어 문장으로 바꾼다.
+// ErrorInfo는 원본 오류에서 추출한 공급자 코드와 사용자 설명이다.
+type ErrorInfo struct {
+	Code        string
+	Explanation string
+}
+
+// ClassifyError는 AWS 오류를 공급자 코드와 사용자 설명으로 분류한다.
 //
-// 원본 에러는 진단용으로 보존하고(호출부가 %w로 감싼 것), 여기서는 사용자 대면 문장만
-// 만든다. 사용자 대면 메시지와 진단 메시지를 분리하는 원칙(원칙 5)의 구현이다.
-//
-// 판정은 문자열 매칭이 아니라 smithy.APIError의 에러 코드로 한다. 코드가 없을 때만
-// 최후수단으로 문자열을 본다.
-func Explain(err error) string {
+// 호출부가 붙인 %w 문맥을 errors.As로 따라가므로 모든 서비스 수집기가 같은 분류 경로를
+// 사용한다. smithy.APIError가 아닌 설정·자격증명 오류는 코드 없이 설명만 반환한다.
+func ClassifyError(err error) ErrorInfo {
 	if err == nil {
-		return ""
+		return ErrorInfo{}
 	}
 
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
-		switch apiErr.ErrorCode() {
-		case "ExpiredToken", "ExpiredTokenException", "RequestExpired":
-			return "자격증명이 만료되었습니다. 다시 로그인하세요 (예: aws sso login --profile <프로필>)."
-		case "AccessDenied", "AccessDeniedException", "UnauthorizedOperation":
-			return "이 작업을 수행할 권한이 없습니다. 프로필의 IAM 권한을 확인하세요. cloudloupe는 조회 권한만 필요합니다."
-		case "InvalidClientTokenId", "SignatureDoesNotMatch", "AuthFailure":
-			return "자격증명이 유효하지 않습니다. 액세스 키나 프로필 설정을 확인하세요."
-		case "OptInRequired":
-			return "이 리전은 계정에서 활성화되어 있지 않습니다. AWS 콘솔에서 리전을 옵트인하거나 다른 리전을 선택하세요."
-		default:
-			return fmt.Sprintf("AWS 오류 %s: %s", apiErr.ErrorCode(), apiErr.ErrorMessage())
+		return ErrorInfo{
+			Code:        apiErr.ErrorCode(),
+			Explanation: explainAPIError(apiErr),
 		}
 	}
 
-	// SDK 표준 에러 형태에 걸리지 않는 경우들. 자격증명 자체를 못 찾은 경우가 대표적이다.
+	return ErrorInfo{Explanation: explainNonAPIError(err)}
+}
+
+// Explain은 AWS 에러를 사용자가 읽을 수 있는 한국어 문장으로 바꾼다.
+func Explain(err error) string {
+	return ClassifyError(err).Explanation
+}
+
+func explainAPIError(apiErr smithy.APIError) string {
+	switch apiErr.ErrorCode() {
+	case "ExpiredToken", "ExpiredTokenException", "RequestExpired":
+		return "자격증명이 만료되었습니다. 다시 로그인하세요 (예: aws sso login --profile <프로필>)."
+	case "AccessDenied", "AccessDeniedException", "UnauthorizedOperation":
+		return "이 작업을 수행할 권한이 없습니다. 프로필의 IAM 권한을 확인하세요. cloudloupe는 조회 권한만 필요합니다."
+	case "InvalidClientTokenId", "SignatureDoesNotMatch", "AuthFailure":
+		return "자격증명이 유효하지 않습니다. 액세스 키나 프로필 설정을 확인하세요."
+	case "OptInRequired":
+		return "이 리전은 계정에서 활성화되어 있지 않습니다. AWS 콘솔에서 리전을 옵트인하거나 다른 리전을 선택하세요."
+	case "Throttling", "ThrottlingException", "RequestLimitExceeded", "TooManyRequestsException":
+		return "AWS API 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요."
+	default:
+		return fmt.Sprintf("AWS 오류 %s: %s", apiErr.ErrorCode(), apiErr.ErrorMessage())
+	}
+}
+
+func explainNonAPIError(err error) string {
 	msg := err.Error()
 
 	switch {

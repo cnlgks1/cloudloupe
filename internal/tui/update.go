@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -15,8 +16,9 @@ import (
 
 // identityMsg는 신원 확인 결과를 Update로 전달한다.
 type identityMsg struct {
-	id  awsclient.Identity
-	err error
+	requestID uint64
+	id        awsclient.Identity
+	err       error
 }
 
 // collectDoneMsg는 수집과 표시 데이터 준비가 끝났을 때 Update로 전달되는 메시지다.
@@ -45,8 +47,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyResourceFilter(msg)
 	}
 
-	// q는 상세 외에서 종료한다.
-	if key.Matches(msg, m.keys.Quit) && m.screen != ScreenDetail {
+	// q는 상세 화면에서는 이전 목록으로 돌아가고, 그 외 화면에서는 종료한다.
+	if key.Matches(msg, m.keys.Quit) &&
+		m.screen != ScreenDetail && m.screen != ScreenCollectErrorDetail {
 		return m, tea.Quit
 	}
 
@@ -65,6 +68,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyResourceKind(msg)
 	case ScreenDetail:
 		return m.keyDetail(msg)
+	case ScreenCollectErrors:
+		return m.keyCollectErrors(msg)
+	case ScreenCollectErrorDetail:
+		return m.keyCollectErrorDetail(msg)
 	case ScreenError:
 		return m.keyError(msg)
 	case ScreenIdentity:
@@ -155,6 +162,8 @@ func (m Model) keyProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) identifyCmd(p awsclient.Profile) tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	m.identitySequence++
+	requestID := m.identitySequence
 
 	profile := p.Name
 	region := p.Region
@@ -162,14 +171,25 @@ func (m *Model) identifyCmd(p awsclient.Profile) tea.Cmd {
 	return func() tea.Msg {
 		id, err := m.deps.Identify(ctx, profile, region)
 
-		return identityMsg{id: id, err: err}
+		return identityMsg{requestID: requestID, id: id, err: err}
 	}
 }
 
 // --- 신원 확인 결과 ---
 
 func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
-	if m.screen != ScreenIdentity {
+	if m.screen != ScreenIdentity || msg.requestID != m.identitySequence {
+		return m, nil
+	}
+
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+
+	if errors.Is(msg.err, context.Canceled) {
+		m.screen = ScreenProfile
+
 		return m, nil
 	}
 
@@ -356,6 +376,10 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 
 	cmd := func() tea.Msg {
 		result := collectFn(ctx, profile, regions, types)
+		if result.Canceled || errors.Is(ctx.Err(), context.Canceled) {
+			return collectDoneMsg{requestID: requestID, result: result, canceled: true}
+		}
+
 		data, prepared := buildResourceData(ctx, result.Resources, groups, types, showRegion)
 
 		return collectDoneMsg{
@@ -383,7 +407,15 @@ func (m Model) keyCollecting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
-	if m.screen != ScreenCollecting || msg.requestID != m.collectSequence || msg.canceled {
+	if m.screen != ScreenCollecting || msg.requestID != m.collectSequence {
+		return m, nil
+	}
+
+	if msg.canceled {
+		m.cancelWork()
+		m.replaceTypeOnEnter = true
+		m.screen = ScreenResourceType
+
 		return m, nil
 	}
 
@@ -403,6 +435,9 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 	m.resourceTableHeight = m.resourceListHeight()
 	m.resourceKinds = collectResourceKinds(m.deps.ResourceGroups, m.resources)
 	m.resourceKindFilter = ""
+	m.collectErrors = append([]model.CollectError(nil), msg.result.Errors...)
+	m.errorTable = buildCollectErrorTable(
+		m.theme, m.collectErrors, m.deps.ResourceGroups, m.width, m.listHeight())
 	m.showRegion = msg.showRegion
 	m.filtering = false
 	m.filterQuery = ""
@@ -443,6 +478,14 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.kindTable = buildResourceKindTable(m.theme, m.resourceKinds, m.width, m.listHeight())
 		m.kindTable.SetCursor(m.resourceKindFilterCursor())
 		m.screen = ScreenResourceKind
+
+		return m, nil
+
+	case key.Matches(msg, m.keys.ShowErrors) && len(m.collectErrors) > 0:
+		m.errorTable = buildCollectErrorTable(
+			m.theme, m.collectErrors, m.deps.ResourceGroups, m.width, m.listHeight())
+		m.errorTable.SetCursor(0)
+		m.screen = ScreenCollectErrors
 
 		return m, nil
 
@@ -659,7 +702,42 @@ func (m Model) keyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.delegateToActiveList(msg)
 }
 
-// --- 에러 ---
+// --- 수집 오류 ---
+
+func (m Model) keyCollectErrors(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.screen = ScreenList
+
+		return m, nil
+	case key.Matches(msg, m.keys.Enter):
+		cursor := m.errorTable.Cursor()
+		if cursor < 0 || cursor >= len(m.collectErrors) {
+			return m, nil
+		}
+
+		m.detail.SetContent(renderCollectErrorDetail(
+			m.theme, m.deps.ResourceGroups, m.collectErrors[cursor]))
+		m.detail.GotoTop()
+		m.screen = ScreenCollectErrorDetail
+
+		return m, nil
+	}
+
+	return m.delegateToActiveList(msg)
+}
+
+func (m Model) keyCollectErrorDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
+		m.screen = ScreenCollectErrors
+
+		return m, nil
+	}
+
+	return m.delegateToActiveList(msg)
+}
+
+// --- 치명적 오류 ---
 
 func (m Model) keyError(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Back) {

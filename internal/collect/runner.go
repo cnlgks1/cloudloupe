@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -18,7 +19,20 @@ import (
 type Result struct {
 	Resources []model.Resource
 	Errors    []model.CollectError
+	Canceled  bool
 }
+
+// ErrorDetails는 공급자 오류에서 추출한 코드와 사용자 설명이다.
+//
+// collect는 AWS SDK를 모르므로 해석 규칙을 갖지 않는다. 상위 app 계층이 ErrorClassifier를
+// 주입하고, 제로 값 Runner는 코드·설명 없이 원본 메시지만 보존한다.
+type ErrorDetails struct {
+	Code        string
+	Explanation string
+}
+
+// ErrorClassifier는 원본 오류를 사용자 대면 정보로 분류한다.
+type ErrorClassifier func(error) ErrorDetails
 
 // Job은 수집기 하나를 한 범위에 대해 실행하는 단위다.
 //
@@ -37,6 +51,8 @@ type Job struct {
 type Runner struct {
 	// Limit은 동시에 실행할 Job의 최대 개수다. 0 이하면 DefaultLimit을 쓴다.
 	Limit int
+	// Classify는 원본 오류가 문자열로 바뀌기 전에 코드와 사용자 설명을 추출한다.
+	Classify ErrorClassifier
 }
 
 // DefaultLimit은 동시 실행 Job 수의 기본 상한이다.
@@ -70,6 +86,7 @@ func (r Runner) Run(ctx context.Context, jobs []Job) Result {
 		mu        sync.Mutex // resources와 errs를 보호한다
 		resources []model.Resource
 		errs      []model.CollectError
+		canceled  bool
 		wg        sync.WaitGroup
 	)
 
@@ -78,10 +95,16 @@ func (r Runner) Run(ctx context.Context, jobs []Job) Result {
 	sem := make(chan struct{}, limit)
 
 	for _, job := range jobs {
-		// ctx가 이미 끝났으면 남은 Job을 시작하지 않는다.
+		// 사용자가 취소한 작업은 AWS 실패로 만들지 않는다. 데드라인 초과는 실제 진단이
+		// 필요하므로 범위 오류로 남긴다.
 		if ctx.Err() != nil {
 			mu.Lock()
-			errs = append(errs, canceledError(job, ctx.Err()))
+			if errors.Is(ctx.Err(), context.Canceled) {
+				canceled = true
+			} else {
+				errs = append(errs, collectError(job,
+					fmt.Errorf("조회 시작 전 context 종료: %w", ctx.Err()), r.Classify))
+			}
 			mu.Unlock()
 
 			continue
@@ -105,7 +128,9 @@ func (r Runner) Run(ctx context.Context, jobs []Job) Result {
 			resources = append(resources, res...)
 
 			if err != nil {
-				errs = appendCollectErrors(errs, job, err)
+				var wasCanceled bool
+				errs, wasCanceled = appendCollectErrors(errs, job, err, r.Classify)
+				canceled = canceled || wasCanceled
 			}
 		}(job)
 	}
@@ -115,46 +140,54 @@ func (r Runner) Run(ctx context.Context, jobs []Job) Result {
 	model.SortResources(resources)
 	sortErrors(errs)
 
-	return Result{Resources: resources, Errors: errs}
+	return Result{Resources: resources, Errors: errs, Canceled: canceled}
 }
 
 // collectError는 수집 실패를 범위 정보와 함께 CollectError로 감싼다.
-//
-// 여기서는 에러 코드나 사용자 설명을 채우지 않는다. 그 해석은 AWS를 아는 계층
-// (awsclient.Explain)의 몫이고, collect는 도메인 타입만 안다. 원본 메시지만 담는다.
-func collectError(job Job, err error) model.CollectError {
+func collectError(job Job, err error, classify ErrorClassifier) model.CollectError {
+	details := ErrorDetails{}
+	if classify != nil {
+		details = classify(err)
+	}
+
 	return model.CollectError{
-		Type:    job.Collector.Type(),
-		Profile: job.Request.Scope.Profile,
-		Region:  job.Request.Scope.Region,
-		Message: err.Error(),
+		Type:        job.Collector.Type(),
+		Profile:     job.Request.Scope.Profile,
+		Region:      job.Request.Scope.Region,
+		Code:        details.Code,
+		Message:     err.Error(),
+		Explanation: details.Explanation,
 	}
 }
 
 // appendCollectErrors는 errors.Join으로 묶인 부분 오류를 각각의 CollectError로 펼친다.
-func appendCollectErrors(dst []model.CollectError, job Job, err error) []model.CollectError {
+// context.Canceled는 사용자 취소 상태로 분리하고 오류 목록에는 넣지 않는다.
+func appendCollectErrors(
+	dst []model.CollectError,
+	job Job,
+	err error,
+	classify ErrorClassifier,
+) ([]model.CollectError, bool) {
 	type multiError interface {
 		Unwrap() []error
 	}
 
 	if joined, ok := err.(multiError); ok {
+		canceled := false
 		for _, child := range joined.Unwrap() {
-			dst = appendCollectErrors(dst, job, child)
+			var childCanceled bool
+			dst, childCanceled = appendCollectErrors(dst, job, child, classify)
+			canceled = canceled || childCanceled
 		}
 
-		return dst
+		return dst, canceled
 	}
 
-	return append(dst, collectError(job, err))
-}
-
-func canceledError(job Job, err error) model.CollectError {
-	return model.CollectError{
-		Type:    job.Collector.Type(),
-		Profile: job.Request.Scope.Profile,
-		Region:  job.Request.Scope.Region,
-		Message: fmt.Sprintf("취소되어 조회하지 않음: %v", err),
+	if errors.Is(err, context.Canceled) {
+		return dst, true
 	}
+
+	return append(dst, collectError(job, err, classify)), false
 }
 
 // sortErrors는 에러를 결정적 순서로 정렬한다. 리소스와 같은 이유로, 병렬 실행의

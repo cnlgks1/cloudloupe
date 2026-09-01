@@ -404,7 +404,7 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 		return max(6, titleWidth), max(10, titleWidth), false
 	case "암호화":
 		return max(8, titleWidth), max(12, titleWidth), false
-	case "상태", "리전", "프로토콜", "스킴", "종류", "타깃 종류", "타입":
+	case "상태", "리전", "프로필", "AWS 오류 코드", "리소스 종류", "프로토콜", "스킴", "종류", "타깃 종류", "타입":
 		return max(10, titleWidth), max(22, titleWidth), false
 	case "이름", "ID", "DNS 이름", "값", "별칭 대상", "설명", "호스팅 영역", "주요 정보":
 		return max(12, titleWidth), max(48, titleWidth), true
@@ -534,6 +534,37 @@ func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width,
 	}
 
 	return newDataTable(theme, columns, rows, height)
+}
+
+// buildCollectErrorTable은 모든 수집기가 공유하는 부분 오류 목록을 만든다.
+func buildCollectErrorTable(
+	theme Theme,
+	errs []model.CollectError,
+	groups []ResourceGroup,
+	width, height int,
+) table.Model {
+	titles := []string{"리소스 종류", "프로필", "리전", "AWS 오류 코드", "설명"}
+	preferred := make([]int, len(titles))
+	for i, title := range titles {
+		preferred[i] = lipgloss.Width(title) + 2
+	}
+
+	rows := make([]table.Row, 0, len(errs))
+	for _, collectErr := range errs {
+		row := table.Row{
+			resourceTypeLabel(groups, collectErr.Type),
+			orDashUI(collectErr.Profile),
+			orDashUI(collectErr.Region),
+			orDashUI(collectErr.Code),
+			orDashUI(collectErr.Explanation),
+		}
+		for i, value := range row {
+			preferred[i] = max(preferred[i], lipgloss.Width(value)+2)
+		}
+		rows = append(rows, row)
+	}
+
+	return newDataTable(theme, layoutResourceColumns(titles, preferred, width), rows, height)
 }
 
 // buildResourceKindTable은 수집 결과 안의 세부 종류를 단일 선택 표로 만든다.

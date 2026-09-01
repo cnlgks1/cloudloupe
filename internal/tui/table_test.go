@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/collect"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
@@ -817,13 +818,14 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 		t.Fatal("이전 수집의 늦은 완료 메시지를 수락함")
 	}
 
-	canceled := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources}, data: data, canceled: true}
+	canceled := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources, Canceled: true}, data: data, canceled: true}
 	next, _ = m.onCollectDone(canceled)
 	m = next.(Model)
-	if m.screen != ScreenCollecting || len(m.resources) != 0 {
-		t.Fatal("취소된 데이터 준비 결과를 수락함")
+	if m.screen != ScreenResourceType || len(m.resources) != 0 {
+		t.Fatal("취소된 현재 수집에서 타입 선택 화면으로 복귀하지 않음")
 	}
 
+	m.screen = ScreenCollecting
 	current := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources}, data: data}
 	next, _ = m.onCollectDone(current)
 	m = next.(Model)
@@ -835,5 +837,113 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 	cancel()
 	if _, ok := buildResourceData(ctx, resources, nil, nil, false); ok {
 		t.Fatal("취소된 context에서 리소스 데이터를 준비함")
+	}
+}
+
+func TestCollectErrorListAndDetailFlow(t *testing.T) {
+	t.Parallel()
+
+	groups := []ResourceGroup{{
+		ID:    "ec2",
+		Label: "EC2",
+		Types: []ResourceType{{ID: model.TypeEC2Instance, Label: "EC2 인스턴스"}},
+	}}
+	resources := []model.Resource{{Type: model.TypeEC2Instance, ID: "i-1", Name: "web"}}
+	errs := []model.CollectError{
+		{
+			Type:        model.TypeEC2Instance,
+			Profile:     "prod",
+			Region:      "ap-northeast-2",
+			Code:        "AccessDeniedException",
+			Explanation: "조회 권한이 없습니다.",
+			Message:     "raw access denied",
+		},
+		{
+			Type:        "future:resource",
+			Profile:     "prod",
+			Region:      "us-east-1",
+			Code:        "ThrottlingException",
+			Explanation: "AWS API 요청 한도를 초과했습니다.",
+			Message:     "raw throttle failure",
+		},
+	}
+	data, prepared := buildResourceData(context.Background(), resources, groups, nil, true)
+	if !prepared {
+		t.Fatal("오류 흐름 테스트 데이터를 준비하지 못함")
+	}
+
+	m := newFilterFlowModel(nil)
+	m.deps.ResourceGroups = groups
+	m.screen = ScreenCollecting
+	m.collectSequence = 7
+	next, _ := m.Update(collectDoneMsg{
+		requestID:  7,
+		result:     collect.Result{Resources: resources, Errors: errs},
+		data:       data,
+		showRegion: true,
+	})
+	m = next.(Model)
+
+	errs[0].Message = "변경된 외부 슬라이스"
+	if m.screen != ScreenList || len(m.collectErrors) != 2 || m.collectErrors[0].Message != "raw access denied" {
+		t.Fatalf("수집 오류 보존 결과 = 화면 %v, 오류 %+v", m.screen, m.collectErrors)
+	}
+	if !strings.Contains(m.View(), "e 오류 보기") || !strings.Contains(m.listCaption, "오류 2건") {
+		t.Fatalf("리소스 목록에 오류 진입점이 없음:\n%s", m.View())
+	}
+	if got, want := columnTitles(m.errorTable), []string{"리소스 종류", "프로필", "리전", "AWS 오류 코드", "설명"}; !slices.Equal(got, want) {
+		t.Errorf("오류 테이블 열 = %v, want %v", got, want)
+	}
+	if rows := m.errorTable.Rows(); len(rows) != 2 || rows[0][0] != "EC2 인스턴스" || rows[1][0] != "future:resource" {
+		t.Fatalf("오류 테이블 행 = %v", rows)
+	}
+
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	if m.screen != ScreenCollectErrors {
+		t.Fatalf("e 입력 후 화면 = %v, want 오류 목록", m.screen)
+	}
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.errorTable.Cursor() != 1 {
+		t.Fatalf("오류 커서 = %d, want 1", m.errorTable.Cursor())
+	}
+	m = updateFilterModel(m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	if m.errorTable.Cursor() != 1 {
+		t.Fatalf("크기 변경 후 오류 커서 = %d, want 1", m.errorTable.Cursor())
+	}
+
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.screen != ScreenCollectErrorDetail || !strings.Contains(m.detail.View(), "raw throttle failure") {
+		t.Fatalf("오류 상세 화면=%v 내용:\n%s", m.screen, m.detail.View())
+	}
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if m.screen != ScreenCollectErrors {
+		t.Fatalf("q 입력 후 화면 = %v, want 오류 목록", m.screen)
+	}
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.screen != ScreenList {
+		t.Fatalf("esc 입력 후 화면 = %v, want 리소스 목록", m.screen)
+	}
+}
+
+func TestIdentityRejectsStaleResponseAndSeparatesCancellation(t *testing.T) {
+	t.Parallel()
+
+	m := newFilterFlowModel(nil)
+	m.screen = ScreenIdentity
+	m.identitySequence = 2
+
+	next, _ := m.Update(identityMsg{
+		requestID: 1,
+		id:        awsclient.Identity{AccountID: "old-account"},
+	})
+	m = next.(Model)
+	if m.screen != ScreenIdentity || m.identity.AccountID != "" {
+		t.Fatalf("이전 신원 응답을 수락함: 화면=%v identity=%+v", m.screen, m.identity)
+	}
+
+	next, _ = m.Update(identityMsg{requestID: 2, err: context.Canceled})
+	m = next.(Model)
+	if m.screen != ScreenProfile || m.errText != "" {
+		t.Fatalf("신원 확인 취소 결과: 화면=%v err=%q", m.screen, m.errText)
 	}
 }

@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,7 +50,7 @@ func Collect(ctx context.Context, profile string, regions, types []string) colle
 		identify: Identify,
 		config:   awsclient.Config,
 		registry: catalog.Registry,
-		run:      (collect.Runner{}).Run,
+		run:      (collect.Runner{Classify: classifyError}).Run,
 	})
 }
 
@@ -61,7 +62,13 @@ func collectWith(
 ) collect.Result {
 	var result collect.Result
 
-	accountID := identifyAccount(ctx, profile, regions, &result, deps.identify)
+	accountID, canceled := identifyAccount(ctx, profile, regions, &result, deps.identify)
+	if canceled {
+		result.Canceled = true
+
+		return result
+	}
+
 	jobs := make([]collect.Job, 0, len(regions)*len(catalog.Definitions()))
 	reportedUnknown := make(map[string]struct{})
 	includeGlobal := true
@@ -72,6 +79,12 @@ func collectWith(
 	for _, region := range regions {
 		cfg, err := loadConfig(ctx, profile, region)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				result.Canceled = true
+
+				break
+			}
+
 			result.Errors = append(result.Errors, collectError(configErrorType, profile, region,
 				fmt.Errorf("AWS 설정 로드: %w", err)))
 
@@ -106,6 +119,7 @@ func collectWith(
 	runResult := runJobs(ctx, jobs)
 	result.Resources = append(result.Resources, runResult.Resources...)
 	result.Errors = append(result.Errors, runResult.Errors...)
+	result.Canceled = result.Canceled || runResult.Canceled
 
 	return result
 }
@@ -116,27 +130,41 @@ func identifyAccount(
 	regions []string,
 	result *collect.Result,
 	identify func(context.Context, string, string) (awsclient.Identity, error),
-) string {
+) (string, bool) {
 	if len(regions) == 0 {
-		return ""
+		return "", false
 	}
 
 	identity, err := identify(ctx, profile, regions[0])
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return "", true
+		}
+
 		result.Errors = append(result.Errors, collectError(identityErrorType, profile, regions[0],
 			fmt.Errorf("계정 확인: %w", err)))
 
-		return ""
+		return "", false
 	}
 
-	return identity.AccountID
+	return identity.AccountID, false
 }
 
 func collectError(typ, profile, region string, err error) model.CollectError {
+	details := awsclient.ClassifyError(err)
+
 	return model.CollectError{
-		Type:    typ,
-		Profile: profile,
-		Region:  region,
-		Message: err.Error(),
+		Type:        typ,
+		Profile:     profile,
+		Region:      region,
+		Code:        details.Code,
+		Message:     err.Error(),
+		Explanation: details.Explanation,
 	}
+}
+
+func classifyError(err error) collect.ErrorDetails {
+	details := awsclient.ClassifyError(err)
+
+	return collect.ErrorDetails{Code: details.Code, Explanation: details.Explanation}
 }

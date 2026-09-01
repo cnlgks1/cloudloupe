@@ -70,8 +70,14 @@ Linux, Windows용 GitHub Release와 `checksums.txt`를 자동으로 게시합니
 
 ### macOS, Linux, Ubuntu, WSL
 
-설치 스크립트를 먼저 내려받아 확인한 뒤 실행하는 방법을 권장합니다. 운영체제와 CPU를 자동으로
-찾고, 릴리스의 SHA-256 체크섬을 검증한 뒤 기본적으로 `~/.local/bin/cloudloupe`에 설치합니다.
+가장 간단한 설치 방법은 다음 한 줄입니다. 스크립트가 운영체제와 CPU를 자동으로 찾고,
+릴리스의 SHA-256 체크섬을 검증한 뒤 기본적으로 `~/.local/bin/cloudloupe`에 설치합니다.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh | sh
+```
+
+실행하기 전에 설치 스크립트를 직접 확인하려면 내려받아 읽은 뒤 실행합니다.
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh
@@ -84,12 +90,6 @@ sh install.sh
 ```sh
 CLOUDLOUPE_VERSION=v0.1.0 sh install.sh
 CLOUDLOUPE_INSTALL_DIR="$HOME/bin" sh install.sh
-```
-
-한 줄 설치가 필요하면 다음과 같이 실행할 수 있지만, 먼저 스크립트를 읽는 편이 더 안전합니다.
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh | sh
 ```
 
 ### Go 도구 체인
@@ -114,7 +114,8 @@ go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
 
 Homebrew는 별도 `homebrew-tap` 저장소와 그 저장소에 쓸 토큰이 필요합니다. GitHub Release가
 실제로 게시된 뒤 tap을 연결하며, 그전에는 동작하지 않는 `brew install` 명령을 안내하지
-않습니다.
+않습니다. 저장소·토큰·서명 준비 순서는 [릴리스 운영 문서](RELEASING.md#homebrew-tap-연결)에
+정리되어 있습니다.
 
 ## 지원 플랫폼
 
@@ -309,11 +310,19 @@ ID·ARN·DNS 식별자를 공통 규칙으로 연결하며, 미해결되거나 �
 
 ## 개발
 
+처음 기여한다면 [CONTRIBUTING.md](CONTRIBUTING.md)의 개발 환경, 작업 순서, PR 전 검사
+목록을 먼저 확인하세요. 버전 태그와 GitHub Release 운영은 [RELEASING.md](RELEASING.md)에
+정리되어 있습니다.
+
 ```sh
-make ci       # gofmt, vet, 조회 전용 가드, 테스트, 빌드
-make test     # 테스트만
-make build    # 바이너리
-make help     # 전체 타깃
+make test       # 전체 단위 테스트
+make ci         # gofmt, vet, 조회 전용 가드, 테스트, 빌드
+make lint       # golangci-lint 실행
+make test-race  # 데이터 레이스 검사
+make cross      # 지원하는 6개 OS/아키텍처 조합 빌드
+make snapshot   # 태그 없이 GoReleaser 릴리스 산출물 검사
+make build      # 현재 플랫폼 바이너리 빌드
+make help       # 전체 타깃과 설명
 ```
 
 설계 규칙은 [`.kiro/steering/go-conventions.md`](.kiro/steering/go-conventions.md)에 있습니다.

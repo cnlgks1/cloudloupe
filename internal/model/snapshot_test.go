@@ -126,21 +126,23 @@ func TestSnapshotJSONMatchesDocumentedSchema(t *testing.T) {
 			Types:     []string{model.TypeEC2Instance},
 		},
 		[]model.Resource{{
-			Type:      model.TypeEC2Instance,
-			ID:        "i-0a1b2c3d4e5f60718",
-			Name:      "web-prod-01",
-			ARN:       "arn:aws:ec2:ap-northeast-2:123456789012:instance/i-0a1b2c3d4e5f60718",
-			Region:    "ap-northeast-2",
-			Profile:   "prod",
-			AccountID: "123456789012",
-			Status:    "running",
-			CreatedAt: &created,
-			Fields:    []model.Field{{Key: "인스턴스 타입", Value: "t3.medium"}},
-			Tags:      []model.Field{{Key: "Environment", Value: "production"}},
+			Type:        model.TypeEC2Instance,
+			ID:          "i-0a1b2c3d4e5f60718",
+			Name:        "web-prod-01",
+			ARN:         "arn:aws:ec2:ap-northeast-2:123456789012:instance/i-0a1b2c3d4e5f60718",
+			Region:      "ap-northeast-2",
+			Profile:     "prod",
+			AccountID:   "123456789012",
+			Status:      "running",
+			CreatedAt:   &created,
+			Fields:      []model.Field{{Key: "인스턴스 타입", Value: "t3.medium"}},
+			Tags:        []model.Field{{Key: "Environment", Value: "production"}},
+			Identifiers: []model.Identifier{{Kind: model.IdentifierDNS, Value: "web.internal.example.com"}},
 			Related: []model.Ref{{
-				Type:     model.TypeELBv2TargetGroup,
-				ID:       "web-prod-tg",
-				Relation: model.RelationTargetOf,
+				Type:           model.TypeELBv2TargetGroup,
+				ID:             "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web-prod-tg/abc",
+				IdentifierKind: model.IdentifierARN,
+				Relation:       model.RelationTargetOf,
 			}},
 		}}, nil)
 
@@ -151,7 +153,7 @@ func TestSnapshotJSONMatchesDocumentedSchema(t *testing.T) {
 
 	body := string(out)
 	for _, key := range []string{
-		`"schemaVersion":1`,
+		`"schemaVersion":2`,
 		`"generatedAt":"2026-08-28T04:12:33Z"`,
 		`"tool":{"name":"cloudloupe","version":"0.1.0"}`,
 		`"accountId":"123456789012"`,
@@ -159,7 +161,8 @@ func TestSnapshotJSONMatchesDocumentedSchema(t *testing.T) {
 		`"byType":{"ec2:instance":1}`,
 		`"errorCount":0`,
 		`"createdAt":"2025-03-11T02:51:19Z"`,
-		`"related":[{"type":"elbv2:targetGroup","id":"web-prod-tg","relation":"target-of"}]`,
+		`"identifiers":[{"kind":"dns","value":"web.internal.example.com"}]`,
+		`"related":[{"type":"elbv2:targetGroup","id":"arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web-prod-tg/abc","identifierKind":"arn","relation":"target-of"}]`,
 	} {
 		if !strings.Contains(body, key) {
 			t.Errorf("출력에 %s가 없다\n%s", key, body)

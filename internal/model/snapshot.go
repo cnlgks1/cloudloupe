@@ -9,7 +9,9 @@ import (
 //
 // JSON 구조가 호환되지 않게 바뀌면 올린다. 저장된 스냅샷을 읽는 쪽이 이 값을 보고
 // 파싱 가능 여부를 판단한다.
-const SchemaVersion = 1
+// SchemaVersion 2는 namespace와 typed identifier를 도입해 리소스 키와 Ref.ID의 해석
+// 계약을 확장한다. v1 소비자는 이 값을 보고 새 스냅샷을 명시적으로 거부해야 한다.
+const SchemaVersion = 2
 
 // Snapshot은 하나의 완결된 수집 실행이다. 무엇을 요청했고, 무엇이 돌아왔고, 무엇이
 // 실패했는지를 담는다. 리포트가 렌더링하고 캐시가 저장하는 단위다.

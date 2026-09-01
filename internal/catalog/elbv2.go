@@ -36,6 +36,16 @@ func elbv2Definitions(cfg aws.Config) []Definition {
 			},
 		},
 		{
+			Type:           model.TypeELBv2Listener,
+			Label:          "리스너",
+			Scope:          Regional,
+			Columns:        []string{"프로토콜", "포트", "SSL 정책", "기본 동작", "규칙 수"},
+			SummaryColumns: []string{"프로토콜", "포트", "규칙 수"},
+			newCollector: func() collect.Collector {
+				return elbv2collector.NewListener(clientFor())
+			},
+		},
+		{
 			Type:           model.TypeELBv2TargetGroup,
 			Label:          "타깃 그룹",
 			Scope:          Regional,

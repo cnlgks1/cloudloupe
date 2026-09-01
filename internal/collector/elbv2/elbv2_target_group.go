@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -113,21 +112,23 @@ func targetGroupToResource(scope collect.Scope, tg elbv2types.TargetGroup, healt
 
 // targetGroupRelations는 타깃 그룹의 관계를 만든다.
 //
-//   - 타깃 그룹 → 로드밸런서: forwards-to. 어떤 LB가 이 그룹으로 트래픽을 보내는지.
-//     LoadBalancerArns가 ARN이므로 마지막 경로 조각에서 이름을 뽑아 ID로 쓴다.
-//   - 타깃 그룹 → 타깃(인스턴스 등): targets. 헬스 상태를 Via에 담아, 그래프에서
-//     정상/비정상 타깃을 구분할 수 있게 한다.
+//   - 타깃 그룹 → 로드밸런서: forwards-to. LoadBalancerArns를 ARN 식별자로 그대로 남겨
+//     문자열 파싱 없이 graph의 ARN 인덱스로 연결한다.
+//   - 타깃 그룹 → 타깃: targets. instance와 alb처럼 현재 도메인 타입으로 정확히 표현할
+//     수 있는 대상만 기록한다. ip와 lambda를 EC2 인스턴스로 잘못 연결하지 않는다.
 func targetGroupRelations(tg elbv2types.TargetGroup, health []elbv2types.TargetHealthDescription) []model.Ref {
 	var refs []model.Ref
 
 	for _, arn := range tg.LoadBalancerArns {
-		if name := lbNameFromARN(arn); name != "" {
-			refs = append(refs, model.Ref{
-				Type:     model.TypeELBv2LoadBalancer,
-				ID:       name,
-				Relation: model.RelationForwardsTo,
-			})
+		if arn == "" {
+			continue
 		}
+		refs = append(refs, model.Ref{
+			Type:           model.TypeELBv2LoadBalancer,
+			ID:             arn,
+			IdentifierKind: model.IdentifierARN,
+			Relation:       model.RelationForwardsTo,
+		})
 	}
 
 	for _, h := range health {
@@ -136,7 +137,8 @@ func targetGroupRelations(tg elbv2types.TargetGroup, health []elbv2types.TargetH
 		}
 
 		id := aws.ToString(h.Target.Id)
-		if id == "" {
+		typeID, identifierKind, supported := targetIdentifier(tg.TargetType, id)
+		if !supported {
 			continue
 		}
 
@@ -146,26 +148,28 @@ func targetGroupRelations(tg elbv2types.TargetGroup, health []elbv2types.TargetH
 		}
 
 		refs = append(refs, model.Ref{
-			Type:     model.TypeEC2Instance,
-			ID:       id,
-			Relation: model.RelationTargets,
-			Via:      state,
+			Type:           typeID,
+			ID:             id,
+			IdentifierKind: identifierKind,
+			Relation:       model.RelationTargets,
+			Via:            state,
 		})
 	}
 
 	return refs
 }
 
-// lbNameFromARN은 로드밸런서 ARN에서 이름을 뽑는다.
-//
-// ELBv2 ARN 형식: .../loadbalancer/app/<name>/<id>. 로드밸런서 수집기가 이름을 ID로
-// 쓰므로, 관계도 같은 이름을 가리켜야 그래프에서 노드가 이어진다.
-func lbNameFromARN(arn string) string {
-	parts := strings.Split(arn, "/")
-	// [..., "loadbalancer", "app"|"net", "<name>", "<id>"]
-	if len(parts) >= 4 {
-		return parts[len(parts)-2]
+func targetIdentifier(targetType elbv2types.TargetTypeEnum, id string) (string, model.IdentifierKind, bool) {
+	if id == "" {
+		return "", "", false
 	}
 
-	return ""
+	switch targetType {
+	case elbv2types.TargetTypeEnumInstance:
+		return model.TypeEC2Instance, model.IdentifierID, true
+	case elbv2types.TargetTypeEnumAlb:
+		return model.TypeELBv2LoadBalancer, model.IdentifierARN, true
+	default:
+		return "", "", false
+	}
 }

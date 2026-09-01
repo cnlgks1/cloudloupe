@@ -3,7 +3,9 @@ package route53_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsroute53 "github.com/aws/aws-sdk-go-v2/service/route53"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/cnlgks1/cloudloupe/internal/collect"
 	"github.com/cnlgks1/cloudloupe/internal/collector/route53"
+	"github.com/cnlgks1/cloudloupe/internal/graph"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
@@ -92,6 +95,9 @@ func TestRoute53RecordSetCollectorConvertsRecords(t *testing.T) {
 	if r.ID != "www.example.com.|A" {
 		t.Errorf("ID = %q, want 이름|타입", r.ID)
 	}
+	if r.Namespace != "Z1" || r.FieldValue("호스팅 영역 ID") != "Z1" {
+		t.Errorf("호스팅 영역 namespace = %q, field = %q", r.Namespace, r.FieldValue("호스팅 영역 ID"))
+	}
 
 	if r.Region != "global" {
 		t.Errorf("Region = %q, want global (Route53는 글로벌)", r.Region)
@@ -118,7 +124,7 @@ func TestRoute53RecordSetCollectorAliasResolvesTo(t *testing.T) {
 				{
 					Name:        aws.String("app.example.com."),
 					Type:        route53types.RRTypeA,
-					AliasTarget: &route53types.AliasTarget{DNSName: aws.String("web-alb-123.ap-northeast-2.elb.amazonaws.com.")},
+					AliasTarget: &route53types.AliasTarget{DNSName: aws.String("dualstack.web-alb-123.ap-northeast-2.elb.amazonaws.com.")},
 				},
 			}},
 		},
@@ -141,8 +147,11 @@ func TestRoute53RecordSetCollectorAliasResolvesTo(t *testing.T) {
 	}
 
 	// 후행 점(.)은 제거되어야 한다.
-	if res[0].ID != "web-alb-123.ap-northeast-2.elb.amazonaws.com" {
+	if res[0].ID != "dualstack.web-alb-123.ap-northeast-2.elb.amazonaws.com" {
 		t.Errorf("resolves-to 대상 = %q (후행 점 제거 확인)", res[0].ID)
+	}
+	if res[0].IdentifierKind != model.IdentifierDNS {
+		t.Errorf("resolves-to 식별자 종류 = %q, want %q", res[0].IdentifierKind, model.IdentifierDNS)
 	}
 }
 
@@ -228,5 +237,60 @@ func TestRoute53RecordSetCollectorType(t *testing.T) {
 	c := route53.NewRecordSet(&fakeRoute53API{})
 	if c.Type() != model.TypeRoute53RecordSet {
 		t.Errorf("Type() = %q, want %q", c.Type(), model.TypeRoute53RecordSet)
+	}
+}
+
+func TestRoute53PolicyRecordsHaveStableDistinctIdentity(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeRoute53API{
+		zonePages: []*awsroute53.ListHostedZonesOutput{{
+			HostedZones: []route53types.HostedZone{{
+				Id: aws.String("/hostedzone/Z1"), Name: aws.String("example.com."),
+			}},
+		}},
+		records: map[string]*awsroute53.ListResourceRecordSetsOutput{
+			"/hostedzone/Z1": {ResourceRecordSets: []route53types.ResourceRecordSet{
+				{
+					Name: aws.String("app.example.com."), Type: route53types.RRTypeA,
+					SetIdentifier: aws.String("green"), Weight: aws.Int64(50),
+				},
+				{
+					Name: aws.String("app.example.com."), Type: route53types.RRTypeA,
+					SetIdentifier: aws.String("blue"), Weight: aws.Int64(50),
+				},
+			}},
+		},
+	}
+
+	resources, err := route53.NewRecordSet(api).Collect(context.Background(), collect.Request{
+		Scope: collect.Scope{Profile: "prod", AccountID: "123456789012"},
+	})
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("Resources = %+v, want 2", resources)
+	}
+	if resources[0].Key() == resources[1].Key() {
+		t.Fatalf("정책 기반 레코드 키가 충돌함: %q", resources[0].Key())
+	}
+	for _, resource := range resources {
+		if resource.FieldValue("세트 식별자") == "" {
+			t.Errorf("세트 식별자 필드가 비어 있음: %+v", resource)
+		}
+	}
+	if _, err := graph.Build(resources); err != nil {
+		t.Fatalf("정상 정책 레코드로 graph.Build 실패: %v", err)
+	}
+
+	reversed := append([]model.Resource(nil), resources...)
+	slices.Reverse(reversed)
+	first := model.NewSnapshot(time.Unix(0, 0), model.ToolInfo{}, model.Scope{}, resources, nil)
+	second := model.NewSnapshot(time.Unix(0, 0), model.ToolInfo{}, model.Scope{}, reversed, nil)
+	firstIDs := []string{first.Resources[0].ID, first.Resources[1].ID}
+	secondIDs := []string{second.Resources[0].ID, second.Resources[1].ID}
+	if !slices.Equal(firstIDs, secondIDs) {
+		t.Errorf("입력 순서에 따라 snapshot 순서가 바뀜: %v != %v", firstIDs, secondIDs)
 	}
 }

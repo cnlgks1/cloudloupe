@@ -27,6 +27,7 @@ const (
 	TypeEC2Subnet           = "ec2:subnet"
 	TypeEC2SecurityGroup    = "ec2:securityGroup"
 	TypeELBv2LoadBalancer   = "elbv2:loadBalancer"
+	TypeELBv2Listener       = "elbv2:listener"
 	TypeELBv2TargetGroup    = "elbv2:targetGroup"
 	TypeRoute53RecordSet    = "route53:recordSet"
 	TypeWAFv2WebACL         = "wafv2:webAcl"
@@ -40,6 +41,7 @@ const (
 // 노드를 만들어낸다.
 const (
 	RelationForwardsTo     = "forwards-to"
+	RelationListenerOf     = "listener-of"
 	RelationTargets        = "targets"
 	RelationTargetOf       = "target-of"
 	RelationAttachedTo     = "attached-to"
@@ -60,15 +62,40 @@ type Field struct {
 	Value string `json:"value"`
 }
 
+// IdentifierKind는 리소스를 찾는 식별자의 안정적인 종류다.
+type IdentifierKind string
+
+const (
+	// IdentifierID는 Resource.ID와 같은 공급자 리소스 ID다.
+	IdentifierID IdentifierKind = "id"
+	// IdentifierARN은 AWS ARN이다.
+	IdentifierARN IdentifierKind = "arn"
+	// IdentifierDNS는 대소문자와 마지막 점을 무시하는 DNS 이름이다.
+	IdentifierDNS IdentifierKind = "dns"
+)
+
+// Identifier는 정식 ID 외에 리소스를 찾을 수 있는 보조 식별자다.
+//
+// Resource.ID와 ARN은 graph가 자동으로 색인하므로 Identifiers에는 DNS처럼 추가로 필요한
+// 값만 넣는다. Kind의 zero value는 기존 Ref와의 호환을 위해 IdentifierID로 해석한다.
+type Identifier struct {
+	Kind  IdentifierKind `json:"kind"`
+	Value string         `json:"value"`
+}
+
 // Ref는 다른 리소스를 가리키면서 그 관계의 이름을 함께 담는다.
 //
-// Via에는 그 간선을 의미 있게 만드는 한정어가 들어간다. 어떤 리스너가 전달하는지,
-// 볼륨이 어떤 디바이스로 붙어 있는지, 타깃이 정상 상태인지 같은 것들이다.
+// IdentifierKind가 비어 있으면 ID가 Resource.ID를 가리킨다. Namespace를 지정하면
+// 부모 범위 안에서만 ID가 유일한 대상 하나를 고를 수 있다. ARN이나 DNS로 참조할 때만
+// 식별자 종류를 명시한다. Via에는 어떤 규칙이나 상태가 간선을 만들었는지 같은 한정어가
+// 들어간다.
 type Ref struct {
-	Type     string `json:"type"`
-	ID       string `json:"id"`
-	Relation string `json:"relation"`
-	Via      string `json:"via,omitempty"`
+	Type           string         `json:"type"`
+	ID             string         `json:"id"`
+	Namespace      string         `json:"namespace,omitempty"`
+	IdentifierKind IdentifierKind `json:"identifierKind,omitempty"`
+	Relation       string         `json:"relation"`
+	Via            string         `json:"via,omitempty"`
 }
 
 // Resource는 수집된 AWS 리소스 하나다.
@@ -77,26 +104,35 @@ type Ref struct {
 // 표시용 라벨이다. Tags는 AWS 태그를 키 순으로 정렬해 담는다. 둘 다 순서 있는
 // 슬라이스인 이유는 [Field]에 적어두었다.
 type Resource struct {
-	Type      string     `json:"type"`
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	ARN       string     `json:"arn,omitempty"`
-	Region    string     `json:"region"`
-	Profile   string     `json:"profile"`
-	AccountID string     `json:"accountId"`
-	Status    string     `json:"status"`
-	CreatedAt *time.Time `json:"createdAt,omitempty"`
-	Fields    []Field    `json:"fields"`
-	Tags      []Field    `json:"tags"`
-	Related   []Ref      `json:"related"`
+	Type        string       `json:"type"`
+	ID          string       `json:"id"`
+	Namespace   string       `json:"namespace,omitempty"`
+	Name        string       `json:"name"`
+	ARN         string       `json:"arn,omitempty"`
+	Region      string       `json:"region"`
+	Profile     string       `json:"profile"`
+	AccountID   string       `json:"accountId"`
+	Status      string       `json:"status"`
+	CreatedAt   *time.Time   `json:"createdAt,omitempty"`
+	Fields      []Field      `json:"fields"`
+	Tags        []Field      `json:"tags"`
+	Identifiers []Identifier `json:"identifiers,omitempty"`
+	Related     []Ref        `json:"related"`
 }
 
-// Key는 프로필과 리전을 넘어 유일한 안정적 식별자를 반환한다.
+// Key는 프로필과 리전, 타입, 선택적 namespace를 포함한 안정적 식별자를 반환한다.
 //
-// 리소스 ID는 계정과 리전을 넘나들면 충돌한다. 따라서 리소스를 색인하는 모든 코드
-// (그래프, 스냅샷 diff)는 ID가 아니라 이 값을 키로 써야 한다.
+// Namespace는 Route 53 호스팅 영역처럼 ID가 부모 범위 안에서만 유일한 리소스를
+// 구분한다. 비어 있으면 기존 키 형식을 유지한다. 반환 문자열은 ID 자체에 구분자가 들어갈
+// 수 있으므로 호출자가 분해하지 않고 불투명 키로 다뤄야 한다.
 func (r Resource) Key() string {
-	return strings.Join([]string{r.Profile, r.Region, r.Type, r.ID}, "|")
+	parts := []string{r.Profile, r.Region, r.Type}
+	if r.Namespace != "" {
+		parts = append(parts, r.Namespace)
+	}
+	parts = append(parts, r.ID)
+
+	return strings.Join(parts, "|")
 }
 
 // DisplayName은 Name을 반환하고, 이름이 없는 리소스면 ID로 대체한다.
@@ -144,8 +180,8 @@ func lookup(fields []Field, key string) string {
 // SortResources는 리소스를 제자리에서 결정적으로 정렬한다.
 //
 // 1차 정렬 기준은 알파벳 순이 아니라 의도적으로 배치한 타입 순위다. 그래야 리포트에서
-// 관련된 리소스가 함께 모인다. 로드밸런서 다음에 그 타깃 그룹, 그다음 인스턴스,
-// 그다음 인스턴스에 붙은 스토리지와 네트워크 자원이 온다.
+// 관련된 리소스가 함께 모인다. 로드밸런서 다음에 리스너와 타깃 그룹, 그다음 인스턴스,
+// 이어서 인스턴스에 붙은 스토리지와 네트워크 자원이 온다.
 //
 // 모르는 타입은 알파벳 순으로 맨 뒤에 놓는다. 새 수집기가 기존 출력 순서를 조용히
 // 뒤바꿀 수 없게 하기 위한 것이다.
@@ -163,7 +199,11 @@ func SortResources(resources []Resource) {
 			return c
 		}
 
-		return cmp.Compare(a.ID, b.ID)
+		if c := cmp.Compare(a.ID, b.ID); c != 0 {
+			return c
+		}
+
+		return cmp.Compare(a.Key(), b.Key())
 	})
 }
 
@@ -175,24 +215,26 @@ func typeRank(resourceType string) int {
 		return 0
 	case TypeELBv2LoadBalancer:
 		return 1
-	case TypeELBv2TargetGroup:
+	case TypeELBv2Listener:
 		return 2
-	case TypeEC2Instance:
+	case TypeELBv2TargetGroup:
 		return 3
-	case TypeEC2Volume:
+	case TypeEC2Instance:
 		return 4
-	case TypeEC2NetworkInterface:
+	case TypeEC2Volume:
 		return 5
-	case TypeEC2Address:
+	case TypeEC2NetworkInterface:
 		return 6
-	case TypeEC2VPC:
+	case TypeEC2Address:
 		return 7
-	case TypeEC2Subnet:
+	case TypeEC2VPC:
 		return 8
-	case TypeEC2SecurityGroup:
+	case TypeEC2Subnet:
 		return 9
-	case TypeWAFv2WebACL:
+	case TypeEC2SecurityGroup:
 		return 10
+	case TypeWAFv2WebACL:
+		return 11
 	default:
 		return 1000
 	}

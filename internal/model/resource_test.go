@@ -122,6 +122,7 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 		{Type: model.TypeEC2Subnet, ID: "subnet-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0f1e", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Region: "ap-northeast-2"},
+		{Type: model.TypeELBv2Listener, ID: "https:443", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2VPC, ID: "vpc-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0a1b", Region: "ap-northeast-2"},
@@ -131,7 +132,7 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 
 	model.SortResources(resources)
 
-	want := []string{"web-alb", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1", "vpc-1", "subnet-1", "sg-1"}
+	want := []string{"web-alb", "https:443", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1", "vpc-1", "subnet-1", "sg-1"}
 
 	got := make([]string, 0, len(resources))
 	for _, r := range resources {
@@ -231,5 +232,39 @@ func TestTagFieldsHandlesEmptyInput(t *testing.T) {
 
 	if len(got) != 0 {
 		t.Errorf("TagFields(nil) = %+v, want 빈 슬라이스", got)
+	}
+}
+
+func TestResourceKeyUsesOptionalNamespace(t *testing.T) {
+	t.Parallel()
+
+	base := model.Resource{
+		Type: model.TypeRoute53RecordSet, ID: "www.example.com.|A",
+		Profile: "prod", Region: "global",
+	}
+	first := base
+	first.Namespace = "Z1"
+	second := base
+	second.Namespace = "Z2"
+
+	if first.Key() == second.Key() {
+		t.Fatalf("서로 다른 namespace의 키가 충돌함: %q", first.Key())
+	}
+	if got, want := base.Key(), "prod|global|route53:recordSet|www.example.com.|A"; got != want {
+		t.Errorf("namespace 없는 기존 Key = %q, want %q", got, want)
+	}
+}
+
+func TestSortResourcesUsesNamespaceAsTieBreaker(t *testing.T) {
+	t.Parallel()
+
+	resources := []model.Resource{
+		{Type: model.TypeRoute53RecordSet, ID: "www.example.com.|A", Namespace: "Z2", Region: "global"},
+		{Type: model.TypeRoute53RecordSet, ID: "www.example.com.|A", Namespace: "Z1", Region: "global"},
+	}
+	model.SortResources(resources)
+
+	if resources[0].Namespace != "Z1" || resources[1].Namespace != "Z2" {
+		t.Errorf("namespace 정렬 = %q, %q", resources[0].Namespace, resources[1].Namespace)
 	}
 }

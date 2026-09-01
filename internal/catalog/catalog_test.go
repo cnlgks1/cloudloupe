@@ -40,6 +40,7 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeEC2Subnet,
 		model.TypeEC2SecurityGroup,
 		model.TypeELBv2LoadBalancer,
+		model.TypeELBv2Listener,
 		model.TypeELBv2TargetGroup,
 		model.TypeRoute53RecordSet,
 		model.TypeWAFv2WebACL,
@@ -111,7 +112,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	}
 
 	if got, want := groups[3].Types[0].Columns,
-		[]string{"타입", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
+		[]string{"타입", "세트 식별자", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
 	if got, want := groups[4].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {

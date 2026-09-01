@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awselbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -58,6 +59,7 @@ func (c loadBalancerCollector) Collect(ctx context.Context, req collect.Request)
 // 어렵고, 이름이 한 리전·계정 안에서 유일하다. ARN은 ARN 필드에 따로 담아 상세·리포트에서
 // 참조할 수 있게 한다.
 func loadBalancerToResource(scope collect.Scope, lb elbv2types.LoadBalancer) model.Resource {
+	dnsName := aws.ToString(lb.DNSName)
 	r := model.Resource{
 		Type:      model.TypeELBv2LoadBalancer,
 		ID:        aws.ToString(lb.LoadBalancerName),
@@ -66,6 +68,10 @@ func loadBalancerToResource(scope collect.Scope, lb elbv2types.LoadBalancer) mod
 		Region:    scope.Region,
 		Profile:   scope.Profile,
 		AccountID: scope.AccountID,
+	}
+
+	if dnsName != "" {
+		r.Identifiers = loadBalancerDNSIdentifiers(dnsName)
 	}
 
 	if lb.State != nil {
@@ -80,7 +86,7 @@ func loadBalancerToResource(scope collect.Scope, lb elbv2types.LoadBalancer) mod
 	r.Fields = []model.Field{
 		{Key: "종류", Value: string(lb.Type)},
 		{Key: "스킴", Value: string(lb.Scheme)},
-		{Key: "DNS 이름", Value: displayString(aws.ToString(lb.DNSName))},
+		{Key: "DNS 이름", Value: displayString(dnsName)},
 		{Key: "VPC", Value: displayString(aws.ToString(lb.VpcId))},
 		{Key: "가용 영역", Value: displayInt32(int32(len(lb.AvailabilityZones)))},
 	}
@@ -89,6 +95,19 @@ func loadBalancerToResource(scope collect.Scope, lb elbv2types.LoadBalancer) mod
 	// 반대 방향(target group → load balancer)을 남기므로, 3단계 그래프에서 연결된다.
 
 	return r
+}
+
+// loadBalancerDNSIdentifiers는 실제 DNS 이름과 Route 53 alias에서 사용하는 dualstack
+// 이름을 모두 제공한다. graph의 일반 DNS 정규화에 ELB 전용 규칙을 섞지 않기 위함이다.
+func loadBalancerDNSIdentifiers(dnsName string) []model.Identifier {
+	identifiers := []model.Identifier{{Kind: model.IdentifierDNS, Value: dnsName}}
+	if !strings.HasPrefix(strings.ToLower(dnsName), "dualstack.") {
+		identifiers = append(identifiers, model.Identifier{
+			Kind: model.IdentifierDNS, Value: "dualstack." + dnsName,
+		})
+	}
+
+	return identifiers
 }
 
 // displayString은 빈 문자열을 "-"로 바꾼다. 상세 뷰에서 빈칸 대신 없음을 명확히 보이게 한다.

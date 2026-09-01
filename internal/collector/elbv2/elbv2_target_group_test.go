@@ -105,10 +105,12 @@ func TestELBv2TargetGroupCollectorConvertsFieldsAndTargets(t *testing.T) {
 		t.Errorf("타깃 수 = %q, want 2", got)
 	}
 
-	// 로드밸런서로의 forwards-to 관계(ARN에서 이름 web-alb 추출).
+	// 로드밸런서로의 forwards-to 관계는 ARN을 파싱하지 않고 그대로 보존한다.
 	fwd := r.RelatedBy(model.RelationForwardsTo)
-	if len(fwd) != 1 || fwd[0].ID != "web-alb" {
-		t.Errorf("forwards-to LB 관계가 없거나 이름이 틀렸다: %+v", r.Related)
+	if len(fwd) != 1 ||
+		fwd[0].ID != "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/app/web-alb/def456" ||
+		fwd[0].IdentifierKind != model.IdentifierARN {
+		t.Errorf("forwards-to LB 관계가 없거나 ARN이 틀렸다: %+v", r.Related)
 	}
 
 	// 타깃으로의 targets 관계 2개, 헬스 상태가 Via에 담겨야 한다.
@@ -174,5 +176,36 @@ func TestELBv2TargetGroupCollectorType(t *testing.T) {
 	c := elbv2.NewTargetGroup(&fakeTargetGroupAPI{})
 	if c.Type() != model.TypeELBv2TargetGroup {
 		t.Errorf("Type() = %q, want %q", c.Type(), model.TypeELBv2TargetGroup)
+	}
+}
+
+func TestELBv2TargetGroupCollectorDoesNotMisclassifyIPTargets(t *testing.T) {
+	t.Parallel()
+
+	const arn = "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/ip-tg/abc"
+	api := &fakeTargetGroupAPI{
+		groupPages: []*awselbv2.DescribeTargetGroupsOutput{{
+			TargetGroups: []elbv2types.TargetGroup{{
+				TargetGroupName: aws.String("ip-tg"),
+				TargetGroupArn:  aws.String(arn),
+				TargetType:      elbv2types.TargetTypeEnumIp,
+			}},
+		}},
+		health: map[string]*awselbv2.DescribeTargetHealthOutput{
+			arn: {TargetHealthDescriptions: []elbv2types.TargetHealthDescription{{
+				Target: &elbv2types.TargetDescription{Id: aws.String("10.0.1.10")},
+			}}},
+		},
+	}
+
+	resources, err := elbv2.NewTargetGroup(api).Collect(context.Background(), collect.Request{})
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("Resources = %+v, want 1", resources)
+	}
+	if targets := resources[0].RelatedBy(model.RelationTargets); len(targets) != 0 {
+		t.Errorf("IP 타깃을 지원되지 않는 리소스 타입에 연결함: %+v", targets)
 	}
 }

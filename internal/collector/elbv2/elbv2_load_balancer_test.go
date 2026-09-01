@@ -81,6 +81,11 @@ func TestELBv2LoadBalancerCollectorConvertsFields(t *testing.T) {
 	if r.ARN == "" {
 		t.Error("ARN이 비었다")
 	}
+	if len(r.Identifiers) != 2 ||
+		r.Identifiers[0] != (model.Identifier{Kind: model.IdentifierDNS, Value: "web-alb-123.ap-northeast-2.elb.amazonaws.com"}) ||
+		r.Identifiers[1] != (model.Identifier{Kind: model.IdentifierDNS, Value: "dualstack.web-alb-123.ap-northeast-2.elb.amazonaws.com"}) {
+		t.Errorf("DNS 식별자 = %+v", r.Identifiers)
+	}
 
 	if r.Status != "active" {
 		t.Errorf("Status = %q, want active", r.Status)

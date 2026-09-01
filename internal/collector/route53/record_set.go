@@ -65,9 +65,10 @@ func (c recordSetCollector) Collect(ctx context.Context, req collect.Request) ([
 				continue
 			}
 
+			zoneID := normalizeHostedZoneID(aws.ToString(zone.Id))
 			zoneName := aws.ToString(zone.Name)
 			for j := range records {
-				out = append(out, recordSetToResource(req.Scope, zoneName, records[j]))
+				out = append(out, recordSetToResource(req.Scope, zoneID, zoneName, records[j]))
 			}
 		}
 	}
@@ -115,15 +116,22 @@ func (c recordSetCollector) recordSets(ctx context.Context, zoneID string) ([]ro
 
 // recordSetToResource는 SDK 레코드를 도메인 리소스로 변환한다.
 //
-// 레코드 이름은 한 영역 안에서 (이름, 타입) 조합으로 유일하다. 그래서 ID를 "이름|타입"으로
-// 만들어 같은 이름의 A/AAAA 레코드가 충돌하지 않게 한다.
-func recordSetToResource(scope collect.Scope, zoneName string, rec route53types.ResourceRecordSet) model.Resource {
+// 레코드 이름과 타입은 단순 라우팅에서는 한 호스팅 영역 안에서 유일하다. weighted·latency
+// 같은 정책 기반 레코드는 SetIdentifier까지 ID에 포함한다. 호스팅 영역 ID는 Namespace에
+// 넣어 서로 다른 영역의 같은 레코드도 Resource.Key에서 충돌하지 않게 한다.
+func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route53types.ResourceRecordSet) model.Resource {
 	name := aws.ToString(rec.Name)
 	recType := string(rec.Type)
+	setIdentifier := aws.ToString(rec.SetIdentifier)
+	resourceID := name + "|" + recType
+	if setIdentifier != "" {
+		resourceID += "|" + setIdentifier
+	}
 
 	r := model.Resource{
 		Type:      model.TypeRoute53RecordSet,
-		ID:        name + "|" + recType,
+		ID:        resourceID,
+		Namespace: zoneID,
 		Name:      name,
 		Region:    "global",
 		Profile:   scope.Profile,
@@ -131,10 +139,14 @@ func recordSetToResource(scope collect.Scope, zoneName string, rec route53types.
 		Status:    recType,
 	}
 
-	fields := []model.Field{
-		{Key: "타입", Value: recType},
-		{Key: "호스팅 영역", Value: zoneName},
+	fields := []model.Field{{Key: "타입", Value: recType}}
+	if setIdentifier != "" {
+		fields = append(fields, model.Field{Key: "세트 식별자", Value: setIdentifier})
 	}
+	fields = append(fields,
+		model.Field{Key: "호스팅 영역", Value: zoneName},
+		model.Field{Key: "호스팅 영역 ID", Value: zoneID},
+	)
 
 	if rec.TTL != nil {
 		fields = append(fields, model.Field{Key: "TTL", Value: fmt.Sprintf("%d", aws.ToInt64(rec.TTL))})
@@ -147,9 +159,10 @@ func recordSetToResource(scope collect.Scope, zoneName string, rec route53types.
 		fields = append(fields, model.Field{Key: "별칭 대상", Value: target})
 		r.Fields = fields
 		r.Related = []model.Ref{{
-			Type:     model.TypeELBv2LoadBalancer,
-			ID:       strings.TrimSuffix(target, "."),
-			Relation: model.RelationResolvesTo,
+			Type:           model.TypeELBv2LoadBalancer,
+			ID:             strings.TrimSuffix(target, "."),
+			IdentifierKind: model.IdentifierDNS,
+			Relation:       model.RelationResolvesTo,
 		}}
 
 		return r
@@ -164,6 +177,11 @@ func recordSetToResource(scope collect.Scope, zoneName string, rec route53types.
 	r.Fields = fields
 
 	return r
+}
+
+// normalizeHostedZoneID는 AWS 응답의 /hostedzone/ 접두사를 제거해 안정적인 namespace로 만든다.
+func normalizeHostedZoneID(zoneID string) string {
+	return strings.TrimPrefix(zoneID, "/hostedzone/")
 }
 
 // orDash는 빈 문자열을 "-"로 바꾼다. 상세 뷰에서 빈칸 대신 없음을 명확히 보이게 한다.

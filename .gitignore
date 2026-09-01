@@ -39,9 +39,11 @@ cloudloupe-report.*
 *.key
 !**/testdata/**/*.key
 
-# 편집기와 IDE
+# 편집기와 IDE. AI 도구 설정은 로컬에만 둔다. 설계 규칙의 단일 출처는
+# docs/go-conventions.md 이며 특정 도구 디렉터리에 두지 않는다.
 .vscode/
 .idea/
+.kiro/
 *.swp
 *.swo
 *~

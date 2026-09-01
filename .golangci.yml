@@ -24,7 +24,7 @@ linters:
     - errname
     - wrapcheck # 패키지 경계를 넘는 에러는 문맥을 실어야 한다
 
-    # .kiro/steering/go-conventions.md의 설계 규칙
+    # docs/go-conventions.md의 설계 규칙
     - containedctx # context를 구조체에 저장 금지
     - fatcontext
     - gochecknoglobals # ldflags 빌드 변수만 예외

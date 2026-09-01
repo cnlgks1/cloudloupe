@@ -947,3 +947,30 @@ func TestIdentityRejectsStaleResponseAndSeparatesCancellation(t *testing.T) {
 		t.Fatalf("신원 확인 취소 결과: 화면=%v err=%q", m.screen, m.errText)
 	}
 }
+
+func TestRegionEnterSynchronizesChosenRowsAndCursor(t *testing.T) {
+	t.Parallel()
+
+	m := newFilterFlowModel(nil)
+	m.screen = ScreenRegion
+	m.regions = []awsclient.Region{
+		{Code: "ap-northeast-2", Name: "서울"},
+		{Code: "us-east-1", Name: "버지니아 북부"},
+	}
+	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
+	m.regionTable.SetCursor(1)
+
+	next, _ := m.keyRegion(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+
+	if got, want := m.chosenRegions, []string{"us-east-1"}; !slices.Equal(got, want) {
+		t.Fatalf("chosenRegions = %v, want %v", got, want)
+	}
+	rows := m.regionTable.Rows()
+	if rows[1][0] != m.theme.Glyphs.Healthy || rows[0][0] == m.theme.Glyphs.Healthy {
+		t.Errorf("리전 체크 표시가 선택과 다름: %v", rows)
+	}
+	if m.regionTable.Cursor() != 1 {
+		t.Errorf("리전 테이블 커서 = %d, want 1", m.regionTable.Cursor())
+	}
+}

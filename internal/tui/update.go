@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -202,9 +203,11 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 
 	m.identity = msg.id
 	m.chosenRegions = nil
+	m.confirmedRegions = nil
 	m.chosenTypes = nil
 	m.replaceRegionOnEnter = false
 	m.replaceTypeOnEnter = false
+	m.explicitRegionSelection = false
 	m.explicitTypeSelection = false
 	m.regions = awsclient.Regions(m.profileRegion())
 	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
@@ -240,6 +243,7 @@ func (m Model) keyRegion(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if i >= 0 && i < len(m.regions) {
 			m.toggleRegion(m.regions[i].Code)
 			m.replaceRegionOnEnter = false
+			m.explicitRegionSelection = len(m.chosenRegions) > 0
 			m.regionTable = buildRegionTable(m.theme, m.regions, m.chosenRegions, m.width, m.listHeight())
 			m.regionTable.SetCursor(i)
 		}
@@ -247,11 +251,12 @@ func (m Model) keyRegion(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		// 명시적인 리전 전환으로 들어왔거나 아무 체크가 없으면 현재 커서 하나로 교체한다.
-		if m.replaceRegionOnEnter || len(m.chosenRegions) == 0 {
-			i := m.regionTable.Cursor()
+		// space로 만든 명시적 다중 선택이 없으면 현재 커서의 리전 하나로 교체한다.
+		i := m.regionTable.Cursor()
+		if m.replaceRegionOnEnter || !m.explicitRegionSelection || len(m.chosenRegions) == 0 {
 			if i >= 0 && i < len(m.regions) {
 				m.chosenRegions = []string{m.regions[i].Code}
+				m.explicitRegionSelection = false
 			}
 		}
 		m.replaceRegionOnEnter = false
@@ -259,6 +264,15 @@ func (m Model) keyRegion(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.chosenRegions) == 0 {
 			return m, nil
 		}
+
+		// 선택 데이터와 체크 표시가 항상 같은 상태를 가리키게 한다.
+		m.regionTable = buildRegionTable(m.theme, m.regions, m.chosenRegions, m.width, m.listHeight())
+		m.regionTable.SetCursor(i)
+
+		if !sameRegionSelection(m.confirmedRegions, m.chosenRegions) {
+			m.resetResourceSelection()
+		}
+		m.confirmedRegions = append([]string(nil), m.chosenRegions...)
 
 		return m.gotoResourceType(), nil
 	}
@@ -343,6 +357,27 @@ func (m *Model) toggleResourceGroup(group ResourceGroup) {
 		}
 		m.chosenTypes = append(m.chosenTypes, resourceType.ID)
 	}
+}
+
+func sameRegionSelection(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	leftSorted := slices.Clone(left)
+	rightSorted := slices.Clone(right)
+	slices.Sort(leftSorted)
+	slices.Sort(rightSorted)
+
+	return slices.Equal(leftSorted, rightSorted)
+}
+
+func (m *Model) resetResourceSelection() {
+	m.chosenTypes = nil
+	m.explicitTypeSelection = false
+	m.replaceTypeOnEnter = false
+	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
+	m.typeTable.SetCursor(0)
 }
 
 func (m *Model) toggleRegion(code string) {

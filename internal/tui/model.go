@@ -136,20 +136,22 @@ type Model struct {
 	collectErrors       []model.CollectError
 	showRegion          bool
 
-	chosenProfile string
-	identity      awsclient.Identity
-	regions       []awsclient.Region
-	chosenRegions []string
-	chosenTypes   []string
+	chosenProfile    string
+	identity         awsclient.Identity
+	regions          []awsclient.Region
+	chosenRegions    []string
+	confirmedRegions []string
+	chosenTypes      []string
 
 	// replace...OnEnter는 목록 화면에서 리전/타입을 바꾸러 들어왔을 때 기존 선택보다
 	// 현재 커서 행을 우선하도록 한다. space로 다중 선택을 조작하면 false로 바뀐다.
 	replaceRegionOnEnter bool
 	replaceTypeOnEnter   bool
 
-	// explicitTypeSelection은 chosenTypes가 space로 명시적으로 체크된 목록인지 나타낸다.
-	// false면 chosenTypes에 이전 Enter 선택이 남아 있어도 현재 커서 타입으로 교체한다.
-	explicitTypeSelection bool
+	// explicit...Selection은 space로 명시적으로 체크한 다중 선택인지 나타낸다.
+	// false면 이전 Enter 선택이 남아 있어도 현재 커서 항목으로 교체한다.
+	explicitRegionSelection bool
+	explicitTypeSelection   bool
 
 	errText string
 	loading string
@@ -186,7 +188,7 @@ func defaultKeys() keyMap {
 		Toggle:        key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "선택")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "종료")),
 		SwitchProfile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "프로필 전환")),
-		SwitchRegion:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "리전 전환")),
+		SwitchRegion:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "리전 전환")),
 		FilterKind:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "종류 필터")),
 		ShowErrors:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "오류 보기")),
 	}
@@ -370,7 +372,7 @@ func (m Model) resourceListView() string {
 		{"enter/→", "상세"},
 		{"/", "검색"},
 		{"p", "프로필 전환"},
-		{"R", "리전 전환"},
+		{"r", "리전 전환"},
 		{"esc", "뒤로"},
 		{"q", "종료"},
 	}

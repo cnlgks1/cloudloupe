@@ -115,7 +115,8 @@ func TestResolveHonoursFileEnvironmentOverrides(t *testing.T) {
 func TestResolveExpandsTildeInEnvironmentPath(t *testing.T) {
 	clearAWSEnv(t)
 
-	home := t.TempDir()
+	// Windows runner의 DOS 8.3 짧은 홈 경로에는 합법적인 ~ 문자가 들어갈 수 있다.
+	home := filepath.Join(t.TempDir(), "RUNNER~1")
 	setHome(t, home)
 
 	// 환경 변수가 셸을 거치지 않고 오면 ~ 가 확장되지 않은 채 남는다. 그대로 열면
@@ -130,10 +131,6 @@ func TestResolveExpandsTildeInEnvironmentPath(t *testing.T) {
 	want := filepath.Join(home, "custom", "config")
 	if loc.Config.Path != want {
 		t.Errorf("config 경로 = %q, want %q", loc.Config.Path, want)
-	}
-
-	if strings.Contains(loc.Config.Path, "~") {
-		t.Errorf("경로에 확장되지 않은 ~ 가 남아 있다: %q", loc.Config.Path)
 	}
 }
 

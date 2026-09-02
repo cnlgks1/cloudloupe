@@ -57,11 +57,20 @@ type Deps struct {
 	// 세부 타입은 그룹 안에 남아 실제 수집기 선택과 목록 종류 표시에 사용한다.
 	ResourceGroups []ResourceGroup
 
-	// Identify는 프로필의 신원을 확인한다(STS GetCallerIdentity).
-	Identify func(ctx context.Context, profile, region string) (awsclient.Identity, error)
+	// Identify는 프로필 탐색에 사용한 경로로 신원을 확인한다(STS GetCallerIdentity).
+	Identify func(
+		ctx context.Context,
+		profile, region string,
+		locations awsclient.Locations,
+	) (awsclient.Identity, error)
 
-	// Collect는 선택한 프로필의 여러 리전에서 지정한 타입만 조회한다. types가 비면 전부.
-	Collect func(ctx context.Context, profile string, regions, types []string) collect.Result
+	// Collect는 같은 설정 경로로 선택 프로필의 지정 타입을 조회한다. types가 비면 전부.
+	Collect func(
+		ctx context.Context,
+		profile string,
+		regions, types []string,
+		locations awsclient.Locations,
+	) collect.Result
 
 	// Explain은 에러를 사용자용 문장으로 바꾼다.
 	Explain func(error) string
@@ -239,18 +248,18 @@ func NewModel(theme Theme, deps Deps, override awsclient.Override) Model {
 // 성공하면 프로필 선택 화면, 설정을 못 찾으면 경로 입력 화면으로 간다. 경로 입력 화면에서
 // 다시 이 함수를 호출하므로, 경로를 바꿔가며 재시도할 수 있다.
 func (m Model) loadProfiles(override awsclient.Override) Model {
-	m.override = override
-
 	profiles, loc, err := m.deps.LoadProfiles(override)
-	m.locations = loc
-
 	if err != nil {
-		// 설정을 못 찾았거나 읽지 못했다. 경로 입력 화면으로 보낸다.
+		// 실패한 새 경로가 이미 성공한 프로필 목록의 실행 경로를 덮으면 안 된다.
+		// 입력값은 남겨 사용자가 고칠 수 있게 하고, 확정된 override와 locations는 보존한다.
 		m.errText = m.deps.Explain(err)
 
-		return m.enterConfigPath()
+		return m.enterConfigPathWith(override)
 	}
 
+	// 프로필 목록과 실제 연결 경로는 성공했을 때만 함께 확정한다.
+	m.override = override
+	m.locations = loc
 	m.profiles = profiles
 	m.profileTable = buildProfileTable(m.theme, profiles, m.width, m.listHeight())
 	m.screen = ScreenProfile
@@ -264,8 +273,12 @@ func (m Model) loadProfiles(override awsclient.Override) Model {
 // 쓰려고 진입할 때 모두 이 함수를 쓴다. 두 입력 칸에는 지금 쓰고 있는 경로를 미리 채워
 // 넣어, 한 쪽만 바꾸고 싶을 때 나머지를 다시 타이핑하지 않아도 되게 한다.
 func (m Model) enterConfigPath() Model {
-	m.configInput.SetValue(m.override.ConfigPath)
-	m.credsInput.SetValue(m.override.CredentialsPath)
+	return m.enterConfigPathWith(m.override)
+}
+
+func (m Model) enterConfigPathWith(override awsclient.Override) Model {
+	m.configInput.SetValue(override.ConfigPath)
+	m.credsInput.SetValue(override.CredentialsPath)
 	m.pathFocus = 0
 	m.configInput.Focus()
 	m.credsInput.Blur()

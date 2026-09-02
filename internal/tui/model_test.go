@@ -68,10 +68,10 @@ func okDeps(resources []model.Resource) tui.Deps {
 				},
 			},
 		},
-		Identify: func(_ context.Context, profile, _ string) (awsclient.Identity, error) {
+		Identify: func(_ context.Context, profile, _ string, _ awsclient.Locations) (awsclient.Identity, error) {
 			return awsclient.Identity{AccountID: "123456789012", ARN: "arn:aws:sts::123456789012:user/" + profile}, nil
 		},
-		Collect: func(_ context.Context, _ string, _, _ []string) collect.Result {
+		Collect: func(_ context.Context, _ string, _, _ []string, _ awsclient.Locations) collect.Result {
 			return collect.Result{Resources: resources}
 		},
 		Explain: awsclient.Explain,
@@ -364,7 +364,7 @@ func TestSingleTypeGroupSkipsItemScreen(t *testing.T) {
 		Label: "KMS",
 		Types: []tui.ResourceType{{ID: model.TypeKMSKey, Label: "키"}},
 	})
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = append([]string(nil), types...)
 
 		return collect.Result{Resources: sampleResources()}
@@ -435,7 +435,7 @@ func TestIdentityFailureShowsError(t *testing.T) {
 	t.Parallel()
 
 	deps := okDeps(nil)
-	deps.Identify = func(_ context.Context, _, _ string) (awsclient.Identity, error) {
+	deps.Identify = func(_ context.Context, _, _ string, _ awsclient.Locations) (awsclient.Identity, error) {
 		return awsclient.Identity{}, errors.New("ExpiredToken")
 	}
 
@@ -483,7 +483,7 @@ func TestResourceTypeSelectionFiltersCollect(t *testing.T) {
 	var gotTypes []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = types
 
 		return collect.Result{Resources: sampleResources()}
@@ -510,7 +510,7 @@ func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
 	var gotTypes []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = types
 
 		return collect.Result{Resources: sampleResources()}
@@ -535,7 +535,7 @@ func TestResourceItemSpaceSelectsOnlyCheckedTypes(t *testing.T) {
 
 	var gotTypes []string
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = append([]string(nil), types...)
 
 		return collect.Result{Resources: sampleResources()}
@@ -604,7 +604,7 @@ func TestBackNavigationKeepsTypeSelection(t *testing.T) {
 	var gotTypes []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = types
 
 		return collect.Result{Resources: sampleResources()}
@@ -644,7 +644,7 @@ func TestNewProfileResetsSelection(t *testing.T) {
 	var gotTypes []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = types
 
 		return collect.Result{Resources: sampleResources()}
@@ -687,7 +687,7 @@ func TestArrowKeysNavigateList(t *testing.T) {
 	var gotRegions []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, _ []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, _ []string, _ awsclient.Locations) collect.Result {
 		gotRegions = regions
 
 		return collect.Result{Resources: sampleResources()}
@@ -722,7 +722,7 @@ func TestArrowSelectsRegionUnderCursor(t *testing.T) {
 	var gotRegions []string
 
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, _ []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, _ []string, _ awsclient.Locations) collect.Result {
 		gotRegions = regions
 
 		return collect.Result{Resources: sampleResources()}
@@ -845,7 +845,7 @@ func TestRegionEnterReplacesPreviousBareSelectionAfterBack(t *testing.T) {
 
 	var gotRegions []string
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, _ []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, _ []string, _ awsclient.Locations) collect.Result {
 		gotRegions = append([]string(nil), regions...)
 
 		return collect.Result{Resources: sampleResources()}
@@ -876,7 +876,7 @@ func TestRegionBackPreservesExplicitMultiSelection(t *testing.T) {
 	var gotRegions []string
 	var gotTypes []string
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, types []string, _ awsclient.Locations) collect.Result {
 		gotRegions = append([]string(nil), regions...)
 		gotTypes = append([]string(nil), types...)
 
@@ -918,7 +918,7 @@ func TestChangingRegionResetsResourceSelection(t *testing.T) {
 	}
 	var calls []collectCall
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, types []string, _ awsclient.Locations) collect.Result {
 		calls = append(calls, collectCall{
 			regions: append([]string(nil), regions...),
 			types:   append([]string(nil), types...),
@@ -959,7 +959,7 @@ func TestConfirmingSameRegionPreservesResourceSelection(t *testing.T) {
 
 	var gotTypes []string
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, _ []string, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, _ []string, types []string, _ awsclient.Locations) collect.Result {
 		gotTypes = append([]string(nil), types...)
 
 		return collect.Result{Resources: sampleResources()}
@@ -984,7 +984,7 @@ func TestChangingExplicitMultiRegionSelectionResetsResourceSelection(t *testing.
 	var gotRegions []string
 	var gotTypes []string
 	deps := okDeps(sampleResources())
-	deps.Collect = func(_ context.Context, _ string, regions, types []string) collect.Result {
+	deps.Collect = func(_ context.Context, _ string, regions, types []string, _ awsclient.Locations) collect.Result {
 		gotRegions = append([]string(nil), regions...)
 		gotTypes = append([]string(nil), types...)
 

@@ -108,9 +108,8 @@ cloudloupe --config PATH --credentials PATH
 `t`는 결과에 종류가 둘 이상일 때, `e`는 부분 오류가 있을 때만 동작합니다. `/` 검색 입력 중에는
 `q`, `p`, `r`도 검색어로 들어갑니다.
 
-> **경로 플래그의 적용 범위.** `--config`, `--credentials`와 TUI 경로 입력은 **프로필 탐색에만**
-> 적용됩니다. STS 확인과 리소스 조회에도 같은 파일을 쓰려면 `AWS_CONFIG_FILE`,
-> `AWS_SHARED_CREDENTIALS_FILE`을 설정하세요.
+`--config`, `--credentials`와 TUI에서 입력한 경로는 프로필 탐색, STS 신원 확인, 실제
+리소스 조회에 동일하게 적용됩니다.
 
 ## 설정 해석
 

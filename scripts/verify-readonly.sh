@@ -35,7 +35,8 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 # 항목별 근거:
 #   Collect/NextPage/Run   - 우리 수집기·러너·페이지네이터 메서드
 #   Explain                - 에러를 사람이 읽는 문장으로 바꾸는 우리 함수
-#   Config/WhoAmI          - 우리 awsclient 함수. Config는 로컬 설정 로드(파일 읽기),
+#   Config/ConfigWithLocations/WhoAmI
+#                          - 우리 awsclient 함수. Config 계열은 로컬 설정 로드(파일 읽기),
 #                            WhoAmI는 내부에서 GetCallerIdentity(조회)를 부른다
 #   LoadDefaultConfig      - AWS SDK 설정 로더. 자격증명 체인을 구성할 뿐 리소스를
 #                            조회하지 않는다
@@ -53,7 +54,7 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #   keyEntries             - kms 수집기의 내부 메서드. ListKeys(조회)를 페이지째 감싼다
 #   aliasesByKeyID         - kms 수집기의 내부 메서드. ListAliases(조회)를 감싸 키 ID로
 #                            색인한다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID'
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

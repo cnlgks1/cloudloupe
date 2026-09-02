@@ -170,9 +170,10 @@ func (m *Model) identifyCmd(p awsclient.Profile) tea.Cmd {
 
 	profile := p.Name
 	region := p.Region
+	locations := m.locations
 
 	return func() tea.Msg {
-		id, err := m.deps.Identify(ctx, profile, region)
+		id, err := m.deps.Identify(ctx, profile, region, locations)
 
 		return identityMsg{requestID: requestID, id: id, err: err}
 	}
@@ -535,11 +536,12 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 	regions := append([]string(nil), m.chosenRegions...)
 	types := append([]string(nil), m.chosenTypes...)
 	groups := append([]ResourceGroup(nil), m.deps.ResourceGroups...)
+	locations := m.locations
 	showRegion := len(regions) > 1
 	collectFn := m.deps.Collect
 
 	cmd := func() tea.Msg {
-		result := collectFn(ctx, profile, regions, types)
+		result := collectFn(ctx, profile, regions, types, locations)
 		if result.Canceled || errors.Is(ctx.Err(), context.Canceled) {
 			return collectDoneMsg{requestID: requestID, result: result, canceled: true}
 		}

@@ -65,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("플래그 해석: %w", err)
 	}
 
+	override := awsclient.Override{ConfigPath: *configPath, CredentialsPath: *credsPath}
+
 	if *showVersion {
 		fmt.Fprintf(stdout, "cloudloupe %s\n커밋:   %s\n빌드:   %s\nGo:     %s %s/%s\n",
 			version, commit, date, runtime.Version(), runtime.GOOS, runtime.GOARCH)
@@ -73,7 +75,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if *check {
-		return runCheck(stdout)
+		return runCheck(stdout, override)
 	}
 
 	// --output이나 --list-profiles를 주면 헤드리스 모드(프로필 목록만). 그 외에는
@@ -85,14 +87,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 			format = "text"
 		}
 
-		return listProfiles(stdout, format)
+		return listProfiles(stdout, format, override)
 	}
-
-	override := awsclient.Override{ConfigPath: *configPath, CredentialsPath: *credsPath}
 
 	if !isInteractive() {
 		// 터미널이 아니면(파이프, CI) TUI를 띄울 수 없다. 목록 출력으로 폴백한다.
-		return listProfiles(stdout, "text")
+		return listProfiles(stdout, "text", override)
 	}
 
 	return runTUI(ascii, override)
@@ -135,8 +135,8 @@ func runTUI(ascii *bool, override awsclient.Override) error {
 			return profiles, loc, nil
 		},
 		ResourceGroups: groups,
-		Identify:       app.Identify,
-		Collect:        app.Collect,
+		Identify:       app.IdentifyWithLocations,
+		Collect:        app.CollectWithLocations,
 		Explain:        awsclient.Explain,
 	}
 
@@ -185,8 +185,8 @@ func resourceGroups() ([]tui.ResourceGroup, error) {
 // 대조까지 해서 알려준다.
 //
 // 문제가 있으면 0이 아닌 코드로 끝난다. 스크립트에서 사전 점검으로 쓸 수 있다.
-func runCheck(w io.Writer) error {
-	loc, err := awsclient.Resolve()
+func runCheck(w io.Writer, override awsclient.Override) error {
+	loc, err := awsclient.ResolveWith(override)
 	if err != nil {
 		return fmt.Errorf("AWS 설정 위치 해석: %w", err)
 	}
@@ -217,7 +217,7 @@ func runCheck(w io.Writer) error {
 		fmt.Fprintf(w, "\n프로필 %d개를 읽었습니다.\n", len(profiles))
 	}
 
-	crossCheckAWSCLI(w, profiles, loadErr)
+	crossCheckAWSCLI(w, loc, profiles, loadErr)
 
 	if problems := diag.Problems(); len(problems) > 0 {
 		fmt.Fprintln(w, "\n조치할 것:")
@@ -242,14 +242,14 @@ func runCheck(w io.Writer) error {
 //
 // 1단계 진입점이다. 프로필 탐색은 동작하고, 대화형 TUI가 다음에 붙는다. 여기서는 AWS에
 // 접속하지 않으므로 자격증명 없이도 실행된다.
-func listProfiles(w io.Writer, format string) error {
+func listProfiles(w io.Writer, format string, override awsclient.Override) error {
 	if format != "text" && format != "json" {
 		return fmt.Errorf("알 수 없는 출력 형식 %q: text 또는 json이어야 합니다", format)
 	}
 
 	// 위치 해석을 읽기보다 먼저 한다. 읽기가 실패해도 어디를 찾아봤는지는 보여줄 수 있어야
 	// 한다. "내 프로필이 안 보인다"의 원인은 거의 항상 예상과 다른 파일을 읽은 것이다.
-	loc, err := awsclient.Resolve()
+	loc, err := awsclient.ResolveWith(override)
 	if err != nil {
 		return fmt.Errorf("AWS 설정 위치 해석: %w", err)
 	}
@@ -278,12 +278,17 @@ func listProfiles(w io.Writer, format string) error {
 //
 // aws 명령이 없거나 실패하면 조용히 넘어간다. AWS CLI는 cloudloupe의 의존성이 아니므로
 // 없다는 것이 문제는 아니다.
-func crossCheckAWSCLI(w io.Writer, profiles []awsclient.Profile, loadErr error) {
+func crossCheckAWSCLI(
+	w io.Writer,
+	locations awsclient.Locations,
+	profiles []awsclient.Profile,
+	loadErr error,
+) {
 	if loadErr != nil {
 		return
 	}
 
-	theirs, err := awsCLIProfiles()
+	theirs, err := awsCLIProfiles(locations)
 	if err != nil {
 		return
 	}
@@ -319,7 +324,7 @@ func crossCheckAWSCLI(w io.Writer, profiles []awsclient.Profile, loadErr error) 
 //
 // 조회 전용 원칙은 AWS API 호출에 대한 것이고, 이건 로컬 명령이 자신의 설정 파일을 읽어
 // 이름만 출력하는 것이다. AWS를 변경하지 않는다.
-func awsCLIProfiles() ([]string, error) {
+func awsCLIProfiles(locations awsclient.Locations) ([]string, error) {
 	path, err := exec.LookPath("aws")
 	if err != nil {
 		return nil, err //nolint:wrapcheck // 호출자가 조용히 무시한다
@@ -329,7 +334,10 @@ func awsCLIProfiles() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, path, "configure", "list-profiles").Output()
+	cmd := exec.CommandContext(ctx, path, "configure", "list-profiles")
+	cmd.Env = awsCLIEnv(locations)
+
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, err //nolint:wrapcheck // 호출자가 조용히 무시한다
 	}
@@ -343,6 +351,32 @@ func awsCLIProfiles() ([]string, error) {
 	}
 
 	return names, nil
+}
+
+// awsCLIEnv는 비교 대상 AWS CLI도 cloudloupe와 같은 공유 설정 파일을 보게 한다.
+func awsCLIEnv(locations awsclient.Locations) []string {
+	const (
+		configPrefix      = awsclient.EnvConfigFile + "="
+		credentialsPrefix = awsclient.EnvCredentialsFile + "="
+	)
+
+	env := make([]string, 0, len(os.Environ())+2)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, configPrefix) || strings.HasPrefix(entry, credentialsPrefix) {
+			continue
+		}
+
+		env = append(env, entry)
+	}
+
+	if locations.Config.Path != "" {
+		env = append(env, configPrefix+locations.Config.Path)
+	}
+	if locations.Credentials.Path != "" {
+		env = append(env, credentialsPrefix+locations.Credentials.Path)
+	}
+
+	return env
 }
 
 // diffProfiles는 두 프로필 이름 목록의 차이를 구한다.

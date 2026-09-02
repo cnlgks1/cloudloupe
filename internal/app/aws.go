@@ -24,8 +24,28 @@ const (
 )
 
 // Identify는 프로필의 호출 주체를 STS로 확인한다.
+// Identify는 SDK 기본 탐색 규칙으로 프로필의 신원을 확인한다.
 func Identify(ctx context.Context, profile, region string) (awsclient.Identity, error) {
-	cfg, err := awsclient.Config(ctx, profile, region)
+	return identifyWithConfig(ctx, profile, region, awsclient.Config)
+}
+
+// IdentifyWithLocations는 프로필 탐색에 사용한 경로로 신원을 확인한다.
+func IdentifyWithLocations(
+	ctx context.Context,
+	profile, region string,
+	locations awsclient.Locations,
+) (awsclient.Identity, error) {
+	return identifyWithConfig(ctx, profile, region, func(ctx context.Context, profile, region string) (aws.Config, error) {
+		return awsclient.ConfigWithLocations(ctx, profile, region, locations)
+	})
+}
+
+func identifyWithConfig(
+	ctx context.Context,
+	profile, region string,
+	loadConfig func(context.Context, string, string) (aws.Config, error),
+) (awsclient.Identity, error) {
+	cfg, err := loadConfig(ctx, profile, region)
 	if err != nil {
 		return awsclient.Identity{}, fmt.Errorf("AWS 설정 로드 (%s/%s): %w", profile, region, err)
 	}
@@ -54,6 +74,27 @@ func Collect(ctx context.Context, profile string, regions, types []string) colle
 	return collectWith(ctx, profile, regions, types, collectDeps{
 		identify: Identify,
 		config:   awsclient.Config,
+		registry: catalog.Registry,
+		run:      (collect.Runner{Classify: classifyError}).Run,
+	})
+}
+
+// CollectWithLocations는 프로필 탐색에 사용한 경로로 리소스를 조회한다.
+func CollectWithLocations(
+	ctx context.Context,
+	profile string,
+	regions, types []string,
+	locations awsclient.Locations,
+) collect.Result {
+	loadConfig := func(ctx context.Context, profile, region string) (aws.Config, error) {
+		return awsclient.ConfigWithLocations(ctx, profile, region, locations)
+	}
+
+	return collectWith(ctx, profile, regions, types, collectDeps{
+		identify: func(ctx context.Context, profile, region string) (awsclient.Identity, error) {
+			return identifyWithConfig(ctx, profile, region, loadConfig)
+		},
+		config:   loadConfig,
 		registry: catalog.Registry,
 		run:      (collect.Runner{Classify: classifyError}).Run,
 	})

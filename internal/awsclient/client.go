@@ -38,10 +38,32 @@ type stsAPI interface {
 // region이 빈 문자열이면 프로필의 기본 리전을 쓴다. 프로필에도 리전이 없으면 이후
 // AWS 호출에서 리전 미지정 에러가 나고, Explain이 그것을 사람이 읽을 수 있게 바꾼다.
 func Config(ctx context.Context, profile, region string) (aws.Config, error) {
+	return loadConfig(ctx, profile, region, Locations{})
+}
+
+// ConfigWithLocations는 확정된 공유 설정 경로로 AWS 설정을 로드한다.
+//
+// 프로필 탐색에 사용한 config와 credentials 파일을 STS와 서비스 클라이언트도 그대로
+// 사용하게 한다. Locations의 제로 값이면 Config와 같은 SDK 기본 탐색 규칙을 따른다.
+func ConfigWithLocations(
+	ctx context.Context,
+	profile, region string,
+	locations Locations,
+) (aws.Config, error) {
+	return loadConfig(ctx, profile, region, locations)
+}
+
+func loadConfig(ctx context.Context, profile, region string, locations Locations) (aws.Config, error) {
 	opts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithSharedConfigProfile(profile),
 	}
 
+	if locations.Config.Path != "" {
+		opts = append(opts, awsconfig.WithSharedConfigFiles([]string{locations.Config.Path}))
+	}
+	if locations.Credentials.Path != "" {
+		opts = append(opts, awsconfig.WithSharedCredentialsFiles([]string{locations.Credentials.Path}))
+	}
 	if region != "" {
 		opts = append(opts, awsconfig.WithRegion(region))
 	}

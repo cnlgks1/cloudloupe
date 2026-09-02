@@ -165,12 +165,12 @@ func TestRoleToResourceMapsFields(t *testing.T) {
 	}
 
 	for key, want := range map[string]string{
-		"경로":       "/service-role/",
-		"설명":       "애플리케이션 런타임",
-		"최대 세션 시간": "1시간",
-		"권한 경계":    "arn:aws:iam::123456789012:policy/boundary",
-		"마지막 사용":   "2026-01-02 03:04:05 UTC (ap-northeast-2)",
-		"역할 ID":    "AROAEXAMPLE",
+		"Path":                "/service-role/",
+		"Description":         "애플리케이션 런타임",
+		"MaxSessionDuration":  "3600",
+		"PermissionsBoundary": "arn:aws:iam::123456789012:policy/boundary",
+		"RoleLastUsed":        "2026-01-02T03:04:05Z (ap-northeast-2)",
+		"RoleId":              "AROAEXAMPLE",
 	} {
 		if got := role.FieldValue(key); got != want {
 			t.Errorf("FieldValue(%q) = %q, want %q", key, got, want)
@@ -199,7 +199,7 @@ func TestRoleToResourceHandlesMissingOptionalValues(t *testing.T) {
 	if len(role.Tags) != 0 {
 		t.Errorf("Tags = %+v, want empty", role.Tags)
 	}
-	for _, key := range []string{"경로", "설명", "최대 세션 시간", "권한 경계", "마지막 사용", "역할 ID"} {
+	for _, key := range []string{"Path", "Description", "MaxSessionDuration", "PermissionsBoundary", "RoleLastUsed", "RoleId"} {
 		if got := role.FieldValue(key); got != "-" {
 			t.Errorf("FieldValue(%q) = %q, want %q", key, got, "-")
 		}

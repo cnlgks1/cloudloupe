@@ -14,7 +14,7 @@ import (
 // kmsDefinitions는 KMS 그룹의 리소스 타입을 조립한다.
 //
 // KMS 키는 리전마다 따로 존재하므로 Scope는 Regional이다. 다중 리전 키도 리전별 복제본이
-// 각각 조회되며, 원본인지 복제본인지는 "다중 리전" 필드로 구분한다.
+// 각각 조회되며, 원본인지 복제본인지는 "MultiRegion" 필드로 구분한다.
 func kmsDefinitions(cfg aws.Config) []Definition {
 	var (
 		client     *awskms.Client
@@ -31,13 +31,13 @@ func kmsDefinitions(cfg aws.Config) []Definition {
 	return []Definition{
 		{
 			Type:  model.TypeKMSKey,
-			Label: "키",
+			Label: "Keys",
 			Scope: Regional,
 			Columns: []string{
-				"별칭", "관리 주체", "용도", "키 스펙", "키 원본",
-				"다중 리전", "사용 가능", "삭제 예정", "설명",
+				"Aliases", "KeyManager", "KeyUsage", "KeySpec", "Origin",
+				"MultiRegion", "Enabled", "DeletionDate", "Description",
 			},
-			SummaryColumns: []string{"별칭", "관리 주체", "용도"},
+			SummaryColumns: []string{"Aliases", "KeyManager", "KeyUsage"},
 			newCollector: func() collect.Collector {
 				return kmscollector.NewKey(clientFor())
 			},

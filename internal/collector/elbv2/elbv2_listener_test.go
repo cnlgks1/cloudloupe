@@ -128,7 +128,7 @@ func TestELBv2ListenerCollectorBuildsRuleRelations(t *testing.T) {
 	if listener.Type != model.TypeELBv2Listener || listener.ID != listenerARN || listener.Name != "HTTPS:443" {
 		t.Errorf("Listener = %+v", listener)
 	}
-	if listener.FieldValue("규칙 수") != "2" || listener.FieldValue("SSL 정책") == "-" {
+	if listener.FieldValue("Rules") != "2" || listener.FieldValue("SslPolicy") == "-" {
 		t.Errorf("Fields = %+v", listener.Fields)
 	}
 	if api.listenerCalls[lbARN] != 2 {
@@ -188,8 +188,8 @@ func TestELBv2ListenerCollectorKeepsDefaultRelationWhenRulesFail(t *testing.T) {
 	if len(forward) != 1 || forward[0].ID != tgARN || forward[0].Via != "default" {
 		t.Errorf("기본 동작 fallback = %+v", forward)
 	}
-	if resources[0].FieldValue("규칙 수") != "-" {
-		t.Errorf("규칙 수 = %q, want -", resources[0].FieldValue("규칙 수"))
+	if resources[0].FieldValue("Rules") != "-" {
+		t.Errorf("규칙 수 = %q, want -", resources[0].FieldValue("Rules"))
 	}
 }
 

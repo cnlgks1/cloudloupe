@@ -99,11 +99,11 @@ func targetGroupToResource(scope collect.Scope, tg elbv2types.TargetGroup, healt
 	}
 
 	r.Fields = []model.Field{
-		{Key: "프로토콜", Value: string(tg.Protocol)},
-		{Key: "포트", Value: displayInt32(aws.ToInt32(tg.Port))},
-		{Key: "타깃 종류", Value: string(tg.TargetType)},
-		{Key: "VPC", Value: displayString(aws.ToString(tg.VpcId))},
-		{Key: "타깃 수", Value: strconv.Itoa(len(health))},
+		{Key: "Protocol", Value: string(tg.Protocol)},
+		{Key: "Port", Value: displayInt32(aws.ToInt32(tg.Port))},
+		{Key: "TargetType", Value: string(tg.TargetType)},
+		{Key: "VpcId", Value: displayString(aws.ToString(tg.VpcId))},
+		{Key: "Targets", Value: strconv.Itoa(len(health))},
 	}
 
 	r.Related = targetGroupRelations(tg, health)

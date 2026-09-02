@@ -95,19 +95,19 @@ func TestRoute53RecordSetCollectorConvertsRecords(t *testing.T) {
 	if r.ID != "www.example.com.|A" {
 		t.Errorf("ID = %q, want 이름|타입", r.ID)
 	}
-	if r.Namespace != "Z1" || r.FieldValue("호스팅 영역 ID") != "Z1" {
-		t.Errorf("호스팅 영역 namespace = %q, field = %q", r.Namespace, r.FieldValue("호스팅 영역 ID"))
+	if r.Namespace != "Z1" || r.FieldValue("HostedZoneId") != "Z1" {
+		t.Errorf("호스팅 영역 namespace = %q, field = %q", r.Namespace, r.FieldValue("HostedZoneId"))
 	}
 
 	if r.Region != "global" {
 		t.Errorf("Region = %q, want global (Route53는 글로벌)", r.Region)
 	}
 
-	if got := r.FieldValue("값"); got != "192.0.2.1" {
+	if got := r.FieldValue("ResourceRecords"); got != "192.0.2.1" {
 		t.Errorf("값 = %q", got)
 	}
 
-	if got := r.FieldValue("호스팅 영역"); got != "example.com." {
+	if got := r.FieldValue("HostedZoneName"); got != "example.com." {
 		t.Errorf("호스팅 영역 = %q", got)
 	}
 }
@@ -137,7 +137,7 @@ func TestRoute53RecordSetCollectorAliasResolvesTo(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	if got := got[0].FieldValue("별칭 대상"); got == "" {
+	if got := got[0].FieldValue("AliasTarget"); got == "" {
 		t.Error("별칭 대상 필드가 비었다")
 	}
 
@@ -276,7 +276,7 @@ func TestRoute53PolicyRecordsHaveStableDistinctIdentity(t *testing.T) {
 		t.Fatalf("정책 기반 레코드 키가 충돌함: %q", resources[0].Key())
 	}
 	for _, resource := range resources {
-		if resource.FieldValue("세트 식별자") == "" {
+		if resource.FieldValue("SetIdentifier") == "" {
 			t.Errorf("세트 식별자 필드가 비어 있음: %+v", resource)
 		}
 	}

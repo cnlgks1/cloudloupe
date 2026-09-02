@@ -61,11 +61,11 @@ func vpcToResource(scope collect.Scope, vpc ec2types.Vpc) model.Resource {
 		AccountID: scope.AccountID,
 		Status:    string(vpc.State),
 		Fields: []model.Field{
-			{Key: "IPv4 CIDR", Value: orDash(aws.ToString(vpc.CidrBlock))},
-			{Key: "기본 VPC", Value: yesNo(aws.ToBool(vpc.IsDefault))},
-			{Key: "인스턴스 테넌시", Value: orDash(string(vpc.InstanceTenancy))},
-			{Key: "DHCP 옵션 세트", Value: orDash(aws.ToString(vpc.DhcpOptionsId))},
-			{Key: "소유자 ID", Value: orDash(aws.ToString(vpc.OwnerId))},
+			{Key: "CidrBlock", Value: orDash(aws.ToString(vpc.CidrBlock))},
+			{Key: "IsDefault", Value: boolValue(aws.ToBool(vpc.IsDefault))},
+			{Key: "InstanceTenancy", Value: orDash(string(vpc.InstanceTenancy))},
+			{Key: "DhcpOptionsId", Value: orDash(aws.ToString(vpc.DhcpOptionsId))},
+			{Key: "OwnerId", Value: orDash(aws.ToString(vpc.OwnerId))},
 		},
 		Tags: ec2Tags(vpc.Tags),
 	}

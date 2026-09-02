@@ -93,15 +93,15 @@ func TestELBv2TargetGroupCollectorConvertsFieldsAndTargets(t *testing.T) {
 		t.Errorf("Type/ID = %q/%q", r.Type, r.ID)
 	}
 
-	if got := r.FieldValue("프로토콜"); got != "HTTP" {
+	if got := r.FieldValue("Protocol"); got != "HTTP" {
 		t.Errorf("프로토콜 = %q, want HTTP", got)
 	}
 
-	if got := r.FieldValue("포트"); got != "80" {
+	if got := r.FieldValue("Port"); got != "80" {
 		t.Errorf("포트 = %q, want 80", got)
 	}
 
-	if got := r.FieldValue("타깃 수"); got != "2" {
+	if got := r.FieldValue("Targets"); got != "2" {
 		t.Errorf("타깃 수 = %q, want 2", got)
 	}
 

@@ -87,11 +87,11 @@ func TestSecurityGroupCollectorConvertsFieldsAndRelation(t *testing.T) {
 		t.Errorf("ARN 또는 상태 = %+v", got)
 	}
 	wantFields := []model.Field{
-		{Key: "VPC", Value: "vpc-0123"},
-		{Key: "인바운드 규칙 수", Value: "7"},
-		{Key: "아웃바운드 규칙 수", Value: "4"},
-		{Key: "설명", Value: "애플리케이션 보안 그룹"},
-		{Key: "소유자 ID", Value: "123456789012"},
+		{Key: "VpcId", Value: "vpc-0123"},
+		{Key: "InboundRules", Value: "7"},
+		{Key: "OutboundRules", Value: "4"},
+		{Key: "Description", Value: "애플리케이션 보안 그룹"},
+		{Key: "OwnerId", Value: "123456789012"},
 	}
 	if !slices.Equal(got.Fields, wantFields) {
 		t.Errorf("Fields = %+v, want %+v", got.Fields, wantFields)

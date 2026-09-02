@@ -186,14 +186,14 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Enter:         key.NewBinding(key.WithKeys("enter", "right"), key.WithHelp("enter/→", "선택")),
-		Back:          key.NewBinding(key.WithKeys("esc", "left"), key.WithHelp("esc/←", "뒤로")),
-		Toggle:        key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "선택")),
-		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "종료")),
-		SwitchProfile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "프로필 전환")),
-		SwitchRegion:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "리전 전환")),
-		FilterKind:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "종류 필터")),
-		ShowErrors:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "오류 보기")),
+		Enter:         key.NewBinding(key.WithKeys("enter", "right"), key.WithHelp("enter/→", "select")),
+		Back:          key.NewBinding(key.WithKeys("esc", "left"), key.WithHelp("esc/←", "back")),
+		Toggle:        key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "select")),
+		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		SwitchProfile: key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "switch profile")),
+		SwitchRegion:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "switch region")),
+		FilterKind:    key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "Filter by kind")),
+		ShowErrors:    key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "errors")),
 	}
 }
 
@@ -207,16 +207,16 @@ func NewModel(theme Theme, deps Deps, override awsclient.Override) Model {
 	sp.Spinner = spinner.Spinner{Frames: theme.Glyphs.SpinnerDots, FPS: 10}
 
 	cfgTI := textinput.New()
-	cfgTI.Placeholder = "~/.aws/config 경로 (비우면 기본 위치)"
+	cfgTI.Placeholder = "~/.aws/config path (empty for default)"
 	cfgTI.CharLimit = 512
 
 	credsTI := textinput.New()
-	credsTI.Placeholder = "~/.aws/credentials 경로 (비우면 config와 같은 위치)"
+	credsTI.Placeholder = "~/.aws/credentials path (empty to match config)"
 	credsTI.CharLimit = 512
 
 	filterTI := textinput.New()
 	filterTI.Prompt = "/ "
-	filterTI.Placeholder = "타입, 이름, ID, 리전, 상태, 필드 검색"
+	filterTI.Placeholder = "search type, name, ID, region, status, fields"
 	filterTI.CharLimit = 256
 
 	m := Model{
@@ -310,52 +310,52 @@ func (m Model) View() string {
 	case ScreenConfigPath:
 		return m.configPathView()
 	case ScreenProfile:
-		return m.screenWithHelp("프로필 선택", m.profileTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "선택"},
-			[2]string{"c", "AWS 설정 파일 경로 지정"},
+		return m.screenWithHelp("Select profile", m.profileTable,
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "select"},
+			[2]string{"c", "Set AWS config paths"},
 		)
 	case ScreenIdentity:
 		return m.centered(m.spinner.View() + " " + m.loading)
 	case ScreenRegion:
-		return m.screenWithHelp("리전 선택", m.regionTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "이 리전 조회"},
-			[2]string{"space", "여러 개 선택"},
+		return m.screenWithHelp("Select region", m.regionTable,
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "query this region"},
+			[2]string{"space", "multi-select"},
 		)
 	case ScreenResourceType:
-		return m.screenWithHelp("리소스 선택", m.typeTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "세부 항목"},
-			[2]string{"space", "그룹 전체 조회"},
+		return m.screenWithHelp("Select resource", m.typeTable,
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "Items"},
+			[2]string{"space", "query whole group"},
 		)
 	case ScreenResourceItem:
 		return m.screenWithHelp(m.resourceItemTitle(), m.itemTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "이 항목 조회"},
-			[2]string{"space", "여러 개 선택"},
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "query this item"},
+			[2]string{"space", "multi-select"},
 		)
 	case ScreenCollecting:
-		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: 취소"))
+		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: cancel"))
 	case ScreenList:
 		return m.resourceListView()
 	case ScreenResourceKind:
-		return m.screenWithHelp("종류 필터", m.kindTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "적용"},
+		return m.screenWithHelp("Filter by kind", m.kindTable,
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "apply"},
 		)
 	case ScreenDetail:
 		return m.detail.View() + m.helpBar(
-			[2]string{"↑↓/jk", "스크롤"},
+			[2]string{"↑↓/jk", "scroll"},
 		)
 	case ScreenCollectErrors:
-		return m.screenWithHelp("수집 오류", m.errorTable,
-			[2]string{"↑↓/jk", "이동"},
-			[2]string{"enter/→", "원본 상세"},
+		return m.screenWithHelp("Collect errors", m.errorTable,
+			[2]string{"↑↓/jk", "move"},
+			[2]string{"enter/→", "raw detail"},
 		)
 	case ScreenCollectErrorDetail:
 		return m.detail.View() + m.helpBar(
-			[2]string{"↑↓/jk", "스크롤"},
+			[2]string{"↑↓/jk", "scroll"},
 		)
 	case ScreenError:
 		return m.errorView()
@@ -368,17 +368,17 @@ func (m Model) View() string {
 //
 // 필터 줄을 항상 한 줄 예약해 입력 시작·적용·취소 때 테이블 높이가 흔들리지 않게 한다.
 func (m Model) resourceListView() string {
-	filterLine := m.theme.Faint.Render("/ 필터")
+	filterLine := m.theme.Faint.Render("/ filter")
 	help := [][2]string{
-		{"↑↓/jk", "이동"},
-		{"enter/→", "상세"},
-		{"/", "검색"},
-		{"p", "프로필 전환"},
-		{"r", "리전 전환"},
+		{"↑↓/jk", "move"},
+		{"enter/→", "details"},
+		{"/", "search"},
+		{"p", "switch profile"},
+		{"r", "switch region"},
 	}
 
 	if len(m.collectErrors) > 0 {
-		help = append([][2]string{{"e", "오류 보기"}}, help...)
+		help = append([][2]string{{"e", "errors"}}, help...)
 	}
 
 	lines := []string{
@@ -387,26 +387,26 @@ func (m Model) resourceListView() string {
 	}
 	if m.hasResourceKindFilter() {
 		kind := m.resourceKindFilterLabel()
-		kindLine := m.theme.Faint.Render("종류: ") + m.theme.Title.Render(kind) +
-			m.theme.Faint.Render("  t: 변경")
+		kindLine := m.theme.Faint.Render("Kind: ") + m.theme.Title.Render(kind) +
+			m.theme.Faint.Render("  t: change")
 		if m.resourceKindFilter != "" && m.filterQuery == "" {
 			kindLine += "  " + m.theme.Faint.Render(
-				fmt.Sprintf("결과 %d/%d개", m.resourceList.filteredCount(), m.resourceList.totalCount()))
+				fmt.Sprintf("%d/%d shown", m.resourceList.filteredCount(), m.resourceList.totalCount()))
 		}
 		lines = append(lines, kindLine)
-		help = append([][2]string{{"t", "종류 필터"}}, help...)
+		help = append([][2]string{{"t", "Filter by kind"}}, help...)
 	}
 
 	if m.filtering {
 		filterLine = m.filterInput.View()
 		help = [][2]string{
-			{"입력", "실시간 검색"},
-			{"enter", "적용"},
-			{"esc", "취소"},
+			{"type", "live search"},
+			{"enter", "apply"},
+			{"esc", "cancel"},
 		}
 	} else if m.filterQuery != "" {
 		filterLine = fmt.Sprintf("/ %s  %s", m.filterQuery,
-			m.theme.Faint.Render(fmt.Sprintf("결과 %d/%d개",
+			m.theme.Faint.Render(fmt.Sprintf("%d/%d shown",
 				m.resourceList.filteredCount(), m.resourceList.totalCount())))
 	}
 	lines = append(lines, filterLine)
@@ -420,7 +420,7 @@ func (m Model) hasResourceKindFilter() bool {
 
 func (m Model) resourceKindFilterLabel() string {
 	if m.resourceKindFilter == "" {
-		return "전체"
+		return "All"
 	}
 	for _, kind := range m.resourceKinds {
 		if kind.ID == m.resourceKindFilter {
@@ -536,9 +536,9 @@ func (m Model) centered(s string) string {
 // 두 경우의 제목과 하단 안내를 다르게 보여준다(돌아갈 프로필이 있으면 esc가 종료가 아니라
 // 뒤로다).
 func (m Model) configPathView() string {
-	title := "AWS 설정 파일 경로 지정"
+	title := "Set AWS config paths"
 	if len(m.profiles) == 0 {
-		title = "AWS 설정을 찾을 수 없습니다"
+		title = "AWS config not found"
 	}
 
 	lines := []string{m.theme.Title.Render(title), ""}
@@ -548,23 +548,23 @@ func (m Model) configPathView() string {
 	}
 
 	if m.locations.Config.Path != "" {
-		lines = append(lines, m.theme.Faint.Render("현재 위치: "+m.locations.Config.Path), "")
+		lines = append(lines, m.theme.Faint.Render("Current: "+m.locations.Config.Path), "")
 	}
 
 	// 커서가 있는 입력 칸의 라벨에 표시를 붙여 어디를 타이핑 중인지 보이게 한다.
 	lines = append(lines,
-		m.pathLabel("config 경로", 0),
+		m.pathLabel("config path", 0),
 		m.configInput.View(),
 		"",
-		m.pathLabel("credentials 경로", 1),
+		m.pathLabel("credentials path", 1),
 		m.credsInput.View(),
 		"",
 	)
 
 	if len(m.profiles) > 0 {
-		lines = append(lines, m.theme.Faint.Render("tab: 칸 이동   enter: 적용   esc: 뒤로"))
+		lines = append(lines, m.theme.Faint.Render("tab: next field   enter: apply   esc: back"))
 	} else {
-		lines = append(lines, m.theme.Faint.Render("tab: 칸 이동   enter: 다시 시도   esc/q: 종료"))
+		lines = append(lines, m.theme.Faint.Render("tab: next field   enter: retry   esc/q: quit"))
 	}
 
 	return m.centered(strings.Join(lines, "\n"))
@@ -580,8 +580,8 @@ func (m Model) pathLabel(text string, focus int) string {
 }
 
 func (m Model) errorView() string {
-	body := m.theme.Error.Render("오류") + "\n\n" + m.errText +
-		"\n\n" + m.theme.Faint.Render("esc: 뒤로  q: 종료")
+	body := m.theme.Error.Render("Error") + "\n\n" + m.errText +
+		"\n\n" + m.theme.Faint.Render("esc: back  q: quit")
 
 	return m.centered(body)
 }
@@ -624,8 +624,8 @@ func (m Model) shouldShowRegion() bool {
 // 이름으로 보이면 사용자가 매 화면에서 도움말을 다시 읽어야 한다.
 func (m Model) helpBar(pairs ...[2]string) string {
 	pairs = append(pairs,
-		[2]string{"esc/←", "뒤로"},
-		[2]string{"q", "종료"},
+		[2]string{"esc/←", "back"},
+		[2]string{"q", "quit"},
 	)
 
 	parts := make([]string, 0, len(pairs))
@@ -666,19 +666,19 @@ func (m Model) breadcrumb() string {
 	}
 
 	depth := m.breadcrumbDepth()
-	parts := []string{label("프로필", profile)}
+	parts := []string{label("Profile", profile)}
 
 	if depth >= breadcrumbRegion {
-		parts = append(parts, label("리전", region))
+		parts = append(parts, label("Region", region))
 	}
 	if depth >= breadcrumbGroup {
-		parts = append(parts, label("리소스", orDashUI(m.breadcrumbGroups())))
+		parts = append(parts, label("Resource", orDashUI(m.breadcrumbGroups())))
 	}
 
 	// 세부 항목은 고른 것이 있을 때만 붙인다. 항상 "-"로 자리를 차지하면 좁은 터미널에서
 	// 프로필·리전이 먼저 밀린다.
 	if items := m.breadcrumbItems(); depth >= breadcrumbItem && items != "" {
-		parts = append(parts, label("세부 항목", items))
+		parts = append(parts, label("Items", items))
 	}
 
 	return strings.Join(parts, m.theme.Faint.Render("   "))
@@ -772,10 +772,10 @@ func (m Model) currentResourceGroup() ResourceGroup {
 func (m Model) resourceItemTitle() string {
 	group := m.currentResourceGroup()
 	if group.Label == "" {
-		return "세부 항목 선택"
+		return "Select item"
 	}
 
-	return group.Label + " 세부 항목"
+	return group.Label + " items"
 }
 
 // 상세 화면 렌더링은 detail.go에 있다.

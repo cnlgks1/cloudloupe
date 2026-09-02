@@ -72,11 +72,11 @@ func TestVPCCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantFields := []model.Field{
-		{Key: "IPv4 CIDR", Value: "10.0.0.0/16"},
-		{Key: "기본 VPC", Value: "예"},
-		{Key: "인스턴스 테넌시", Value: "default"},
-		{Key: "DHCP 옵션 세트", Value: "dopt-0123"},
-		{Key: "소유자 ID", Value: "123456789012"},
+		{Key: "CidrBlock", Value: "10.0.0.0/16"},
+		{Key: "IsDefault", Value: "true"},
+		{Key: "InstanceTenancy", Value: "default"},
+		{Key: "DhcpOptionsId", Value: "dopt-0123"},
+		{Key: "OwnerId", Value: "123456789012"},
 	}
 	if !slices.Equal(got.Fields, wantFields) {
 		t.Errorf("Fields = %+v, want %+v", got.Fields, wantFields)

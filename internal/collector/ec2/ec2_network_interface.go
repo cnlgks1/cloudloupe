@@ -68,12 +68,12 @@ func networkInterfaceToResource(scope collect.Scope, eni ec2types.NetworkInterfa
 	// ENI에는 생성 시각이 없다. CreatedAt은 비워 둔다.
 
 	r.Fields = []model.Field{
-		{Key: "종류", Value: string(eni.InterfaceType)},
-		{Key: "사설 IP", Value: orDash(aws.ToString(eni.PrivateIpAddress))},
-		{Key: "VPC", Value: orDash(aws.ToString(eni.VpcId))},
-		{Key: "서브넷", Value: orDash(aws.ToString(eni.SubnetId))},
-		{Key: "가용 영역", Value: orDash(aws.ToString(eni.AvailabilityZone))},
-		{Key: "설명", Value: orDash(aws.ToString(eni.Description))},
+		{Key: "InterfaceType", Value: string(eni.InterfaceType)},
+		{Key: "PrivateIpAddress", Value: orDash(aws.ToString(eni.PrivateIpAddress))},
+		{Key: "VpcId", Value: orDash(aws.ToString(eni.VpcId))},
+		{Key: "SubnetId", Value: orDash(aws.ToString(eni.SubnetId))},
+		{Key: "AvailabilityZone", Value: orDash(aws.ToString(eni.AvailabilityZone))},
+		{Key: "Description", Value: orDash(aws.ToString(eni.Description))},
 	}
 
 	r.Related = networkInterfaceRelations(eni)

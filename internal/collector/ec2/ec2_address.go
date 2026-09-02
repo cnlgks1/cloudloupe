@@ -61,10 +61,11 @@ func addressToResource(scope collect.Scope, addr ec2types.Address) model.Resourc
 		name = publicIP
 	}
 
-	// 연결되지 않은 EIP는 요금이 부과되므로, 상태로 연결 여부를 드러낸다.
-	status := "연결 안 됨"
+	// 연결되지 않은 EIP는 요금이 부과되므로, 상태로 연결 여부를 드러낸다. EIP에는 AWS가 주는
+	// 상태 필드가 없어 이 값만 우리가 만든다. AWS 용어를 따라 associated/unassociated로 쓴다.
+	status := "unassociated"
 	if aws.ToString(addr.AssociationId) != "" || aws.ToString(addr.InstanceId) != "" {
-		status = "연결됨"
+		status = "associated"
 	}
 
 	r := model.Resource{
@@ -79,10 +80,10 @@ func addressToResource(scope collect.Scope, addr ec2types.Address) model.Resourc
 	}
 
 	r.Fields = []model.Field{
-		{Key: "공인 IP", Value: orDash(publicIP)},
-		{Key: "사설 IP", Value: orDash(aws.ToString(addr.PrivateIpAddress))},
-		{Key: "도메인", Value: string(addr.Domain)},
-		{Key: "연결 ID", Value: orDash(aws.ToString(addr.AssociationId))},
+		{Key: "PublicIp", Value: orDash(publicIP)},
+		{Key: "PrivateIpAddress", Value: orDash(aws.ToString(addr.PrivateIpAddress))},
+		{Key: "Domain", Value: string(addr.Domain)},
+		{Key: "AssociationId", Value: orDash(aws.ToString(addr.AssociationId))},
 	}
 
 	r.Related = addressRelations(addr)

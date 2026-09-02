@@ -95,15 +95,15 @@ func TestELBv2LoadBalancerCollectorConvertsFields(t *testing.T) {
 		t.Errorf("CreatedAt = %v, want %v", r.CreatedAt, created)
 	}
 
-	if got := r.FieldValue("종류"); got != "application" {
+	if got := r.FieldValue("Type"); got != "application" {
 		t.Errorf("종류 = %q, want application", got)
 	}
 
-	if got := r.FieldValue("스킴"); got != "internet-facing" {
+	if got := r.FieldValue("Scheme"); got != "internet-facing" {
 		t.Errorf("스킴 = %q, want internet-facing", got)
 	}
 
-	if got := r.FieldValue("가용 영역"); got != "2" {
+	if got := r.FieldValue("AvailabilityZones"); got != "2" {
 		t.Errorf("가용 영역 = %q, want 2", got)
 	}
 }

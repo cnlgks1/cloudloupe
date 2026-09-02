@@ -144,12 +144,12 @@ func resourceColumns(
 	mixedTypes := multipleResourceTypes(resources, selectedTypes)
 
 	if mixedTypes {
-		columns = append(columns, resourceColumn{title: "종류", value: func(resource model.Resource) string {
+		columns = append(columns, resourceColumn{title: "Kind", value: func(resource model.Resource) string {
 			return resourceTypeLabel(groups, resource.Type)
 		}})
 	}
 
-	columns = append(columns, resourceColumn{title: "이름", value: func(resource model.Resource) string {
+	columns = append(columns, resourceColumn{title: "Name", value: func(resource model.Resource) string {
 		return resource.DisplayName()
 	}})
 
@@ -160,20 +160,20 @@ func resourceColumns(
 	}
 
 	if showRegion {
-		columns = append(columns, resourceColumn{title: "리전", value: func(resource model.Resource) string {
+		columns = append(columns, resourceColumn{title: "Region", value: func(resource model.Resource) string {
 			return resource.Region
 		}})
 	}
 
 	if hasResourceStatus(resources) {
-		columns = append(columns, resourceColumn{title: "상태", value: func(resource model.Resource) string {
+		columns = append(columns, resourceColumn{title: "Status", value: func(resource model.Resource) string {
 			return resource.Status
 		}})
 	}
 
 	if mixedTypes {
 		if hasSummaryColumns(groups, selectedTypes) {
-			columns = append(columns, resourceColumn{title: "주요 정보", value: func(resource model.Resource) string {
+			columns = append(columns, resourceColumn{title: "Summary", value: func(resource model.Resource) string {
 				return resourceSummary(groups, resource)
 			}})
 		}
@@ -400,13 +400,24 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 	titleWidth := lipgloss.Width(title) + 2
 
 	switch title {
-	case "포트", "타깃 수", "IOPS", "TTL", "규칙 수":
+	case "Port", "Targets", "Iops", "TTL", "Rules", "Size", "Associations", "Routes",
+		"InboundRules", "OutboundRules", "SubnetIds", "RouteTableIds", "SecurityGroups",
+		"PropagatingVgws", "AvailableIpAddressCount", "Count", "Items":
 		return max(6, titleWidth), max(10, titleWidth), false
-	case "암호화":
+	case "Encrypted", "Main", "IsDefault", "MultiRegion", "Enabled", "Ipv6Native",
+		"DefaultForAz", "PrivateDnsEnabled", "RequesterManaged", "MapPublicIpOnLaunch",
+		"AssignIpv6AddressOnCreation":
 		return max(8, titleWidth), max(12, titleWidth), false
-	case "상태", "리전", "프로필", "AWS 오류 코드", "리소스 종류", "프로토콜", "스킴", "종류", "타깃 종류", "타입":
+	case "Status", "Region", "Profile", "Error code", "Resource", "Kind",
+		"Protocol", "Scheme", "TargetType", "VolumeType", "InstanceType", "InterfaceType",
+		"VpcEndpointType", "Type", "AvailabilityZone", "AvailabilityZoneId", "ConnectivityType",
+		"AvailabilityMode", "IpAddressType", "KeyManager", "KeyUsage", "KeySpec", "Origin",
+		"AttachmentState", "InstanceTenancy", "Domain":
 		return max(10, titleWidth), max(22, titleWidth), false
-	case "이름", "ID", "DNS 이름", "값", "별칭 대상", "설명", "호스팅 영역", "주요 정보":
+	case "Name", "ID", "Summary", "DNSName", "ResourceRecords", "AliasTarget",
+		"Description", "HostedZoneName", "ServiceName", "Aliases", "ARN", "Path",
+		"PermissionsBoundary", "FailureMessage", "FailureReason", "CreationDate",
+		"DeletionDate", "RoleLastUsed", "DefaultActions", "SslPolicy":
 		return max(12, titleWidth), max(48, titleWidth), true
 	default:
 		return max(10, titleWidth), max(30, titleWidth), false
@@ -469,7 +480,7 @@ func layoutColumns(titles []string, width int) []table.Column {
 
 // buildProfileTable은 프로필 선택 테이블을 만든다. 열: 프로필 / 종류 / 리전.
 func buildProfileTable(theme Theme, profiles []awsclient.Profile, width, height int) table.Model {
-	titles := []string{"프로필", "종류", "리전"}
+	titles := []string{"Profile", "Kind", "Region"}
 	columns := layoutColumns(titles, width)
 
 	rows := make([]table.Row, 0, len(profiles))
@@ -488,7 +499,7 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 		set[c] = true
 	}
 
-	titles := []string{"", "리전", "이름"}
+	titles := []string{"", "Region", "Name"}
 	columns := layoutColumns(titles, width)
 	// 첫 열(선택 표시)은 좁게 고정한다.
 	if len(columns) > 0 {
@@ -513,7 +524,7 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 // 포함 항목을 한 줄에 나열하지 않고 개수만 보여준다. 세부 항목은 다음 화면에서 한 행씩
 // 보여주므로, 지원 리소스가 늘어나도 이 화면의 폭이 부족해지지 않는다.
 func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width, height int) table.Model {
-	titles := []string{"", "리소스", "세부 항목"}
+	titles := []string{"", "Resource", "Items"}
 	columns := layoutColumns(titles, width)
 	if len(columns) > 0 {
 		columns[0].Width = 3
@@ -526,7 +537,7 @@ func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width,
 			mark = theme.Glyphs.Healthy
 		}
 
-		rows = append(rows, table.Row{mark, group.Label, strconv.Itoa(len(group.Types)) + "개"})
+		rows = append(rows, table.Row{mark, group.Label, strconv.Itoa(len(group.Types))})
 	}
 
 	return newDataTable(theme, columns, rows, height)
@@ -543,7 +554,7 @@ func buildResourceItemTable(
 	chosen []string,
 	width, height int,
 ) table.Model {
-	titles := []string{"", "항목", "타입 ID"}
+	titles := []string{"", "Item", "Type ID"}
 	columns := layoutColumns(titles, width)
 	if len(columns) > 0 {
 		columns[0].Width = 3
@@ -574,7 +585,7 @@ func buildCollectErrorTable(
 	groups []ResourceGroup,
 	width, height int,
 ) table.Model {
-	titles := []string{"리소스 종류", "프로필", "리전", "AWS 오류 코드", "설명"}
+	titles := []string{"Resource", "Profile", "Region", "Error code", "Explanation"}
 	preferred := make([]int, len(titles))
 	for i, title := range titles {
 		preferred[i] = lipgloss.Width(title) + 2
@@ -600,7 +611,7 @@ func buildCollectErrorTable(
 
 // buildResourceKindTable은 수집 결과 안의 세부 종류를 단일 선택 표로 만든다.
 func buildResourceKindTable(theme Theme, kinds []resourceKind, width, height int) table.Model {
-	titles := []string{"종류", "개수"}
+	titles := []string{"Kind", "Count"}
 	columns := layoutColumns(titles, width)
 
 	total := 0
@@ -608,7 +619,7 @@ func buildResourceKindTable(theme Theme, kinds []resourceKind, width, height int
 		total += kind.Count
 	}
 	rows := make([]table.Row, 0, len(kinds)+1)
-	rows = append(rows, table.Row{"전체", strconv.Itoa(total)})
+	rows = append(rows, table.Row{"All", strconv.Itoa(total)})
 	for _, kind := range kinds {
 		rows = append(rows, table.Row{kind.Label, strconv.Itoa(kind.Count)})
 	}

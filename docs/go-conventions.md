@@ -129,8 +129,8 @@ type instancesAPI interface {
 
 ## 13. 언어
 
-주석과 문서는 한국어로 씁니다. Go doc 주석, README, Makefile 도움말, 스크립트 메시지, CLI
-출력과 에러 메시지, 커밋 메시지 본문이 해당합니다.
+주석과 문서는 한국어로 씁니다. Go doc 주석, README, Makefile 도움말, 스크립트 메시지,
+커밋 메시지 본문, 그리고 진단·설명 성격의 CLI 메시지가 해당합니다.
 
 다음은 영어로 유지합니다. 바꾸면 깨지거나 관례를 벗어납니다.
 
@@ -138,6 +138,25 @@ type instancesAPI interface {
 - 출력 계약 — 리소스 타입 ID(`ec2:instance`), 관계 이름, JSON 키, CSV 헤더
 - `Test` 접두사 테스트 함수명, Conventional Commit 접두사(`feat:`, `fix:`)
 - AWS API 이름과 에러 코드(`AccessDeniedException`), CLI 플래그 이름
+- **TUI 화면에 보이는 것 전부** — 리소스 필드 이름과 값, 그룹·타입 표시명, 화면 제목,
+  하단 도움말, 경로 헤더, 리전 이름
+
+TUI를 영어로 두는 이유는 이 도구의 목적이 AWS 콘솔·CLI·문서와 대조하며 조사하는 것이기
+때문입니다. 화면에 `인스턴스 타입`이라고 쓰면 사용자가 AWS 문서에서 `InstanceType`을 찾을 때
+번역을 한 번 거쳐야 합니다. 게다가 `Field.Key`는 그대로 리포트의 JSON 키·CSV 헤더가 되므로,
+한국어 라벨은 위의 "출력 계약은 영어" 규칙과도 충돌합니다.
+
+리소스 데이터는 **AWS가 준 것을 그대로** 보여줍니다.
+
+- 필드 이름: SDK 구조체 필드 이름 (`InstanceType`, `PrivateIpAddress`, `VpcId`)
+- 문자열·열거형: API 값 그대로 (`available`, `CUSTOMER`, `gp3`)
+- 불리언: `true` / `false`
+- 시각: RFC 3339 (`2025-11-14T03:22:05Z`)
+- 목록: 쉼표로 연결, 값이 없으면 `-`
+- 개수처럼 API에 이름이 없는 파생 값만 같은 표기로 만든다 (`InboundRules`, `Targets`)
+
+가공하지 않는 이유는 화면에서 본 값을 `aws` CLI 출력에 그대로 붙여 대조할 수 있어야 하기
+때문입니다. 우리가 만든 값과 AWS가 준 값이 섞이면 그 대조가 불가능해집니다.
 
 Go doc 주석은 한국어에서도 식별자 이름으로 시작하고 마침표로 끝냅니다. `revive`의 `exported`와
 `godot`이 검사합니다.

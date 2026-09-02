@@ -74,7 +74,7 @@ func TestResourceTableRendersRows(t *testing.T) {
 	}
 
 	// 공통 열 제목이 보여야 한다.
-	if !strings.Contains(v, "이름") || !strings.Contains(v, "상태") {
+	if !strings.Contains(v, "Name") || !strings.Contains(v, "Status") {
 		t.Errorf("테이블 헤더(이름/상태)가 보여야 한다:\n%s", v)
 	}
 }
@@ -113,7 +113,7 @@ func TestBreadcrumbShowsPath(t *testing.T) {
 	m = key(m, "enter") // 프로필 선택 → 신원 → 리전
 
 	v := m.View()
-	if !strings.Contains(v, "프로필") || !strings.Contains(v, "리전") {
+	if !strings.Contains(v, "Profile") || !strings.Contains(v, "Region") {
 		t.Errorf("상단 경로 헤더(프로필/리전)가 보여야 한다:\n%s", v)
 	}
 

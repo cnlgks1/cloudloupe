@@ -22,8 +22,8 @@ func TestDetailAlignsValuesByDisplayWidth(t *testing.T) {
 		Region: "ap-northeast-2",
 		Fields: []model.Field{
 			{Key: "VPC", Value: "vpc-0212196b30296f40a"},
-			{Key: "연결 상태", Value: "available"},
-			{Key: "소유자 ID", Value: "123456789012"},
+			{Key: "AttachmentState", Value: "available"},
+			{Key: "OwnerId", Value: "123456789012"},
 		},
 	}
 
@@ -55,9 +55,9 @@ func TestDetailKeepsFieldOrder(t *testing.T) {
 		Type: model.TypeEC2NATGateway,
 		ID:   "nat-1",
 		Fields: []model.Field{
-			{Key: "연결 유형", Value: "public"},
+			{Key: "ConnectivityType", Value: "public"},
 			{Key: "VPC", Value: "vpc-1"},
-			{Key: "서브넷", Value: "subnet-1"},
+			{Key: "SubnetId", Value: "subnet-1"},
 		},
 		Related: []model.Ref{
 			{Type: model.TypeEC2VPC, ID: "vpc-1", Relation: model.RelationAssociatedWith},
@@ -68,9 +68,9 @@ func TestDetailKeepsFieldOrder(t *testing.T) {
 	view := renderDetail(New(true), res)
 
 	if got := []int{
-		strings.Index(view, "연결 유형"),
+		strings.Index(view, "ConnectivityType"),
 		strings.Index(view, "VPC"),
-		strings.Index(view, "서브넷"),
+		strings.Index(view, "SubnetId"),
 	}; got[0] > got[1] || got[1] > got[2] {
 		t.Errorf("필드 순서가 수집기 순서와 다르다: %v\n%s", got, view)
 	}
@@ -97,7 +97,7 @@ func TestDetailShowsIdentityAndTags(t *testing.T) {
 		AccountID: "123456789012",
 		Status:    "available",
 		CreatedAt: &created,
-		Fields:    []model.Field{{Key: "연결 유형", Value: "public"}},
+		Fields:    []model.Field{{Key: "ConnectivityType", Value: "public"}},
 		Tags: []model.Field{
 			{Key: "Name", Value: "web-nat-a"},
 			{Key: "env", Value: "prod"},
@@ -111,8 +111,8 @@ func TestDetailShowsIdentityAndTags(t *testing.T) {
 		"prod",
 		res.ARN,
 		"available",
-		"2025-11-14 03:22:05 UTC",
-		"태그 (2)",
+		"2025-11-14T03:22:05Z",
+		"Tags (2)",
 		"env",
 		"prod",
 	} {
@@ -136,7 +136,7 @@ func TestDetailOmitsEmptySections(t *testing.T) {
 
 	view := renderDetail(New(true), res)
 
-	for _, unwanted := range []string{"ARN", "상태", "생성", "태그", "관계"} {
+	for _, unwanted := range []string{"ARN", "Status", "Created", "Tags", "Relations"} {
 		if strings.Contains(view, unwanted) {
 			t.Errorf("값이 없는 %q 항목이 표시된다:\n%s", unwanted, view)
 		}

@@ -50,6 +50,7 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeWAFv2WebACL,
 		model.TypeIAMRole,
 		model.TypeKMSKey,
+		model.TypeS3Bucket,
 	}
 
 	got := make([]string, 0, len(definitions))
@@ -78,7 +79,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "network", "elbv2", "route53", "wafv2", "iam", "kms"}
+	wantIDs := []string{"ec2", "vpc", "network", "elbv2", "route53", "wafv2", "iam", "kms", "s3"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)
@@ -133,10 +134,10 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	}
 
 	if got, want := groups[4].Types[0].Columns,
-		[]string{"타입", "세트 식별자", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
+		[]string{"Type", "SetIdentifier", "HostedZoneName", "TTL", "ResourceRecords", "AliasTarget"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
-	if got, want := groups[5].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
+	if got, want := groups[5].Types[0].Columns, []string{"Rules"}; !slices.Equal(got, want) {
 		t.Errorf("WAF 열 = %v, want %v", got, want)
 	}
 
@@ -146,10 +147,10 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("두 번째 Groups() 실패: %v", err)
 	}
-	if fresh[0].Types[0].Columns[0] != "인스턴스 타입" {
+	if fresh[0].Types[0].Columns[0] != "InstanceType" {
 		t.Errorf("Columns 방어적 복사 실패: %v", fresh[0].Types[0].Columns)
 	}
-	if fresh[0].Types[0].SummaryColumns[0] != "인스턴스 타입" {
+	if fresh[0].Types[0].SummaryColumns[0] != "InstanceType" {
 		t.Errorf("SummaryColumns 방어적 복사 실패: %v", fresh[0].Types[0].SummaryColumns)
 	}
 }
@@ -166,11 +167,11 @@ func TestDefinitionsReturnsCopies(t *testing.T) {
 	if second[0].Type != model.TypeEC2Instance {
 		t.Errorf("Type = %q, want %q", second[0].Type, model.TypeEC2Instance)
 	}
-	if second[0].Columns[0] != "인스턴스 타입" {
-		t.Errorf("Columns[0] = %q, want %q", second[0].Columns[0], "인스턴스 타입")
+	if second[0].Columns[0] != "InstanceType" {
+		t.Errorf("Columns[0] = %q, want %q", second[0].Columns[0], "InstanceType")
 	}
-	if second[0].SummaryColumns[0] != "인스턴스 타입" {
-		t.Errorf("SummaryColumns[0] = %q, want %q", second[0].SummaryColumns[0], "인스턴스 타입")
+	if second[0].SummaryColumns[0] != "InstanceType" {
+		t.Errorf("SummaryColumns[0] = %q, want %q", second[0].SummaryColumns[0], "InstanceType")
 	}
 }
 

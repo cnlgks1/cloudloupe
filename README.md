@@ -13,7 +13,7 @@
 AWS 인프라를 조회하는 터미널 UI입니다. `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의
 리소스를 수집하고, 리소스 필드 상세와 수집기가 기록한 관계 메타데이터를 보여줍니다.
 
-> **개발 중.** 8개 그룹 18개 타입 수집과 TUI 조회는 동작합니다.
+> **개발 중.** 9개 그룹 19개 타입 수집과 TUI 조회는 동작합니다.
 > 그래프 UI, 미사용 탐지, 리포트는 [로드맵](#로드맵) 3~5단계입니다.
 
 ## 빠른 시작
@@ -62,6 +62,7 @@ TUI에서는 그룹을 고른 뒤 세부 항목 화면에서 조회 대상을 �
 | WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 | IAM | `iam:role` | `iam.ListRoles` |
 | KMS | `kms:key` | `kms.ListKeys`, `DescribeKey`, `ListAliases` |
+| S3 | `s3:bucket` | `s3.ListBuckets` (리전 필터) |
 
 `elbv2`는 SDK 패키지 `elasticloadbalancingv2`입니다. Route 53과 IAM은 글로벌 서비스라 리전
 선택과 무관하게 한 번만 조회하고, 결과의 리전은 `global`로 표시됩니다.
@@ -71,7 +72,14 @@ IAM 역할의 태그와 마지막 사용 시각은 `ListRoles` 응답에 없어 
 부르며, 동시 호출 수에 상한을 두어 API 스로틀링을 피합니다. 키 태그는 같은 이유로 아직
 수집하지 않습니다.
 
+S3 버킷은 이름이 전역이지만 버킷 자체는 리전에 속하므로 리전별로 조회합니다. 버킷의 암호화,
+퍼블릭 액세스 차단, 버전 관리, 태그는 버킷마다 별도 API가 필요해 아직 수집하지 않습니다.
+
 타입 ID는 관계 식별과 수집기 선택에 쓰이는 내부 계약입니다.
+
+화면에 보이는 필드 이름과 값은 AWS SDK 응답을 그대로 씁니다. 필드 이름은 SDK 구조체 필드
+이름(`InstanceType`, `PrivateIpAddress`), 값은 API가 준 값(`available`, `gp3`, `true`)이고
+시각은 RFC 3339입니다. `aws` CLI 출력이나 AWS 문서와 그대로 대조할 수 있게 하려는 것입니다.
 
 ## 사용법
 
@@ -168,7 +176,7 @@ macOS, Linux, Windows × amd64, arm64 6종을 `CGO_ENABLED=0` 정적 바이너�
 | 단계 | 범위 | 상태 |
 | --- | --- | --- |
 | 1 | 프로필·신원·리전 선택과 EC2 인스턴스 조회 TUI | 완료 |
-| 2 | EBS, ENI, EIP, VPC, 서브넷, 보안 그룹, 라우팅 테이블, 인터넷·NAT 게이트웨이, VPC 엔드포인트, ALB/NLB, 타깃 그룹, Route 53, WAF, IAM 역할, KMS 키 | 진행 중 |
+| 2 | EBS, ENI, EIP, VPC, 서브넷, 보안 그룹, 라우팅 테이블, 인터넷·NAT 게이트웨이, VPC 엔드포인트, ALB/NLB, 타깃 그룹, Route 53, WAF, IAM 역할, KMS 키, S3 버킷 | 진행 중 |
 | 3 | 관계 그래프 코어와 TUI 그래프 탐색 연결 | 진행 중 |
 | 4 | 근거·신뢰도를 갖춘 미사용 후보 탐지 (CloudWatch, CloudTrail) | 예정 |
 | 5 | JSON / CSV / Markdown 리포트 | 예정 |

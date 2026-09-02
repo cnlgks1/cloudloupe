@@ -3,6 +3,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -30,12 +31,12 @@ func renderDetail(theme Theme, res model.Resource) string {
 		theme.Faint.Render(detailContext(res)),
 	}
 
-	lines = appendDetailSection(lines, theme, "기본", detailBasics(res))
-	lines = appendDetailSection(lines, theme, "속성", res.Fields)
-	lines = appendDetailSection(lines, theme, "태그", res.Tags)
+	lines = appendDetailSection(lines, theme, "Basics", detailBasics(res))
+	lines = appendDetailSection(lines, theme, "Attributes", res.Fields)
+	lines = appendDetailSection(lines, theme, "Tags", res.Tags)
 
 	if len(res.Related) > 0 {
-		lines = append(lines, "", theme.Title.Render(detailSectionTitle("관계", len(res.Related))))
+		lines = append(lines, "", theme.Title.Render(detailSectionTitle("Relations", len(res.Related))))
 
 		for _, ref := range res.Related {
 			via := ""
@@ -70,19 +71,20 @@ func detailBasics(res model.Resource) []model.Field {
 	fields := []model.Field{{Key: "ID", Value: res.ID}}
 
 	if res.Namespace != "" {
-		fields = append(fields, model.Field{Key: "상위 범위", Value: res.Namespace})
+		fields = append(fields, model.Field{Key: "Namespace", Value: res.Namespace})
 	}
 	if res.ARN != "" {
 		fields = append(fields, model.Field{Key: "ARN", Value: res.ARN})
 	}
 	if res.Status != "" {
-		fields = append(fields, model.Field{Key: "상태", Value: res.Status})
+		fields = append(fields, model.Field{Key: "Status", Value: res.Status})
 	}
 	if res.CreatedAt != nil {
-		// 도메인 모델은 UTC로 들고, 표시 직전에만 포맷한다.
+		// 도메인 모델은 UTC로 들고, 표시 직전에만 포맷한다. 수집기가 만드는 시각 필드와 같은
+		// RFC 3339를 쓰는 이유는 화면의 모든 값이 aws CLI 출력과 대조 가능해야 하기 때문이다.
 		fields = append(fields, model.Field{
-			Key:   "생성",
-			Value: res.CreatedAt.UTC().Format("2006-01-02 15:04:05") + " UTC",
+			Key:   "Created",
+			Value: res.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -105,7 +107,7 @@ func appendDetailSection(lines []string, theme Theme, title string, fields []mod
 // 다르게 다뤄야 한다.
 func detailSectionTitle(title string, count int) string {
 	switch title {
-	case "태그", "관계":
+	case "Tags", "Relations":
 		return title + " (" + strconv.Itoa(count) + ")"
 	default:
 		return title
@@ -122,21 +124,21 @@ func renderCollectErrorDetail(
 	collectErr model.CollectError,
 ) string {
 	fields := []model.Field{
-		{Key: "리소스 종류", Value: resourceTypeLabel(groups, collectErr.Type)},
-		{Key: "타입 ID", Value: collectErr.Type},
-		{Key: "프로필", Value: orDashUI(collectErr.Profile)},
-		{Key: "리전", Value: orDashUI(collectErr.Region)},
-		{Key: "AWS 오류 코드", Value: orDashUI(collectErr.Code)},
+		{Key: "Resource", Value: resourceTypeLabel(groups, collectErr.Type)},
+		{Key: "Type ID", Value: collectErr.Type},
+		{Key: "Profile", Value: orDashUI(collectErr.Profile)},
+		{Key: "Region", Value: orDashUI(collectErr.Region)},
+		{Key: "Error code", Value: orDashUI(collectErr.Code)},
 	}
 
-	lines := []string{theme.Error.Render("수집 오류"), ""}
+	lines := []string{theme.Error.Render("Collect errors"), ""}
 	lines = append(lines, alignedFieldLines(fields)...)
 	lines = append(lines,
 		"",
-		theme.Title.Render("설명"),
+		theme.Title.Render("Explanation"),
 		orDashUI(collectErr.Explanation),
 		"",
-		theme.Title.Render("원본 오류"),
+		theme.Title.Render("Raw error"),
 		collectErr.Message,
 	)
 

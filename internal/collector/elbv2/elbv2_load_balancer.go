@@ -84,11 +84,11 @@ func loadBalancerToResource(scope collect.Scope, lb elbv2types.LoadBalancer) mod
 	}
 
 	r.Fields = []model.Field{
-		{Key: "종류", Value: string(lb.Type)},
-		{Key: "스킴", Value: string(lb.Scheme)},
-		{Key: "DNS 이름", Value: displayString(dnsName)},
-		{Key: "VPC", Value: displayString(aws.ToString(lb.VpcId))},
-		{Key: "가용 영역", Value: strconv.Itoa(len(lb.AvailabilityZones))},
+		{Key: "Type", Value: string(lb.Type)},
+		{Key: "Scheme", Value: string(lb.Scheme)},
+		{Key: "DNSName", Value: displayString(dnsName)},
+		{Key: "VpcId", Value: displayString(aws.ToString(lb.VpcId))},
+		{Key: "AvailabilityZones", Value: strconv.Itoa(len(lb.AvailabilityZones))},
 	}
 
 	// 관계(로드밸런서 → 타깃 그룹)는 리스너를 따라가야 알 수 있다. 타깃 그룹 수집기가

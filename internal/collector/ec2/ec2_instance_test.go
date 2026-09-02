@@ -114,7 +114,7 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 		t.Errorf("태그 정렬이 안 됐다: %+v", r.Tags)
 	}
 
-	if got := r.FieldValue("인스턴스 타입"); got != "t3.medium" {
+	if got := r.FieldValue("InstanceType"); got != "t3.medium" {
 		t.Errorf("인스턴스 타입 = %q", got)
 	}
 }

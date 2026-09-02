@@ -27,10 +27,10 @@ func wafv2Definitions(cfg aws.Config) []Definition {
 	return []Definition{
 		{
 			Type:           model.TypeWAFv2WebACL,
-			Label:          "Web ACL",
+			Label:          "Web ACLs",
 			Scope:          Regional,
-			Columns:        []string{"규칙 수"},
-			SummaryColumns: []string{"규칙 수"},
+			Columns:        []string{"Rules"},
+			SummaryColumns: []string{"Rules"},
 			newCollector: func() collect.Collector {
 				return wafv2collector.NewWebACL(clientFor())
 			},

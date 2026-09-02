@@ -93,16 +93,16 @@ func TestEC2VolumeCollectorConvertsFields(t *testing.T) {
 		t.Errorf("CreatedAt = %v, want %v", r.CreatedAt, created)
 	}
 
-	if got := r.FieldValue("타입"); got != "gp3" {
+	if got := r.FieldValue("VolumeType"); got != "gp3" {
 		t.Errorf("타입 = %q, want gp3", got)
 	}
 
-	if got := r.FieldValue("크기(GiB)"); got != "100" {
+	if got := r.FieldValue("Size"); got != "100" {
 		t.Errorf("크기 = %q, want 100", got)
 	}
 
-	if got := r.FieldValue("암호화"); got != "예" {
-		t.Errorf("암호화 = %q, want 예", got)
+	if got := r.FieldValue("Encrypted"); got != "true" {
+		t.Errorf("Encrypted = %q, want true", got)
 	}
 }
 

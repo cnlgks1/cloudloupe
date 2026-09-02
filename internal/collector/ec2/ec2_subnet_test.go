@@ -76,16 +76,16 @@ func TestSubnetCollectorConvertsFieldsAndRelation(t *testing.T) {
 		t.Errorf("ARN 또는 상태 = %+v", got)
 	}
 	wantFields := []model.Field{
-		{Key: "IPv4 CIDR", Value: "10.0.1.0/24"},
-		{Key: "가용 영역", Value: "ap-northeast-2a"},
-		{Key: "가용 영역 ID", Value: "apne2-az1"},
-		{Key: "사용 가능한 IPv4 주소", Value: "247"},
-		{Key: "VPC", Value: "vpc-0123"},
-		{Key: "시작 시 공인 IPv4 자동 할당", Value: "예"},
-		{Key: "기본 서브넷", Value: "아니오"},
-		{Key: "IPv6 전용", Value: "아니오"},
-		{Key: "시작 시 IPv6 자동 할당", Value: "예"},
-		{Key: "소유자 ID", Value: "123456789012"},
+		{Key: "CidrBlock", Value: "10.0.1.0/24"},
+		{Key: "AvailabilityZone", Value: "ap-northeast-2a"},
+		{Key: "AvailabilityZoneId", Value: "apne2-az1"},
+		{Key: "AvailableIpAddressCount", Value: "247"},
+		{Key: "VpcId", Value: "vpc-0123"},
+		{Key: "MapPublicIpOnLaunch", Value: "true"},
+		{Key: "DefaultForAz", Value: "false"},
+		{Key: "Ipv6Native", Value: "false"},
+		{Key: "AssignIpv6AddressOnCreation", Value: "true"},
+		{Key: "OwnerId", Value: "123456789012"},
 	}
 	if !slices.Equal(got.Fields, wantFields) {
 		t.Errorf("Fields = %+v, want %+v", got.Fields, wantFields)

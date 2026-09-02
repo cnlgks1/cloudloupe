@@ -85,11 +85,11 @@ func securityGroupToResource(scope collect.Scope, group ec2types.SecurityGroup) 
 		Profile:   scope.Profile,
 		AccountID: scope.AccountID,
 		Fields: []model.Field{
-			{Key: "VPC", Value: orDash(vpcID)},
-			{Key: "인바운드 규칙 수", Value: strconv.Itoa(securityGroupRuleCount(group.IpPermissions))},
-			{Key: "아웃바운드 규칙 수", Value: strconv.Itoa(securityGroupRuleCount(group.IpPermissionsEgress))},
-			{Key: "설명", Value: orDash(aws.ToString(group.Description))},
-			{Key: "소유자 ID", Value: orDash(aws.ToString(group.OwnerId))},
+			{Key: "VpcId", Value: orDash(vpcID)},
+			{Key: "InboundRules", Value: strconv.Itoa(securityGroupRuleCount(group.IpPermissions))},
+			{Key: "OutboundRules", Value: strconv.Itoa(securityGroupRuleCount(group.IpPermissionsEgress))},
+			{Key: "Description", Value: orDash(aws.ToString(group.Description))},
+			{Key: "OwnerId", Value: orDash(aws.ToString(group.OwnerId))},
 		},
 		Tags: ec2Tags(group.Tags),
 	}

@@ -105,9 +105,9 @@ func (c webACLCollector) webACLToResource(ctx context.Context, scope collect.Sco
 	}
 
 	r.Fields = []model.Field{
-		{Key: "설명", Value: displayString(aws.ToString(acl.Description))},
-		{Key: "규칙 수", Value: ruleCount},
-		{Key: "ID", Value: aws.ToString(acl.Id)},
+		{Key: "Description", Value: displayString(aws.ToString(acl.Description))},
+		{Key: "Rules", Value: ruleCount},
+		{Key: "Id", Value: aws.ToString(acl.Id)},
 	}
 
 	if err != nil {

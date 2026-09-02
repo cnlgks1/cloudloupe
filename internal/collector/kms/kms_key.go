@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awskms "github.com/aws/aws-sdk-go-v2/service/kms"
@@ -163,15 +164,15 @@ func keyToResource(scope collect.Scope, metadata kmstypes.KeyMetadata, aliases [
 		AccountID: scope.AccountID,
 		Status:    string(metadata.KeyState),
 		Fields: []model.Field{
-			{Key: "별칭", Value: orDash(strings.Join(aliases, ", "))},
-			{Key: "관리 주체", Value: keyManager(metadata.KeyManager)},
-			{Key: "용도", Value: orDash(string(metadata.KeyUsage))},
-			{Key: "키 스펙", Value: orDash(string(metadata.KeySpec))},
-			{Key: "키 원본", Value: orDash(string(metadata.Origin))},
-			{Key: "다중 리전", Value: yesNo(aws.ToBool(metadata.MultiRegion))},
-			{Key: "사용 가능", Value: yesNo(metadata.Enabled)},
-			{Key: "삭제 예정", Value: deletionSchedule(metadata)},
-			{Key: "설명", Value: orDash(aws.ToString(metadata.Description))},
+			{Key: "Aliases", Value: orDash(strings.Join(aliases, ", "))},
+			{Key: "KeyManager", Value: orDash(string(metadata.KeyManager))},
+			{Key: "KeyUsage", Value: orDash(string(metadata.KeyUsage))},
+			{Key: "KeySpec", Value: orDash(string(metadata.KeySpec))},
+			{Key: "Origin", Value: orDash(string(metadata.Origin))},
+			{Key: "MultiRegion", Value: boolValue(aws.ToBool(metadata.MultiRegion))},
+			{Key: "Enabled", Value: boolValue(metadata.Enabled)},
+			{Key: "DeletionDate", Value: deletionSchedule(metadata)},
+			{Key: "Description", Value: orDash(aws.ToString(metadata.Description))},
 		},
 	}
 
@@ -189,29 +190,17 @@ func keyToResource(scope collect.Scope, metadata kmstypes.KeyMetadata, aliases [
 	return r
 }
 
-// keyManager는 키 관리 주체를 사람이 읽는 값으로 바꾼다.
-func keyManager(manager kmstypes.KeyManagerType) string {
-	switch manager {
-	case kmstypes.KeyManagerTypeAws:
-		return "AWS 관리"
-	case kmstypes.KeyManagerTypeCustomer:
-		return "고객 관리"
-	default:
-		return orDash(string(manager))
-	}
-}
-
 // deletionSchedule은 삭제 예정 시각을 표시 값으로 만든다.
 //
 // 삭제 대기 중인 키만 이 값을 가진다. 대기 일수만 있는 경우(복제 키가 남은 다중 리전 키)도
-// 있어 둘을 함께 다룬다.
+// 있어 둘을 함께 다룬다. 그때는 API가 날짜를 주지 않으므로 일수를 그대로 적는다.
 func deletionSchedule(metadata kmstypes.KeyMetadata) string {
 	if metadata.DeletionDate != nil {
-		return metadata.DeletionDate.UTC().Format("2006-01-02 15:04:05") + " UTC"
+		return metadata.DeletionDate.UTC().Format(time.RFC3339)
 	}
 
 	if days := aws.ToInt32(metadata.PendingDeletionWindowInDays); days > 0 {
-		return strconv.Itoa(int(days)) + "일 후"
+		return "PendingDeletionWindowInDays=" + strconv.Itoa(int(days))
 	}
 
 	return "-"
@@ -226,11 +215,7 @@ func orDash(s string) string {
 	return s
 }
 
-// yesNo는 불리언을 사람이 읽는 한국어로 바꾼다.
-func yesNo(b bool) string {
-	if b {
-		return "예"
-	}
-
-	return "아니오"
+// boolValue는 불리언을 AWS가 주는 표기로 바꾼다. 화면 값이 aws CLI 출력과 같아야 한다.
+func boolValue(b bool) string {
+	return strconv.FormatBool(b)
 }

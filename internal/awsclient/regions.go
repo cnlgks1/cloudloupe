@@ -13,32 +13,32 @@ package awsclient
 // 제대로 도입한다.
 func commercialRegions() []Region {
 	return []Region{
-		{Code: "us-east-1", Name: "미국 동부 (버지니아 북부)"},
-		{Code: "us-east-2", Name: "미국 동부 (오하이오)"},
-		{Code: "us-west-1", Name: "미국 서부 (캘리포니아 북부)"},
-		{Code: "us-west-2", Name: "미국 서부 (오리건)"},
-		{Code: "af-south-1", Name: "아프리카 (케이프타운)"},
-		{Code: "ap-east-1", Name: "아시아 태평양 (홍콩)"},
-		{Code: "ap-south-1", Name: "아시아 태평양 (뭄바이)"},
-		{Code: "ap-south-2", Name: "아시아 태평양 (하이데라바드)"},
-		{Code: "ap-southeast-1", Name: "아시아 태평양 (싱가포르)"},
-		{Code: "ap-southeast-2", Name: "아시아 태평양 (시드니)"},
-		{Code: "ap-southeast-3", Name: "아시아 태평양 (자카르타)"},
-		{Code: "ap-northeast-1", Name: "아시아 태평양 (도쿄)"},
-		{Code: "ap-northeast-2", Name: "아시아 태평양 (서울)"},
-		{Code: "ap-northeast-3", Name: "아시아 태평양 (오사카)"},
-		{Code: "ca-central-1", Name: "캐나다 (중부)"},
-		{Code: "eu-central-1", Name: "유럽 (프랑크푸르트)"},
-		{Code: "eu-central-2", Name: "유럽 (취리히)"},
-		{Code: "eu-west-1", Name: "유럽 (아일랜드)"},
-		{Code: "eu-west-2", Name: "유럽 (런던)"},
-		{Code: "eu-west-3", Name: "유럽 (파리)"},
-		{Code: "eu-north-1", Name: "유럽 (스톡홀름)"},
-		{Code: "eu-south-1", Name: "유럽 (밀라노)"},
-		{Code: "eu-south-2", Name: "유럽 (스페인)"},
-		{Code: "me-south-1", Name: "중동 (바레인)"},
-		{Code: "me-central-1", Name: "중동 (UAE)"},
-		{Code: "sa-east-1", Name: "남아메리카 (상파울루)"},
+		{Code: "us-east-1", Name: "US East (N. Virginia)"},
+		{Code: "us-east-2", Name: "US East (Ohio)"},
+		{Code: "us-west-1", Name: "US West (N. California)"},
+		{Code: "us-west-2", Name: "US West (Oregon)"},
+		{Code: "af-south-1", Name: "Africa (Cape Town)"},
+		{Code: "ap-east-1", Name: "Asia Pacific (Hong Kong)"},
+		{Code: "ap-south-1", Name: "Asia Pacific (Mumbai)"},
+		{Code: "ap-south-2", Name: "Asia Pacific (Hyderabad)"},
+		{Code: "ap-southeast-1", Name: "Asia Pacific (Singapore)"},
+		{Code: "ap-southeast-2", Name: "Asia Pacific (Sydney)"},
+		{Code: "ap-southeast-3", Name: "Asia Pacific (Jakarta)"},
+		{Code: "ap-northeast-1", Name: "Asia Pacific (Tokyo)"},
+		{Code: "ap-northeast-2", Name: "Asia Pacific (Seoul)"},
+		{Code: "ap-northeast-3", Name: "Asia Pacific (Osaka)"},
+		{Code: "ca-central-1", Name: "Canada (Central)"},
+		{Code: "eu-central-1", Name: "Europe (Frankfurt)"},
+		{Code: "eu-central-2", Name: "Europe (Zurich)"},
+		{Code: "eu-west-1", Name: "Europe (Ireland)"},
+		{Code: "eu-west-2", Name: "Europe (London)"},
+		{Code: "eu-west-3", Name: "Europe (Paris)"},
+		{Code: "eu-north-1", Name: "Europe (Stockholm)"},
+		{Code: "eu-south-1", Name: "Europe (Milan)"},
+		{Code: "eu-south-2", Name: "Europe (Spain)"},
+		{Code: "me-south-1", Name: "Middle East (Bahrain)"},
+		{Code: "me-central-1", Name: "Middle East (UAE)"},
+		{Code: "sa-east-1", Name: "South America (Sao Paulo)"},
 	}
 }
 
@@ -61,7 +61,7 @@ func Regions(defaultRegion string) []Region {
 		if r, ok := findRegion(regions, defaultRegion); ok {
 			out = append(out, r)
 		} else {
-			out = append(out, Region{Code: defaultRegion, Name: "(프로필 기본값)"})
+			out = append(out, Region{Code: defaultRegion, Name: "(profile default)"})
 		}
 	}
 

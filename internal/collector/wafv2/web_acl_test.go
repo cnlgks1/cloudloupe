@@ -86,11 +86,11 @@ func TestWAFv2WebACLCollectorConvertsFields(t *testing.T) {
 		t.Error("ARN이 비었다")
 	}
 
-	if got := r.FieldValue("규칙 수"); got != "3" {
+	if got := r.FieldValue("Rules"); got != "3" {
 		t.Errorf("규칙 수 = %q, want 3 (GetWebACL 상세에서)", got)
 	}
 
-	if got := r.FieldValue("설명"); got != "production web acl" {
+	if got := r.FieldValue("Description"); got != "production web acl" {
 		t.Errorf("설명 = %q", got)
 	}
 }
@@ -117,7 +117,7 @@ func TestWAFv2WebACLCollectorSurvivesGetError(t *testing.T) {
 		t.Fatalf("ACL은 살아야 한다, got %d", len(got))
 	}
 
-	if got := got[0].FieldValue("규칙 수"); got != "-" {
+	if got := got[0].FieldValue("Rules"); got != "-" {
 		t.Errorf("규칙 수 = %q, want - (상세 조회 실패)", got)
 	}
 }

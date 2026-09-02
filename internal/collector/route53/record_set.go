@@ -139,13 +139,13 @@ func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route
 		Status:    recType,
 	}
 
-	fields := []model.Field{{Key: "타입", Value: recType}}
+	fields := []model.Field{{Key: "Type", Value: recType}}
 	if setIdentifier != "" {
-		fields = append(fields, model.Field{Key: "세트 식별자", Value: setIdentifier})
+		fields = append(fields, model.Field{Key: "SetIdentifier", Value: setIdentifier})
 	}
 	fields = append(fields,
-		model.Field{Key: "호스팅 영역", Value: zoneName},
-		model.Field{Key: "호스팅 영역 ID", Value: zoneID},
+		model.Field{Key: "HostedZoneName", Value: zoneName},
+		model.Field{Key: "HostedZoneId", Value: zoneID},
 	)
 
 	if rec.TTL != nil {
@@ -156,7 +156,7 @@ func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route
 	// 가진다. 둘을 구분해 표시하고, 별칭이면 그 대상으로의 resolves-to 관계를 남긴다.
 	if rec.AliasTarget != nil {
 		target := aws.ToString(rec.AliasTarget.DNSName)
-		fields = append(fields, model.Field{Key: "별칭 대상", Value: target})
+		fields = append(fields, model.Field{Key: "AliasTarget", Value: target})
 		r.Fields = fields
 		r.Related = []model.Ref{{
 			Type:           model.TypeELBv2LoadBalancer,
@@ -173,7 +173,7 @@ func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route
 		values = append(values, aws.ToString(rr.Value))
 	}
 
-	fields = append(fields, model.Field{Key: "값", Value: orDash(strings.Join(values, ", "))})
+	fields = append(fields, model.Field{Key: "ResourceRecords", Value: orDash(strings.Join(values, ", "))})
 	r.Fields = fields
 
 	return r

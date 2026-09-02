@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
@@ -84,12 +85,12 @@ func roleToResource(scope collect.Scope, role iamtypes.Role) model.Resource {
 		Profile:   scope.Profile,
 		AccountID: scope.AccountID,
 		Fields: []model.Field{
-			{Key: "경로", Value: orDash(aws.ToString(role.Path))},
-			{Key: "설명", Value: orDash(aws.ToString(role.Description))},
-			{Key: "최대 세션 시간", Value: sessionDuration(role.MaxSessionDuration)},
-			{Key: "권한 경계", Value: permissionsBoundary(role.PermissionsBoundary)},
-			{Key: "마지막 사용", Value: lastUsed(role.RoleLastUsed)},
-			{Key: "역할 ID", Value: orDash(aws.ToString(role.RoleId))},
+			{Key: "Path", Value: orDash(aws.ToString(role.Path))},
+			{Key: "Description", Value: orDash(aws.ToString(role.Description))},
+			{Key: "MaxSessionDuration", Value: sessionSeconds(role.MaxSessionDuration)},
+			{Key: "PermissionsBoundary", Value: permissionsBoundary(role.PermissionsBoundary)},
+			{Key: "RoleLastUsed", Value: lastUsed(role.RoleLastUsed)},
+			{Key: "RoleId", Value: orDash(aws.ToString(role.RoleId))},
 		},
 		Tags: iamTags(role.Tags),
 	}
@@ -105,21 +106,17 @@ func roleToResource(scope collect.Scope, role iamtypes.Role) model.Resource {
 	return r
 }
 
-// sessionDuration은 최대 세션 시간을 사람이 읽는 문자열로 바꾼다.
+// sessionSeconds는 최대 세션 시간을 API가 준 초 단위 그대로 표시한다.
 //
-// AWS는 초 단위로 준다. 실제 값은 1~12시간이라 시간으로 환산해 보여주고, 시간 단위로
-// 나누어지지 않으면 초를 그대로 둔다.
-func sessionDuration(seconds *int32) string {
+// 시간으로 환산하지 않는 이유는 화면 값이 aws CLI 출력과 같아야 하기 때문이다. AWS는
+// MaxSessionDuration을 초로 주고 CLI도 초로 찍는다.
+func sessionSeconds(seconds *int32) string {
 	value := aws.ToInt32(seconds)
 	if value <= 0 {
 		return "-"
 	}
 
-	if value%3600 == 0 {
-		return strconv.Itoa(int(value/3600)) + "시간"
-	}
-
-	return strconv.Itoa(int(value)) + "초"
+	return strconv.Itoa(int(value))
 }
 
 // permissionsBoundary는 권한 경계 정책 ARN을 표시 값으로 바꾼다.
@@ -140,7 +137,7 @@ func lastUsed(used *iamtypes.RoleLastUsed) string {
 		return "-"
 	}
 
-	value := used.LastUsedDate.UTC().Format("2006-01-02 15:04:05") + " UTC"
+	value := used.LastUsedDate.UTC().Format(time.RFC3339)
 	if region := aws.ToString(used.Region); region != "" {
 		value += " (" + region + ")"
 	}

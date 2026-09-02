@@ -91,14 +91,14 @@ func instanceToResource(scope collect.Scope, inst ec2types.Instance) model.Resou
 	}
 
 	r.Fields = []model.Field{
-		{Key: "인스턴스 타입", Value: string(inst.InstanceType)},
-		{Key: "가용 영역", Value: azOf(inst)},
-		{Key: "사설 IP", Value: orDash(aws.ToString(inst.PrivateIpAddress))},
-		{Key: "공인 IP", Value: orDash(aws.ToString(inst.PublicIpAddress))},
-		{Key: "VPC", Value: orDash(aws.ToString(inst.VpcId))},
-		{Key: "서브넷", Value: orDash(aws.ToString(inst.SubnetId))},
-		{Key: "AMI", Value: orDash(aws.ToString(inst.ImageId))},
-		{Key: "키 페어", Value: orDash(aws.ToString(inst.KeyName))},
+		{Key: "InstanceType", Value: string(inst.InstanceType)},
+		{Key: "AvailabilityZone", Value: azOf(inst)},
+		{Key: "PrivateIpAddress", Value: orDash(aws.ToString(inst.PrivateIpAddress))},
+		{Key: "PublicIpAddress", Value: orDash(aws.ToString(inst.PublicIpAddress))},
+		{Key: "VpcId", Value: orDash(aws.ToString(inst.VpcId))},
+		{Key: "SubnetId", Value: orDash(aws.ToString(inst.SubnetId))},
+		{Key: "ImageId", Value: orDash(aws.ToString(inst.ImageId))},
+		{Key: "KeyName", Value: orDash(aws.ToString(inst.KeyName))},
 	}
 
 	r.Related = instanceRelations(inst)

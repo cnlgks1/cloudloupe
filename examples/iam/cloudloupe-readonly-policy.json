@@ -45,6 +45,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "ObjectStorageInventory",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "Encryption",
       "Effect": "Allow",
       "Action": [

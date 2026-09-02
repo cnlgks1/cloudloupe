@@ -67,7 +67,9 @@ func internetGatewayToResource(scope collect.Scope, gateway ec2types.InternetGat
 		}
 	}
 
-	status := "연결 안 됨"
+	// AWS는 VPC에 붙어 있을 때만 attachment 상태(available)를 준다. 떨어진 게이트웨이는
+	// 상태가 비므로 그때만 우리가 값을 만든다.
+	status := "detached"
 	if len(states) > 0 {
 		status = strings.Join(states, ", ")
 	}
@@ -81,9 +83,9 @@ func internetGatewayToResource(scope collect.Scope, gateway ec2types.InternetGat
 		AccountID: scope.AccountID,
 		Status:    status,
 		Fields: []model.Field{
-			{Key: "VPC", Value: stringSliceOrDash(vpcIDs)},
-			{Key: "연결 상태", Value: status},
-			{Key: "소유자 ID", Value: orDash(aws.ToString(gateway.OwnerId))},
+			{Key: "VpcId", Value: stringSliceOrDash(vpcIDs)},
+			{Key: "AttachmentState", Value: status},
+			{Key: "OwnerId", Value: orDash(aws.ToString(gateway.OwnerId))},
 		},
 		Tags:    ec2Tags(gateway.Tags),
 		Related: refs,

@@ -144,7 +144,7 @@ func (m Model) keyProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if i >= 0 && i < len(m.profiles) {
 			p := m.profiles[i]
 			m.chosenProfile = p.Name
-			m.loading = p.Name + " 자격증명 확인 중..."
+			m.loading = p.Name + " checking credentials..."
 			m.screen = ScreenIdentity
 
 			cmd := m.identifyCmd(p)
@@ -529,7 +529,7 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 	m.collectSequence++
 	requestID := m.collectSequence
 	m.screen = ScreenCollecting
-	m.loading = strings.Join(m.chosenRegions, ", ") + " 조회 중..."
+	m.loading = strings.Join(m.chosenRegions, ", ") + " querying..."
 
 	profile := m.chosenProfile
 	regions := append([]string(nil), m.chosenRegions...)
@@ -603,9 +603,9 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) listTitle(result collect.Result) string {
-	title := "리소스 " + strconv.Itoa(len(result.Resources)) + "개"
+	title := strconv.Itoa(len(result.Resources)) + " resources"
 	if len(result.Errors) > 0 {
-		title += "  (오류 " + strconv.Itoa(len(result.Errors)) + "건)"
+		title += "  (" + strconv.Itoa(len(result.Errors)) + " errors)"
 	}
 
 	return title

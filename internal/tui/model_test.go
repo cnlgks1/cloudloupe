@@ -56,7 +56,7 @@ func okDeps(resources []model.Resource) tui.Deps {
 				Label: "EC2",
 				Types: []tui.ResourceType{
 					{ID: model.TypeEC2Instance, Label: "EC2 인스턴스"},
-					{ID: model.TypeEC2Volume, Label: "EBS 볼륨"},
+					{ID: model.TypeEC2Volume, Label: "Volumes"},
 				},
 			},
 			{
@@ -291,7 +291,7 @@ func TestBreadcrumbShowsGroupAndItem(t *testing.T) {
 	m = step(m, keyMsg("enter")) // 리전
 
 	// 리전을 고르는 중에는 뒷단계인 리소스가 경로에 없어야 한다.
-	if got := m.View(); strings.Contains(got, "리소스: ") {
+	if got := m.View(); strings.Contains(got, "Resource: ") {
 		t.Errorf("리전 화면 경로에 리소스가 보인다:\n%s", got)
 	}
 
@@ -307,14 +307,14 @@ func TestBreadcrumbShowsGroupAndItem(t *testing.T) {
 	m = send(m, keyMsg("space")) // 그 항목만 체크
 
 	got := m.View()
-	if !strings.Contains(got, "세부 항목: ") || !strings.Contains(got, "EBS 볼륨") {
+	if !strings.Contains(got, "Items: ") || !strings.Contains(got, "Volumes") {
 		t.Errorf("고른 세부 항목이 경로에 보이지 않는다:\n%s", got)
 	}
 
 	// 조회한 뒤 리전 전환으로 돌아가면 리소스·세부 항목은 다시 감춰져야 한다.
 	m = step(m, keyMsg("enter")) // 조회 → 목록
 	m = send(m, keyMsg("r"))     // 리전 전환
-	if got := m.View(); strings.Contains(got, "리소스: ") || strings.Contains(got, "세부 항목: ") {
+	if got := m.View(); strings.Contains(got, "Resource: ") || strings.Contains(got, "Items: ") {
 		t.Errorf("리전 전환 화면에 이전 리소스 선택이 남아 있다:\n%s", got)
 	}
 }
@@ -344,7 +344,7 @@ func TestHelpBarAlwaysEndsWithBackAndQuit(t *testing.T) {
 		}
 
 		view := current.View()
-		if !strings.Contains(view, "esc/← 뒤로") || !strings.Contains(view, "q 종료") {
+		if !strings.Contains(view, "esc/← back") || !strings.Contains(view, "q quit") {
 			t.Errorf("%s 화면 도움말에 공통 뒤로·종료가 없다:\n%s", screen.name, view)
 		}
 	}

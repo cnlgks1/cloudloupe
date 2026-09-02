@@ -83,7 +83,7 @@ func TestEC2NetworkInterfaceCollectorConvertsFields(t *testing.T) {
 		t.Errorf("Status = %q, want in-use", r.Status)
 	}
 
-	if got := r.FieldValue("사설 IP"); got != "10.0.1.24" {
+	if got := r.FieldValue("PrivateIpAddress"); got != "10.0.1.24" {
 		t.Errorf("사설 IP = %q", got)
 	}
 }

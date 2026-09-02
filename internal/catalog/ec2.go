@@ -31,7 +31,7 @@ func ec2GroupsWithClientFactory(newClient func() *awsec2.Client) []Group {
 	return []Group{
 		{ID: "ec2", Label: "EC2", Types: ec2Definitions(clientFor)},
 		{ID: "vpc", Label: "VPC", Types: vpcDefinitions(clientFor)},
-		{ID: "network", Label: "네트워크", Types: networkDefinitions(clientFor)},
+		{ID: "network", Label: "Network", Types: networkDefinitions(clientFor)},
 	}
 }
 
@@ -54,40 +54,40 @@ func ec2Definitions(clientFor ec2ClientFor) []Definition {
 	return []Definition{
 		{
 			Type:           model.TypeEC2Instance,
-			Label:          "인스턴스",
+			Label:          "Instances",
 			Scope:          Regional,
-			Columns:        []string{"인스턴스 타입", "가용 영역", "사설 IP", "공인 IP"},
-			SummaryColumns: []string{"인스턴스 타입", "사설 IP", "공인 IP"},
+			Columns:        []string{"InstanceType", "AvailabilityZone", "PrivateIpAddress", "PublicIp"},
+			SummaryColumns: []string{"InstanceType", "PrivateIpAddress", "PublicIp"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewInstance(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2Volume,
-			Label:          "볼륨",
+			Label:          "Volumes",
 			Scope:          Regional,
-			Columns:        []string{"타입", "크기(GiB)", "IOPS", "가용 영역", "암호화"},
-			SummaryColumns: []string{"타입", "크기(GiB)", "가용 영역"},
+			Columns:        []string{"VolumeType", "Size", "Iops", "AvailabilityZone", "Encrypted"},
+			SummaryColumns: []string{"VolumeType", "Size", "AvailabilityZone"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewVolume(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2NetworkInterface,
-			Label:          "ENI",
+			Label:          "Network interfaces",
 			Scope:          Regional,
-			Columns:        []string{"종류", "사설 IP", "VPC", "서브넷"},
-			SummaryColumns: []string{"사설 IP", "VPC", "서브넷"},
+			Columns:        []string{"InterfaceType", "PrivateIpAddress", "VpcId", "SubnetId"},
+			SummaryColumns: []string{"PrivateIpAddress", "VpcId", "SubnetId"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewNetworkInterface(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2Address,
-			Label:          "Elastic IP",
+			Label:          "Elastic IPs",
 			Scope:          Regional,
-			Columns:        []string{"공인 IP", "사설 IP", "도메인"},
-			SummaryColumns: []string{"공인 IP", "사설 IP"},
+			Columns:        []string{"PublicIp", "PrivateIpAddress", "Domain"},
+			SummaryColumns: []string{"PublicIp", "PrivateIpAddress"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewAddress(clientFor())
 			},
@@ -99,30 +99,30 @@ func vpcDefinitions(clientFor ec2ClientFor) []Definition {
 	return []Definition{
 		{
 			Type:           model.TypeEC2VPC,
-			Label:          "VPC",
+			Label:          "VPCs",
 			Scope:          Regional,
-			Columns:        []string{"IPv4 CIDR", "기본 VPC", "인스턴스 테넌시", "DHCP 옵션 세트", "소유자 ID"},
-			SummaryColumns: []string{"IPv4 CIDR", "기본 VPC", "인스턴스 테넌시"},
+			Columns:        []string{"CidrBlock", "IsDefault", "InstanceTenancy", "DhcpOptionsId", "OwnerId"},
+			SummaryColumns: []string{"CidrBlock", "IsDefault", "InstanceTenancy"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewVPC(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2Subnet,
-			Label:          "서브넷",
+			Label:          "Subnets",
 			Scope:          Regional,
-			Columns:        []string{"IPv4 CIDR", "가용 영역", "가용 영역 ID", "사용 가능한 IPv4 주소", "VPC", "시작 시 공인 IPv4 자동 할당", "기본 서브넷", "IPv6 전용", "시작 시 IPv6 자동 할당", "소유자 ID"},
-			SummaryColumns: []string{"IPv4 CIDR", "가용 영역", "VPC"},
+			Columns:        []string{"CidrBlock", "AvailabilityZone", "AvailabilityZoneId", "AvailableIpAddressCount", "VpcId", "MapPublicIpOnLaunch", "DefaultForAz", "Ipv6Native", "AssignIpv6AddressOnCreation", "OwnerId"},
+			SummaryColumns: []string{"CidrBlock", "AvailabilityZone", "VpcId"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewSubnet(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2SecurityGroup,
-			Label:          "보안 그룹",
+			Label:          "Security groups",
 			Scope:          Regional,
-			Columns:        []string{"VPC", "인바운드 규칙 수", "아웃바운드 규칙 수", "설명", "소유자 ID"},
-			SummaryColumns: []string{"VPC", "인바운드 규칙 수", "아웃바운드 규칙 수"},
+			Columns:        []string{"VpcId", "InboundRules", "OutboundRules", "Description", "OwnerId"},
+			SummaryColumns: []string{"VpcId", "InboundRules", "OutboundRules"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewSecurityGroup(clientFor())
 			},
@@ -135,40 +135,40 @@ func networkDefinitions(clientFor ec2ClientFor) []Definition {
 	return []Definition{
 		{
 			Type:           model.TypeEC2RouteTable,
-			Label:          "라우팅 테이블",
+			Label:          "Route tables",
 			Scope:          Regional,
-			Columns:        []string{"VPC", "기본 라우팅 테이블", "연결 수", "라우트 수", "전파 VGW 수", "소유자 ID"},
-			SummaryColumns: []string{"VPC", "기본 라우팅 테이블", "라우트 수"},
+			Columns:        []string{"VpcId", "Main", "Associations", "Routes", "PropagatingVgws", "OwnerId"},
+			SummaryColumns: []string{"VpcId", "Main", "Routes"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewRouteTable(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2InternetGateway,
-			Label:          "인터넷 게이트웨이",
+			Label:          "Internet gateways",
 			Scope:          Regional,
-			Columns:        []string{"VPC", "연결 상태", "소유자 ID"},
-			SummaryColumns: []string{"VPC", "연결 상태"},
+			Columns:        []string{"VpcId", "AttachmentState", "OwnerId"},
+			SummaryColumns: []string{"VpcId", "AttachmentState"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewInternetGateway(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2NATGateway,
-			Label:          "NAT 게이트웨이",
+			Label:          "NAT gateways",
 			Scope:          Regional,
-			Columns:        []string{"연결 유형", "가용 모드", "VPC", "서브넷", "공인 IP", "사설 IP", "ENI", "EIP 할당 ID", "실패 코드", "실패 메시지"},
-			SummaryColumns: []string{"연결 유형", "VPC", "서브넷", "공인 IP"},
+			Columns:        []string{"ConnectivityType", "AvailabilityMode", "VpcId", "SubnetId", "PublicIp", "PrivateIpAddress", "ENI", "AllocationId", "FailureCode", "FailureMessage"},
+			SummaryColumns: []string{"ConnectivityType", "VpcId", "SubnetId", "PublicIp"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewNATGateway(clientFor())
 			},
 		},
 		{
 			Type:           model.TypeEC2VPCEndpoint,
-			Label:          "VPC 엔드포인트",
+			Label:          "Endpoints",
 			Scope:          Regional,
-			Columns:        []string{"종류", "서비스 이름", "서비스 리전", "IP 주소 유형", "VPC", "서브넷 수", "라우팅 테이블 수", "보안 그룹 수", "사설 DNS", "서비스 관리", "소유자 ID", "실패 원인"},
-			SummaryColumns: []string{"종류", "서비스 이름", "VPC"},
+			Columns:        []string{"VpcEndpointType", "ServiceName", "ServiceRegion", "IpAddressType", "VpcId", "SubnetIds", "RouteTableIds", "SecurityGroups", "PrivateDnsEnabled", "RequesterManaged", "OwnerId", "FailureReason"},
+			SummaryColumns: []string{"VpcEndpointType", "ServiceName", "VpcId"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewVPCEndpoint(clientFor())
 			},

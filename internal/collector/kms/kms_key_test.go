@@ -172,19 +172,20 @@ func TestKeyCollectJoinsAliasesAndMetadata(t *testing.T) {
 	if first.Name != "alias/app-data" {
 		t.Errorf("Name = %q, want alias/app-data", first.Name)
 	}
-	if got, want := first.FieldValue("별칭"), "alias/app-data, alias/app-data-old"; got != want {
+	if got, want := first.FieldValue("Aliases"), "alias/app-data, alias/app-data-old"; got != want {
 		t.Errorf("별칭 = %q, want %q", got, want)
 	}
-	if got, want := first.FieldValue("관리 주체"), "고객 관리"; got != want {
-		t.Errorf("관리 주체 = %q, want %q", got, want)
+	// 값은 AWS가 준 것을 그대로 쓴다. CUSTOMER/AWS를 한국어로 바꾸지 않는다.
+	if got, want := first.FieldValue("KeyManager"), "CUSTOMER"; got != want {
+		t.Errorf("KeyManager = %q, want %q", got, want)
 	}
 	if first.CreatedAt == nil || !first.CreatedAt.Equal(created) {
 		t.Errorf("CreatedAt = %v, want %v", first.CreatedAt, created)
 	}
 
 	// AWS가 만든 키는 사용자가 만든 키와 구분되어야 한다.
-	if got, want := got[1].FieldValue("관리 주체"), "AWS 관리"; got != want {
-		t.Errorf("AWS 키 관리 주체 = %q, want %q", got, want)
+	if got, want := got[1].FieldValue("KeyManager"), "AWS"; got != want {
+		t.Errorf("AWS 키 KeyManager = %q, want %q", got, want)
 	}
 }
 
@@ -238,7 +239,7 @@ func TestKeyCollectSurvivesAliasFailure(t *testing.T) {
 	if !errors.Is(err, aliasErr) {
 		t.Errorf("err = %v, want %v", err, aliasErr)
 	}
-	if len(got) != 1 || got[0].FieldValue("별칭") != "-" {
+	if len(got) != 1 || got[0].FieldValue("Aliases") != "-" {
 		t.Errorf("별칭 없이도 키가 남아야 한다: %+v", got)
 	}
 }

@@ -48,11 +48,10 @@ func itoa32(n int32) string {
 	return strconv.Itoa(int(n))
 }
 
-// yesNo는 불리언을 사람이 읽는 한국어로 바꾼다.
-func yesNo(b bool) string {
-	if b {
-		return "예"
-	}
-
-	return "아니오"
+// boolValue는 불리언을 AWS가 주는 표기로 바꾼다.
+//
+// 한국어 예/아니오가 아니라 true/false를 쓰는 이유는 화면 값이 aws CLI 출력과 같아야 하기
+// 때문이다. 사용자는 이 도구로 본 값을 그대로 CLI 출력이나 AWS 문서와 대조한다.
+func boolValue(b bool) string {
+	return strconv.FormatBool(b)
 }

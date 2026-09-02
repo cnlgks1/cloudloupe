@@ -37,6 +37,7 @@ const (
 	TypeWAFv2WebACL         = "wafv2:webAcl"
 	TypeIAMRole             = "iam:role"
 	TypeKMSKey              = "kms:key"
+	TypeS3Bucket            = "s3:bucket"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -260,6 +261,8 @@ func typeRank(resourceType string) int {
 		return 16
 	case TypeKMSKey:
 		return 17
+	case TypeS3Bucket:
+		return 18
 	default:
 		return 1000
 	}

@@ -47,14 +47,14 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 	types := []ResourceType{{
 		ID:      model.TypeEC2Volume,
 		Label:   "EBS 볼륨",
-		Columns: []string{"타입"},
+		Columns: []string{"VolumeType"},
 	}}
 
 	t.Run("단일 리전은 숨김", func(t *testing.T) {
 		t.Parallel()
 
 		resources := []model.Resource{
-			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "타입", Value: "gp3"}}},
+			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}}},
 			{Type: model.TypeRoute53RecordSet, ID: "example.com|A", Region: "global"},
 		}
 
@@ -67,7 +67,7 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		t.Parallel()
 
 		resources := []model.Resource{
-			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "타입", Value: "gp3"}}},
+			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}}},
 		}
 
 		showRegion := (Model{chosenRegions: []string{"ap-northeast-2", "us-east-1"}}).shouldShowRegion()
@@ -79,8 +79,8 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		t.Parallel()
 
 		all := []model.Resource{
-			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "타입", Value: "gp3"}}},
-			{Type: model.TypeEC2Volume, ID: "vol-2", Region: "us-east-1", Fields: []model.Field{{Key: "타입", Value: "gp2"}}},
+			{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2", Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}}},
+			{Type: model.TypeEC2Volume, ID: "vol-2", Region: "us-east-1", Fields: []model.Field{{Key: "VolumeType", Value: "gp2"}}},
 		}
 		visible := all[:1]
 
@@ -88,7 +88,7 @@ func TestBuildTableRegionColumnPolicy(t *testing.T) {
 		table := buildTestTable(New(true), visible, all, testResourceGroups(types), []string{model.TypeEC2Volume}, showRegion, 120, 20)
 		assertTableShape(t, table, true)
 
-		regionColumn := columnIndex(table, "리전")
+		regionColumn := columnIndex(table, "Region")
 		if regionColumn < 0 {
 			t.Fatal("리전 열이 없음")
 		}
@@ -105,16 +105,16 @@ func TestBuildTableKeepsColumnsWhenFilterHasNoRows(t *testing.T) {
 		Type:   model.TypeEC2Volume,
 		ID:     "vol-1",
 		Region: "ap-northeast-2",
-		Fields: []model.Field{{Key: "타입", Value: "gp3"}},
+		Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}},
 	}}
-	types := []ResourceType{{ID: model.TypeEC2Volume, Label: "EBS 볼륨", Columns: []string{"타입"}}}
+	types := []ResourceType{{ID: model.TypeEC2Volume, Label: "EBS 볼륨", Columns: []string{"VolumeType"}}}
 
 	table := buildTestTable(New(true), nil, all, testResourceGroups(types), []string{model.TypeEC2Volume}, false, 120, 20)
 	if len(table.Rows()) != 0 {
 		t.Errorf("Rows() = %d, want 0", len(table.Rows()))
 	}
 
-	want := []string{"이름", "타입"}
+	want := []string{"Name", "VolumeType"}
 	got := columnTitles(table)
 	if len(got) != len(want) {
 		t.Fatalf("열 = %v, want %v", got, want)
@@ -144,10 +144,10 @@ func TestResourceListViewUsesDedicatedFilterLine(t *testing.T) {
 	if len(lines) < 3 {
 		t.Fatalf("렌더링 줄 수 = %d, want >= 3", len(lines))
 	}
-	if strings.Contains(lines[1], "/ 필터") {
+	if strings.Contains(lines[1], "/ filter") {
 		t.Errorf("필터가 제목 줄에 있음: %q", lines[1])
 	}
-	if !strings.Contains(lines[2], "/ 필터") {
+	if !strings.Contains(lines[2], "/ filter") {
 		t.Errorf("독립 필터 줄이 없음: %q", lines[2])
 	}
 
@@ -187,7 +187,7 @@ func assertTableShape(t *testing.T, tableModel table.Model, showRegion bool) {
 	titles := columnTitles(tableModel)
 	hasRegion := false
 	for _, title := range titles {
-		if title == "리전" {
+		if title == "Region" {
 			hasRegion = true
 			break
 		}
@@ -317,26 +317,26 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 		Types: []ResourceType{
 			{
 				ID:             model.TypeEC2Instance,
-				Label:          "인스턴스",
+				Label:          "Instances",
 				Columns:        []string{"인스턴스 타입"},
 				SummaryColumns: []string{"인스턴스 타입"},
 			},
 			{
 				ID:             model.TypeEC2Volume,
-				Label:          "볼륨",
-				Columns:        []string{"타입", "크기(GiB)"},
-				SummaryColumns: []string{"타입", "크기(GiB)"},
+				Label:          "Volumes",
+				Columns:        []string{"VolumeType", "Size"},
+				SummaryColumns: []string{"VolumeType", "Size"},
 			},
 		},
 	}}
 	resources := []model.Resource{
 		{Type: model.TypeEC2Instance, ID: "i-1", Name: "shared-web", Fields: []model.Field{{Key: "인스턴스 타입", Value: "t3.small"}}},
-		{Type: model.TypeEC2Volume, ID: "vol-1", Name: "shared-data", Fields: []model.Field{{Key: "타입", Value: "gp3"}, {Key: "크기(GiB)", Value: "100"}}},
-		{Type: model.TypeEC2Volume, ID: "vol-2", Name: "logs", Fields: []model.Field{{Key: "타입", Value: "gp3"}, {Key: "크기(GiB)", Value: "50"}}},
+		{Type: model.TypeEC2Volume, ID: "vol-1", Name: "shared-data", Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}, {Key: "Size", Value: "100"}}},
+		{Type: model.TypeEC2Volume, ID: "vol-2", Name: "logs", Fields: []model.Field{{Key: "VolumeType", Value: "gp3"}, {Key: "Size", Value: "50"}}},
 	}
 	m := newResourceKindFilterModel(groups, resources)
 
-	if !strings.Contains(m.View(), "종류: 전체") || !strings.Contains(m.View(), "t: 변경") {
+	if !strings.Contains(m.View(), "Kind: All") || !strings.Contains(m.View(), "t: change") {
 		t.Fatalf("혼합 목록에 종류 필터 줄이 없음:\n%s", m.View())
 	}
 
@@ -345,9 +345,9 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 		t.Fatalf("t 입력 후 화면 = %v, want 종류 필터", m.screen)
 	}
 	if got := m.kindTable.Rows(); len(got) != 3 ||
-		got[0][0] != "전체" || got[0][1] != "3" ||
-		got[1][0] != "인스턴스" || got[1][1] != "1" ||
-		got[2][0] != "볼륨" || got[2][1] != "2" {
+		got[0][0] != "All" || got[0][1] != "3" ||
+		got[1][0] != "Instances" || got[1][1] != "1" ||
+		got[2][0] != "Volumes" || got[2][1] != "2" {
 		t.Fatalf("종류 옵션 = %v", got)
 	}
 
@@ -370,7 +370,7 @@ func TestResourceKindFilterFlowAndTextSearch(t *testing.T) {
 			t.Errorf("종류 필터 결과에 다른 타입이 포함됨: %s", resource.Type)
 		}
 	}
-	wantTitles := []string{"종류", "이름", "ID", "주요 정보"}
+	wantTitles := []string{"Kind", "Name", "ID", "Summary"}
 	if got := columnTitles(m.resourceList.table); !slices.Equal(got, wantTitles) {
 		t.Errorf("종류 필터 후 열 = %v, want %v", got, wantTitles)
 	}
@@ -399,7 +399,7 @@ func TestResourceKindFilterIsHiddenForSingleKind(t *testing.T) {
 	groups := []ResourceGroup{{
 		ID:    "ec2",
 		Label: "EC2",
-		Types: []ResourceType{{ID: model.TypeEC2Instance, Label: "인스턴스"}},
+		Types: []ResourceType{{ID: model.TypeEC2Instance, Label: "Instances"}},
 	}}
 	resources := []model.Resource{{Type: model.TypeEC2Instance, ID: "i-1", Name: "web"}}
 	m := newResourceKindFilterModel(groups, resources)
@@ -437,10 +437,10 @@ func TestTargetGroupTableRemovesRedundantColumnsAndAdjustsWidths(t *testing.T) {
 			ID:   "season2-tgxecr-alb-tg-http-26656",
 			Name: "season2-tgxecr-alb-tg-http-26656",
 			Fields: []model.Field{
-				{Key: "프로토콜", Value: "HTTP"},
-				{Key: "포트", Value: "26656"},
-				{Key: "타깃 종류", Value: "instance"},
-				{Key: "타깃 수", Value: "1"},
+				{Key: "Protocol", Value: "HTTP"},
+				{Key: "Port", Value: "26656"},
+				{Key: "TargetType", Value: "instance"},
+				{Key: "Targets", Value: "1"},
 			},
 		},
 		{
@@ -448,29 +448,29 @@ func TestTargetGroupTableRemovesRedundantColumnsAndAdjustsWidths(t *testing.T) {
 			ID:   "web-monitoring-target-group",
 			Name: "web-monitoring-target-group",
 			Fields: []model.Field{
-				{Key: "프로토콜", Value: "HTTP"},
-				{Key: "포트", Value: "3000"},
-				{Key: "타깃 종류", Value: "instance"},
-				{Key: "타깃 수", Value: "0"},
+				{Key: "Protocol", Value: "HTTP"},
+				{Key: "Port", Value: "3000"},
+				{Key: "TargetType", Value: "instance"},
+				{Key: "Targets", Value: "0"},
 			},
 		},
 	}
 	types := []ResourceType{{
 		ID:      model.TypeELBv2TargetGroup,
 		Label:   "타깃 그룹",
-		Columns: []string{"프로토콜", "포트", "타깃 종류", "타깃 수"},
+		Columns: []string{"Protocol", "Port", "TargetType", "Targets"},
 	}}
 
 	tableModel := buildTestTable(New(true), resources, resources, testResourceGroups(types),
 		[]string{model.TypeELBv2TargetGroup}, false, 120, 20)
-	wantTitles := []string{"이름", "프로토콜", "포트", "타깃 종류", "타깃 수"}
+	wantTitles := []string{"Name", "Protocol", "Port", "TargetType", "Targets"}
 	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
 		t.Errorf("열 = %v, want %v", got, wantTitles)
 	}
 
-	nameWidth := tableModel.Columns()[columnIndex(tableModel, "이름")].Width
-	portWidth := tableModel.Columns()[columnIndex(tableModel, "포트")].Width
-	targetCountWidth := tableModel.Columns()[columnIndex(tableModel, "타깃 수")].Width
+	nameWidth := tableModel.Columns()[columnIndex(tableModel, "Name")].Width
+	portWidth := tableModel.Columns()[columnIndex(tableModel, "Port")].Width
+	targetCountWidth := tableModel.Columns()[columnIndex(tableModel, "Targets")].Width
 	if nameWidth <= portWidth || nameWidth <= targetCountWidth {
 		t.Errorf("열 너비 이름=%d 포트=%d 타깃 수=%d, 이름이 더 넓어야 함",
 			nameWidth, portWidth, targetCountWidth)
@@ -487,15 +487,15 @@ func TestServiceGroupTableUsesFriendlyTypeAndSummary(t *testing.T) {
 		Types: []ResourceType{
 			{
 				ID:             model.TypeEC2Instance,
-				Label:          "인스턴스",
+				Label:          "Instances",
 				Columns:        []string{"인스턴스 타입", "사설 IP", "공인 IP"},
 				SummaryColumns: []string{"인스턴스 타입", "사설 IP"},
 			},
 			{
 				ID:             model.TypeEC2Volume,
-				Label:          "볼륨",
-				Columns:        []string{"타입", "크기(GiB)", "가용 영역"},
-				SummaryColumns: []string{"타입", "크기(GiB)"},
+				Label:          "Volumes",
+				Columns:        []string{"VolumeType", "Size", "AvailabilityZone"},
+				SummaryColumns: []string{"VolumeType", "Size"},
 			},
 		},
 	}}
@@ -516,30 +516,30 @@ func TestServiceGroupTableUsesFriendlyTypeAndSummary(t *testing.T) {
 			Name:   "data",
 			Status: "available",
 			Fields: []model.Field{
-				{Key: "타입", Value: "gp3"},
-				{Key: "크기(GiB)", Value: "100"},
+				{Key: "VolumeType", Value: "gp3"},
+				{Key: "Size", Value: "100"},
 			},
 		},
 	}
 
 	tableModel := buildTestTable(New(true), resources, resources, groups,
 		[]string{model.TypeEC2Instance, model.TypeEC2Volume}, false, 140, 20)
-	wantTitles := []string{"종류", "이름", "ID", "상태", "주요 정보"}
+	wantTitles := []string{"Kind", "Name", "ID", "Status", "Summary"}
 	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
 		t.Errorf("열 = %v, want %v", got, wantTitles)
 	}
 
 	rows := tableModel.Rows()
-	if got := rows[0][columnIndex(tableModel, "종류")]; got != "인스턴스" {
-		t.Errorf("인스턴스 종류 = %q, want %q", got, "인스턴스")
+	if got := rows[0][columnIndex(tableModel, "Kind")]; got != "Instances" {
+		t.Errorf("인스턴스 종류 = %q, want %q", got, "Instances")
 	}
-	if got := rows[1][columnIndex(tableModel, "종류")]; got != "볼륨" {
-		t.Errorf("볼륨 종류 = %q, want %q", got, "볼륨")
+	if got := rows[1][columnIndex(tableModel, "Kind")]; got != "Volumes" {
+		t.Errorf("볼륨 종류 = %q, want %q", got, "Volumes")
 	}
-	if got := rows[0][columnIndex(tableModel, "주요 정보")]; got != "인스턴스 타입 t3.small · 사설 IP 10.0.0.10" {
+	if got := rows[0][columnIndex(tableModel, "Summary")]; got != "인스턴스 타입 t3.small · 사설 IP 10.0.0.10" {
 		t.Errorf("인스턴스 주요 정보 = %q", got)
 	}
-	if got := rows[1][columnIndex(tableModel, "주요 정보")]; got != "타입 gp3 · 크기(GiB) 100" {
+	if got := rows[1][columnIndex(tableModel, "Summary")]; got != "VolumeType gp3 · Size 100" {
 		t.Errorf("볼륨 주요 정보 = %q", got)
 	}
 	assertTableShape(t, tableModel, false)
@@ -555,7 +555,7 @@ func TestMixedResourceTableKeepsDisambiguatingColumns(t *testing.T) {
 
 	tableModel := buildTestTable(New(true), resources, resources, nil,
 		[]string{model.TypeELBv2TargetGroup, model.TypeEC2Instance}, false, 100, 20)
-	wantTitles := []string{"종류", "이름", "ID", "상태"}
+	wantTitles := []string{"Kind", "Name", "ID", "Status"}
 	if got := columnTitles(tableModel); !slices.Equal(got, wantTitles) {
 		t.Errorf("열 = %v, want %v", got, wantTitles)
 	}
@@ -884,10 +884,10 @@ func TestCollectErrorListAndDetailFlow(t *testing.T) {
 	if m.screen != ScreenList || len(m.collectErrors) != 2 || m.collectErrors[0].Message != "raw access denied" {
 		t.Fatalf("수집 오류 보존 결과 = 화면 %v, 오류 %+v", m.screen, m.collectErrors)
 	}
-	if !strings.Contains(m.View(), "e 오류 보기") || !strings.Contains(m.listCaption, "오류 2건") {
+	if !strings.Contains(m.View(), "e errors") || !strings.Contains(m.listCaption, "2 errors") {
 		t.Fatalf("리소스 목록에 오류 진입점이 없음:\n%s", m.View())
 	}
-	if got, want := columnTitles(m.errorTable), []string{"리소스 종류", "프로필", "리전", "AWS 오류 코드", "설명"}; !slices.Equal(got, want) {
+	if got, want := columnTitles(m.errorTable), []string{"Resource", "Profile", "Region", "Error code", "Explanation"}; !slices.Equal(got, want) {
 		t.Errorf("오류 테이블 열 = %v, want %v", got, want)
 	}
 	if rows := m.errorTable.Rows(); len(rows) != 2 || rows[0][0] != "EC2 인스턴스" || rows[1][0] != "future:resource" {

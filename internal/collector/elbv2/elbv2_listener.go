@@ -156,11 +156,11 @@ func listenerToResource(
 		Profile:   scope.Profile,
 		AccountID: scope.AccountID,
 		Fields: []model.Field{
-			{Key: "프로토콜", Value: displayString(string(listener.Protocol))},
-			{Key: "포트", Value: displayInt32(aws.ToInt32(listener.Port))},
-			{Key: "SSL 정책", Value: displayString(aws.ToString(listener.SslPolicy))},
-			{Key: "기본 동작", Value: displayString(strings.Join(actions, ", "))},
-			{Key: "규칙 수", Value: ruleCount},
+			{Key: "Protocol", Value: displayString(string(listener.Protocol))},
+			{Key: "Port", Value: displayInt32(aws.ToInt32(listener.Port))},
+			{Key: "SslPolicy", Value: displayString(aws.ToString(listener.SslPolicy))},
+			{Key: "DefaultActions", Value: displayString(strings.Join(actions, ", "))},
+			{Key: "Rules", Value: ruleCount},
 		},
 	}
 

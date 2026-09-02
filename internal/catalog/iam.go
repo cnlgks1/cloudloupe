@@ -31,10 +31,10 @@ func iamDefinitions(cfg aws.Config) []Definition {
 	return []Definition{
 		{
 			Type:           model.TypeIAMRole,
-			Label:          "역할",
+			Label:          "Roles",
 			Scope:          Global,
-			Columns:        []string{"경로", "설명", "최대 세션 시간", "권한 경계", "마지막 사용", "역할 ID"},
-			SummaryColumns: []string{"경로", "마지막 사용"},
+			Columns:        []string{"Path", "Description", "MaxSessionDuration", "PermissionsBoundary", "RoleLastUsed", "RoleId"},
+			SummaryColumns: []string{"Path", "RoleLastUsed"},
 			newCollector: func() collect.Collector {
 				return iamcollector.NewRole(clientFor())
 			},

@@ -73,11 +73,11 @@ func TestEC2AddressCollectorConvertsFields(t *testing.T) {
 		t.Errorf("Name = %q, want nat-eip (Name 태그에서)", r.Name)
 	}
 
-	if r.Status != "연결됨" {
+	if r.Status != "associated" {
 		t.Errorf("Status = %q, want 연결됨", r.Status)
 	}
 
-	if got := r.FieldValue("공인 IP"); got != "52.79.1.2" {
+	if got := r.FieldValue("PublicIp"); got != "52.79.1.2" {
 		t.Errorf("공인 IP = %q", got)
 	}
 }
@@ -85,7 +85,7 @@ func TestEC2AddressCollectorConvertsFields(t *testing.T) {
 func TestEC2AddressCollectorUnassociatedName(t *testing.T) {
 	t.Parallel()
 
-	// 연결 안 되고 Name 태그도 없는 EIP는 이름을 공인 IP로 대체하고, 상태는 "연결 안 됨".
+	// 연결 안 되고 Name 태그도 없는 EIP는 이름을 공인 IP로 대체하고, 상태는 unassociated.
 	api := &fakeAddressesAPI{out: &awsec2.DescribeAddressesOutput{
 		Addresses: []ec2types.Address{{
 			AllocationId: aws.String("eipalloc-free"),
@@ -105,7 +105,7 @@ func TestEC2AddressCollectorUnassociatedName(t *testing.T) {
 		t.Errorf("Name = %q, want 공인 IP로 대체", got[0].Name)
 	}
 
-	if got[0].Status != "연결 안 됨" {
+	if got[0].Status != "unassociated" {
 		t.Errorf("Status = %q, want 연결 안 됨", got[0].Status)
 	}
 

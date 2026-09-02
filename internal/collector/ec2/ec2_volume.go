@@ -73,11 +73,11 @@ func volumeToResource(scope collect.Scope, vol ec2types.Volume) model.Resource {
 	}
 
 	r.Fields = []model.Field{
-		{Key: "타입", Value: string(vol.VolumeType)},
-		{Key: "크기(GiB)", Value: itoa32(aws.ToInt32(vol.Size))},
-		{Key: "IOPS", Value: itoa32(aws.ToInt32(vol.Iops))},
-		{Key: "가용 영역", Value: orDash(aws.ToString(vol.AvailabilityZone))},
-		{Key: "암호화", Value: yesNo(aws.ToBool(vol.Encrypted))},
+		{Key: "VolumeType", Value: string(vol.VolumeType)},
+		{Key: "Size", Value: itoa32(aws.ToInt32(vol.Size))},
+		{Key: "Iops", Value: itoa32(aws.ToInt32(vol.Iops))},
+		{Key: "AvailabilityZone", Value: orDash(aws.ToString(vol.AvailabilityZone))},
+		{Key: "Encrypted", Value: boolValue(aws.ToBool(vol.Encrypted))},
 	}
 
 	r.Related = volumeRelations(vol)

@@ -119,12 +119,16 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 	resources := []model.Resource{
 		{Type: model.TypeEC2SecurityGroup, ID: "sg-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Address, ID: "eipalloc-1", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2VPCEndpoint, ID: "vpce-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Subnet, ID: "subnet-1", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2NATGateway, ID: "nat-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0f1e", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2Listener, ID: "https:443", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2InternetGateway, ID: "igw-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2VPC, ID: "vpc-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Volume, ID: "vol-1", Region: "ap-northeast-2"},
+		{Type: model.TypeEC2RouteTable, ID: "rtb-1", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2Instance, ID: "i-0a1b", Region: "ap-northeast-2"},
 		{Type: model.TypeELBv2LoadBalancer, ID: "web-alb", Region: "ap-northeast-2"},
 		{Type: model.TypeEC2NetworkInterface, ID: "eni-1", Region: "ap-northeast-2"},
@@ -132,7 +136,7 @@ func TestSortResourcesGroupsRelatedTypesTogether(t *testing.T) {
 
 	model.SortResources(resources)
 
-	want := []string{"web-alb", "https:443", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1", "vpc-1", "subnet-1", "sg-1"}
+	want := []string{"web-alb", "https:443", "web-tg", "i-0a1b", "i-0f1e", "vol-1", "eni-1", "eipalloc-1", "vpc-1", "subnet-1", "rtb-1", "igw-1", "nat-1", "vpce-1", "sg-1"}
 
 	got := make([]string, 0, len(resources))
 	for _, r := range resources {

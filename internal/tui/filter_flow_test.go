@@ -64,7 +64,8 @@ func TestResourceTableRendersRows(t *testing.T) {
 	var m tea.Model = mkModel(t, res)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = key(m, "enter") // 리전
-	m = key(m, "enter") // 타입
+	m = key(m, "enter") // 리소스 그룹
+	m = key(m, "enter") // 세부 항목
 	m = key(m, "enter") // 목록
 
 	v := m.View()
@@ -105,15 +106,15 @@ func isQuit(msg tea.Msg) bool {
 }
 
 func TestBreadcrumbShowsPath(t *testing.T) {
-	// 모든 목록 화면 상단에 현재 경로(프로필/리전/리소스)가 보여야 한다. 프로필을 고른
-	// 뒤 리전 화면에서 그 프로필이 헤더에 나타나는지 확인한다.
+	// 목록 화면 상단에 현재까지의 경로가 보여야 한다. 경로는 현재 화면 단계까지만 보여주므로
+	// 리전 화면에서는 프로필과 리전이 나타난다.
 	var m tea.Model = mkModel(t, nil)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = key(m, "enter") // 프로필 선택 → 신원 → 리전
 
 	v := m.View()
-	if !strings.Contains(v, "프로필") || !strings.Contains(v, "리전") || !strings.Contains(v, "리소스") {
-		t.Errorf("상단 경로 헤더(프로필/리전/리소스)가 보여야 한다:\n%s", v)
+	if !strings.Contains(v, "프로필") || !strings.Contains(v, "리전") {
+		t.Errorf("상단 경로 헤더(프로필/리전)가 보여야 한다:\n%s", v)
 	}
 
 	// 첫 프로필(prod)이 헤더에 나타나야 한다.

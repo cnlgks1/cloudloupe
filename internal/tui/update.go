@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
@@ -58,6 +59,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyRegion(msg)
 	case ScreenResourceType:
 		return m.keyResourceType(msg)
+	case ScreenResourceItem:
+		return m.keyResourceItem(msg)
 	case ScreenCollecting:
 		return m.keyCollecting(msg)
 	case ScreenList:
@@ -208,6 +211,9 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 	m.replaceTypeOnEnter = false
 	m.explicitRegionSelection = false
 	m.explicitTypeSelection = false
+	m.collectFromItem = false
+	m.itemTable = table.Model{}
+	m.itemGroup = 0
 	m.regions = awsclient.Regions(m.profileRegion())
 	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
 	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
@@ -311,21 +317,115 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		// space로 만든 명시적 다중 선택이 없으면 현재 커서의 서비스 그룹만 조회한다.
-		// chosenTypes에는 그룹 ID가 아니라 실제 수집기에 전달할 내부 타입 ID를 보관한다.
-		if m.replaceTypeOnEnter || !m.explicitTypeSelection || len(m.chosenTypes) == 0 {
-			i := m.typeTable.Cursor()
-			if i >= 0 && i < len(m.deps.ResourceGroups) {
-				m.chosenTypes = resourceGroupTypeIDs(m.deps.ResourceGroups[i])
+		// space로 그룹을 명시적으로 골랐으면 그 선택대로 바로 조회한다. 그러지 않았다면
+		// 커서 그룹의 세부 항목으로 들어간다. 그룹 화면에 포함 항목을 나열하지 않는 대신
+		// 한 단계 내려가서 무엇을 수집할지 온전히 보여주는 방식이다.
+		if m.explicitTypeSelection && len(m.chosenTypes) > 0 && !m.replaceTypeOnEnter {
+			m.replaceTypeOnEnter = false
+			m.collectFromItem = false
+
+			return m.startCollecting()
+		}
+
+		m.replaceTypeOnEnter = false
+
+		return m.gotoResourceItem(m.typeTable.Cursor()), nil
+	}
+
+	return m.delegateToActiveList(msg)
+}
+
+// --- 세부 리소스 항목 ---
+
+// gotoResourceItem은 선택한 그룹의 세부 항목 화면으로 들어간다.
+func (m Model) gotoResourceItem(groupIndex int) Model {
+	if groupIndex < 0 || groupIndex >= len(m.deps.ResourceGroups) {
+		return m
+	}
+
+	// 다른 그룹으로 들어가면 이전 그룹에서 체크한 항목은 유지하지 않는다. 화면에 보이지
+	// 않는 선택이 조회 범위에 남아 있으면 사용자가 결과를 설명할 수 없다.
+	if m.itemGroup != groupIndex || !m.explicitTypeSelection {
+		m.chosenTypes = nil
+		m.explicitTypeSelection = false
+	}
+
+	m.itemGroup = groupIndex
+	m.itemTable = buildResourceItemTable(
+		m.theme, m.deps.ResourceGroups[groupIndex], m.chosenTypes, m.width, m.listHeight())
+	m.itemTable.SetCursor(0)
+	m.screen = ScreenResourceItem
+
+	return m
+}
+
+func (m Model) keyResourceItem(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	group := m.currentResourceGroup()
+
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
+		m.typeTable.SetCursor(m.itemGroup)
+		m.screen = ScreenResourceType
+
+		return m, nil
+
+	case key.Matches(msg, m.keys.Toggle):
+		i := m.itemTable.Cursor()
+		if i >= 0 && i < len(group.Types) {
+			m.toggleResourceItem(group.Types[i].ID)
+			m.explicitTypeSelection = len(m.chosenTypes) > 0
+			m.itemTable = buildResourceItemTable(m.theme, group, m.chosenTypes, m.width, m.listHeight())
+			m.itemTable.SetCursor(i)
+		}
+
+		return m, nil
+
+	case key.Matches(msg, m.keys.Enter):
+		// space로 체크한 항목이 없으면 커서가 가리키는 항목 하나만 조회한다. 리전 선택과
+		// 같은 규칙이다. 그룹 전체가 필요하면 그룹 화면에서 space로 고른다.
+		if !m.explicitTypeSelection || len(m.chosenTypes) == 0 {
+			i := m.itemTable.Cursor()
+			if i < 0 || i >= len(group.Types) {
+				return m, nil
 			}
+			m.chosenTypes = []string{group.Types[i].ID}
 			m.explicitTypeSelection = false
 		}
 		m.replaceTypeOnEnter = false
+		m.collectFromItem = true
 
 		return m.startCollecting()
 	}
 
 	return m.delegateToActiveList(msg)
+}
+
+// backToResourceSelection은 조회를 시작한 선택 화면으로 한 단계만 되돌아간다.
+//
+// 세부 항목에서 조회했으면 그 화면으로 돌아가야 한다. 그룹 화면까지 두 단계 올라가면
+// 방금 고른 항목을 다시 찾아 들어가야 한다.
+func (m Model) backToResourceSelection() Model {
+	if m.collectFromItem && len(m.itemTable.Rows()) > 0 {
+		m.screen = ScreenResourceItem
+
+		return m
+	}
+
+	m.replaceTypeOnEnter = true
+	m.screen = ScreenResourceType
+
+	return m
+}
+
+func (m *Model) toggleResourceItem(typeID string) {
+	if i := slices.Index(m.chosenTypes, typeID); i >= 0 {
+		m.chosenTypes = slices.Delete(m.chosenTypes, i, i+1)
+
+		return
+	}
+
+	m.chosenTypes = append(m.chosenTypes, typeID)
 }
 
 func (m *Model) toggleResourceGroup(group ResourceGroup) {
@@ -375,6 +475,9 @@ func (m *Model) resetResourceSelection() {
 	m.chosenTypes = nil
 	m.explicitTypeSelection = false
 	m.replaceTypeOnEnter = false
+	m.collectFromItem = false
+	m.itemTable = table.Model{}
+	m.itemGroup = 0
 	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
 	m.typeTable.SetCursor(0)
 }
@@ -431,10 +534,8 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 func (m Model) keyCollecting(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Back) {
 		m.cancelWork()
-		m.replaceTypeOnEnter = true
-		m.screen = ScreenResourceType
 
-		return m, nil
+		return m.backToResourceSelection(), nil
 	}
 
 	return m, nil
@@ -447,10 +548,8 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 
 	if msg.canceled {
 		m.cancelWork()
-		m.replaceTypeOnEnter = true
-		m.screen = ScreenResourceType
 
-		return m, nil
+		return m.backToResourceSelection(), nil
 	}
 
 	if m.cancel != nil {
@@ -513,10 +612,7 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case key.Matches(msg, m.keys.Back):
-		m.replaceTypeOnEnter = true
-		m.screen = ScreenResourceType
-
-		return m, nil
+		return m.backToResourceSelection(), nil
 
 	case key.Matches(msg, m.keys.SwitchProfile):
 		m.screen = ScreenProfile

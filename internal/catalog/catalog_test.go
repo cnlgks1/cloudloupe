@@ -39,6 +39,10 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeEC2VPC,
 		model.TypeEC2Subnet,
 		model.TypeEC2SecurityGroup,
+		model.TypeEC2RouteTable,
+		model.TypeEC2InternetGateway,
+		model.TypeEC2NATGateway,
+		model.TypeEC2VPCEndpoint,
 		model.TypeELBv2LoadBalancer,
 		model.TypeELBv2Listener,
 		model.TypeELBv2TargetGroup,
@@ -72,7 +76,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "elbv2", "route53", "wafv2"}
+	wantIDs := []string{"ec2", "vpc", "network", "elbv2", "route53", "wafv2"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)
@@ -111,11 +115,26 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 		t.Errorf("VPC 타입 = %v, want %v", gotVPCTypes, wantVPCTypes)
 	}
 
-	if got, want := groups[3].Types[0].Columns,
+	// 선택 화면에서 포함 항목이 잘리지 않도록 트래픽 경로 리소스는 별도 그룹에 둔다.
+	wantNetworkTypes := []string{
+		model.TypeEC2RouteTable,
+		model.TypeEC2InternetGateway,
+		model.TypeEC2NATGateway,
+		model.TypeEC2VPCEndpoint,
+	}
+	gotNetworkTypes := make([]string, 0, len(groups[2].Types))
+	for _, definition := range groups[2].Types {
+		gotNetworkTypes = append(gotNetworkTypes, definition.Type)
+	}
+	if !slices.Equal(gotNetworkTypes, wantNetworkTypes) {
+		t.Errorf("네트워크 타입 = %v, want %v", gotNetworkTypes, wantNetworkTypes)
+	}
+
+	if got, want := groups[4].Types[0].Columns,
 		[]string{"타입", "세트 식별자", "호스팅 영역", "TTL", "값", "별칭 대상"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
-	if got, want := groups[4].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
+	if got, want := groups[5].Types[0].Columns, []string{"규칙 수"}; !slices.Equal(got, want) {
 		t.Errorf("WAF 열 = %v, want %v", got, want)
 	}
 
@@ -346,7 +365,7 @@ func TestEC2GroupsShareLazyClient(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("그룹 조립 중 EC2 클라이언트를 %d회 생성함, want 0", calls)
 	}
-	if len(groups) != 2 || groups[0].ID != "ec2" || groups[1].ID != "vpc" {
+	if len(groups) != 3 || groups[0].ID != "ec2" || groups[1].ID != "vpc" || groups[2].ID != "network" {
 		t.Fatalf("EC2 계열 그룹 = %+v", groups)
 	}
 
@@ -355,9 +374,11 @@ func TestEC2GroupsShareLazyClient(t *testing.T) {
 		t.Fatalf("첫 EC2 수집기 생성 뒤 클라이언트 생성 횟수 = %d, want 1", calls)
 	}
 
-	groups[1].Types[0].newCollector()
-	groups[1].Types[1].newCollector()
-	groups[1].Types[2].newCollector()
+	for _, group := range groups {
+		for _, definition := range group.Types {
+			definition.newCollector()
+		}
+	}
 	if calls != 1 {
 		t.Errorf("EC2와 VPC 그룹이 클라이언트를 공유하지 않음: 생성 %d회, want 1", calls)
 	}

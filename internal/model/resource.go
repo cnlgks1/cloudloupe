@@ -25,6 +25,10 @@ const (
 	TypeEC2Address          = "ec2:address"
 	TypeEC2VPC              = "ec2:vpc"
 	TypeEC2Subnet           = "ec2:subnet"
+	TypeEC2RouteTable       = "ec2:routeTable"
+	TypeEC2InternetGateway  = "ec2:internetGateway"
+	TypeEC2NATGateway       = "ec2:natGateway"
+	TypeEC2VPCEndpoint      = "ec2:vpcEndpoint"
 	TypeEC2SecurityGroup    = "ec2:securityGroup"
 	TypeELBv2LoadBalancer   = "elbv2:loadBalancer"
 	TypeELBv2Listener       = "elbv2:listener"
@@ -48,6 +52,7 @@ const (
 	RelationAttachedENI    = "attached-eni"
 	RelationAttachedVolume = "attached-volume"
 	RelationAssociatedWith = "associated-with"
+	RelationRoutesTo       = "routes-to"
 	RelationResolvesTo     = "resolves-to"
 	RelationProtects       = "protects"
 )
@@ -231,10 +236,18 @@ func typeRank(resourceType string) int {
 		return 8
 	case TypeEC2Subnet:
 		return 9
-	case TypeEC2SecurityGroup:
+	case TypeEC2RouteTable:
 		return 10
-	case TypeWAFv2WebACL:
+	case TypeEC2InternetGateway:
 		return 11
+	case TypeEC2NATGateway:
+		return 12
+	case TypeEC2VPCEndpoint:
+		return 13
+	case TypeEC2SecurityGroup:
+		return 14
+	case TypeWAFv2WebACL:
+		return 15
 	default:
 		return 1000
 	}

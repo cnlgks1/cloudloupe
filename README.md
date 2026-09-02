@@ -39,8 +39,8 @@ AWS 리소스를 생성·수정·삭제하지 않습니다.
 
 ## 지원 리소스
 
-TUI에서는 그룹 단위로 선택하고, 내부에서 세부 타입을 함께 수집합니다. 모든 조회는 아래
-AWS SDK for Go v2 API만 사용합니다.
+TUI에서는 그룹을 고른 뒤 세부 항목 화면에서 조회 대상을 정합니다. 그룹 전체가 필요하면
+그룹 화면에서 `space`로 고릅니다. 모든 조회는 아래 AWS SDK for Go v2 API만 사용합니다.
 
 | 그룹 | 타입 ID | SDK API |
 | --- | --- | --- |
@@ -51,6 +51,10 @@ AWS SDK for Go v2 API만 사용합니다.
 | VPC | `ec2:vpc` | `ec2.DescribeVpcs` |
 | VPC | `ec2:subnet` | `ec2.DescribeSubnets` |
 | VPC | `ec2:securityGroup` | `ec2.DescribeSecurityGroups` |
+| 네트워크 | `ec2:routeTable` | `ec2.DescribeRouteTables` |
+| 네트워크 | `ec2:internetGateway` | `ec2.DescribeInternetGateways` |
+| 네트워크 | `ec2:natGateway` | `ec2.DescribeNatGateways` |
+| 네트워크 | `ec2:vpcEndpoint` | `ec2.DescribeVpcEndpoints` |
 | ELB | `elbv2:loadBalancer` | `elbv2.DescribeLoadBalancers` |
 | ELB | `elbv2:listener` | `elbv2.DescribeLoadBalancers`, `DescribeListeners`, `DescribeRules` |
 | ELB | `elbv2:targetGroup` | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth` |
@@ -76,8 +80,10 @@ cloudloupe --config PATH --credentials PATH
 터미널이 아니거나 파이프로 넘기면 목록 출력으로 자동 폴백합니다.
 
 주요 키: `↑/↓` 또는 `j/k` 이동, `space` 다중 선택, `enter/→` 다음, `esc/←` 뒤로(수집 중에는
-취소), `q` 종료. 리소스 목록에서는 `t` 종류 필터, `/` 텍스트 검색, `e` 부분 오류 보기,
-`p` 프로필 전환, `r` 리전 전환.
+취소), `q` 종료. 리소스 선택은 그룹 → 세부 항목 두 단계입니다. 어느 화면에서든 `enter`는
+커서가 가리키는 것만 조회하고, `space`로 체크하면 여러 개를 함께 조회합니다. 그룹 화면에서
+`space`로 그룹을 체크하면 세부 항목을 건너뛰고 그룹 전체를 조회합니다. 리소스 목록에서는
+`t` 종류 필터, `/` 텍스트 검색, `e` 부분 오류 보기, `p` 프로필 전환, `r` 리전 전환.
 
 > **경로 플래그의 적용 범위.** `--config`, `--credentials`와 TUI 경로 입력은 **프로필 탐색에만**
 > 적용됩니다. STS 확인과 리소스 조회에도 같은 파일을 쓰려면 `AWS_CONFIG_FILE`,

@@ -244,10 +244,17 @@ func TestFullFlowProfileToList(t *testing.T) {
 		t.Fatalf("리전 선택 후 화면 = %v, want 리소스 타입 선택", m.Screen())
 	}
 
-	// 타입 선택(비우면 전체) → 수집 Cmd 실행 → 리소스 목록.
+	// 리소스 그룹 → 세부 항목 선택. 그룹 화면에 포함 항목을 나열하지 않으므로 한 단계
+	// 내려가서 무엇을 수집할지 보여준다.
+	m = send(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenResourceItem {
+		t.Fatalf("그룹 선택 후 화면 = %v, want 세부 항목 선택", m.Screen())
+	}
+
+	// 세부 항목 선택(비우면 그룹 전체) → 수집 Cmd 실행 → 리소스 목록.
 	m = step(m, keyMsg("enter"))
 	if m.Screen() != tui.ScreenList {
-		t.Fatalf("타입 선택 후 화면 = %v, want 리소스 목록", m.Screen())
+		t.Fatalf("세부 항목 선택 후 화면 = %v, want 리소스 목록", m.Screen())
 	}
 
 	// enter로 상세, esc로 목록 복귀.
@@ -259,6 +266,107 @@ func TestFullFlowProfileToList(t *testing.T) {
 	m = send(m, keyMsg("esc"))
 	if m.Screen() != tui.ScreenList {
 		t.Errorf("esc 후 화면 = %v, want 리소스 목록", m.Screen())
+	}
+
+	// 목록에서 뒤로 가면 세부 항목 화면으로 한 단계만 올라가야 한다. 그룹 화면까지
+	// 건너뛰면 방금 고른 항목을 다시 찾아 들어가야 한다.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenResourceItem {
+		t.Errorf("목록에서 esc 후 화면 = %v, want 세부 항목 선택", m.Screen())
+	}
+
+	// 거기서 다시 뒤로 가면 그룹 화면이다.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Errorf("세부 항목에서 esc 후 화면 = %v, want 리소스 그룹 선택", m.Screen())
+	}
+}
+
+// TestBreadcrumbShowsGroupAndItem은 상단 경로가 지금 무엇을 보고 있는지 채워 보여주는지
+// 확인한다. 세부 항목을 골랐는데 리소스가 "-"로 남으면 맥락을 잃는다.
+func TestBreadcrumbShowsGroupAndItem(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(t, okDeps(sampleResources()))
+	m = step(m, keyMsg("enter")) // 리전
+
+	// 리전을 고르는 중에는 뒷단계인 리소스가 경로에 없어야 한다.
+	if got := m.View(); strings.Contains(got, "리소스: ") {
+		t.Errorf("리전 화면 경로에 리소스가 보인다:\n%s", got)
+	}
+
+	m = send(m, keyMsg("enter")) // 리소스 그룹
+	m = send(m, keyMsg("enter")) // 세부 항목
+
+	// 아직 체크하지 않아도 지금 보고 있는 그룹은 드러나야 한다.
+	if got := m.View(); !strings.Contains(got, "EC2") {
+		t.Errorf("세부 항목 화면 경로에 그룹이 없다:\n%s", got)
+	}
+
+	m = send(m, keyMsg("down"))  // EBS 볼륨으로 이동
+	m = send(m, keyMsg("space")) // 그 항목만 체크
+
+	got := m.View()
+	if !strings.Contains(got, "세부 항목: ") || !strings.Contains(got, "EBS 볼륨") {
+		t.Errorf("고른 세부 항목이 경로에 보이지 않는다:\n%s", got)
+	}
+
+	// 조회한 뒤 리전 전환으로 돌아가면 리소스·세부 항목은 다시 감춰져야 한다.
+	m = step(m, keyMsg("enter")) // 조회 → 목록
+	m = send(m, keyMsg("r"))     // 리전 전환
+	if got := m.View(); strings.Contains(got, "리소스: ") || strings.Contains(got, "세부 항목: ") {
+		t.Errorf("리전 전환 화면에 이전 리소스 선택이 남아 있다:\n%s", got)
+	}
+}
+
+// TestHelpBarAlwaysEndsWithBackAndQuit은 모든 화면의 하단 도움말이 같은 꼬리로 끝나는지
+// 확인한다. 같은 키가 화면마다 다르게 안내되면 사용자가 매번 다시 읽어야 한다.
+func TestHelpBarAlwaysEndsWithBackAndQuit(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(t, okDeps(sampleResources()))
+
+	screens := []struct {
+		name string
+		keys []tea.KeyMsg
+	}{
+		{name: "프로필"},
+		{name: "리전", keys: []tea.KeyMsg{keyMsg("enter")}},
+		{name: "리소스 그룹", keys: []tea.KeyMsg{keyMsg("enter"), keyMsg("enter")}},
+		{name: "세부 항목", keys: []tea.KeyMsg{keyMsg("enter"), keyMsg("enter"), keyMsg("enter")}},
+		{name: "목록", keys: []tea.KeyMsg{keyMsg("enter"), keyMsg("enter"), keyMsg("enter"), keyMsg("enter")}},
+	}
+
+	for _, screen := range screens {
+		current := m
+		for _, k := range screen.keys {
+			current = step(current, k)
+		}
+
+		view := current.View()
+		if !strings.Contains(view, "esc/← 뒤로") || !strings.Contains(view, "q 종료") {
+			t.Errorf("%s 화면 도움말에 공통 뒤로·종료가 없다:\n%s", screen.name, view)
+		}
+	}
+}
+
+// TestListBackReturnsToGroupWhenGroupShortcutUsed는 그룹 화면에서 space로 바로 조회한
+// 경우에는 보지 않은 세부 항목 화면으로 내려가지 않는지 확인한다.
+func TestListBackReturnsToGroupWhenGroupShortcutUsed(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(t, okDeps(sampleResources()))
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 리소스 그룹
+	m = send(m, keyMsg("space")) // 그룹 전체 체크
+	m = step(m, keyMsg("enter")) // 세부 항목을 건너뛰고 조회
+	if m.Screen() != tui.ScreenList {
+		t.Fatalf("그룹 단축 조회 후 화면 = %v, want 목록", m.Screen())
+	}
+
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Errorf("단축 조회 후 esc 화면 = %v, want 리소스 그룹 선택", m.Screen())
 	}
 }
 
@@ -311,10 +419,11 @@ func TestRegionMultiSelect(t *testing.T) {
 		t.Errorf("리전 체크 후 → 화면 = %v, want 타입 선택", m.Screen())
 	}
 
-	// 타입은 비운 채 조회 → 리소스 목록.
+	// 세부 항목은 비운 채 조회 → 리소스 목록.
+	m = send(m, keyMsg("enter"))
 	m = step(m, keyMsg("enter"))
 	if m.Screen() != tui.ScreenList {
-		t.Errorf("타입 선택 후 조회 → 화면 = %v, want 리소스 목록", m.Screen())
+		t.Errorf("세부 항목 선택 후 조회 → 화면 = %v, want 리소스 목록", m.Screen())
 	}
 }
 
@@ -362,11 +471,38 @@ func TestResourceTypeEnterSelectsCursorType(t *testing.T) {
 	m := newTestModel(t, deps)
 	m = step(m, keyMsg("enter")) // 리전
 	m = send(m, keyMsg("enter")) // 타입 선택 화면
-	_ = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서의 타입 하나
+	m = send(m, keyMsg("enter")) // 커서 그룹의 세부 항목 화면
+	_ = step(m, keyMsg("enter")) // 체크 없이 조회 → 커서 항목 하나
 
-	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	want := []string{model.TypeEC2Instance}
 	if !slices.Equal(gotTypes, want) {
-		t.Errorf("체크 없이 enter는 커서 그룹의 타입 전체여야 한다, got %v, want %v", gotTypes, want)
+		t.Errorf("체크 없이 enter는 커서 항목 하나여야 한다, got %v, want %v", gotTypes, want)
+	}
+}
+
+// TestResourceItemSpaceSelectsOnlyCheckedTypes는 세부 항목에서 고른 항목만 조회하는지
+// 확인한다. 항목을 하나 골랐는데 그룹 전체가 조회되면 화면과 결과가 어긋난다.
+func TestResourceItemSpaceSelectsOnlyCheckedTypes(t *testing.T) {
+	t.Parallel()
+
+	var gotTypes []string
+	deps := okDeps(sampleResources())
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = append([]string(nil), types...)
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 리소스 그룹
+	m = send(m, keyMsg("enter")) // 세부 항목
+	m = send(m, keyMsg("down"))  // 두 번째 항목(EBS 볼륨)으로 이동
+	m = send(m, keyMsg("space")) // 그 항목만 체크
+	_ = step(m, keyMsg("enter"))
+
+	if want := []string{model.TypeEC2Volume}; !slices.Equal(gotTypes, want) {
+		t.Errorf("체크한 세부 항목만 조회해야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 
@@ -397,7 +533,8 @@ func TestViewRendersEveryScreenWithoutPanic(t *testing.T) {
 
 		m = step(m, keyMsg("enter")) // 프로필 → 리전 (신원확인 Cmd)
 		m = send(m, keyMsg("enter")) // 리전 → 리소스 선택 (Cmd 없음)
-		m = step(m, keyMsg("enter")) // 리소스 → 목록 (수집 Cmd)
+		m = send(m, keyMsg("enter")) // 리소스 → 세부 항목 (Cmd 없음)
+		m = step(m, keyMsg("enter")) // 세부 항목 → 목록 (수집 Cmd)
 		m = send(m, keyMsg("t"))
 		if m.Screen() != tui.ScreenResourceKind || m.View() == "" {
 			t.Errorf("ascii=%v: 종류 필터 화면을 렌더링하지 못함", ascii)
@@ -479,14 +616,15 @@ func TestNewProfileResetsSelection(t *testing.T) {
 	}
 
 	// 프로필에서 다시 enter → 리전 → 리소스 → 조회. 이전 ELBv2 선택은 초기화됐으므로
-	// 커서의 첫 그룹 EC2만 넘어가야 한다.
+	// 커서의 첫 그룹 첫 항목만 넘어가야 한다.
 	m = step(m, keyMsg("enter")) // 리전 (신원 확인 다시)
 	m = send(m, keyMsg("enter")) // 타입 화면
+	m = send(m, keyMsg("enter")) // 세부 항목 화면
 	_ = step(m, keyMsg("enter")) // 체크 없이 조회
 
-	want := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	want := []string{model.TypeEC2Instance}
 	if !slices.Equal(gotTypes, want) {
-		t.Errorf("새 프로필에서는 이전 선택이 비워지고 첫 그룹만 나와야 한다, got %v, want %v", gotTypes, want)
+		t.Errorf("새 프로필에서는 이전 선택이 비워져야 한다, got %v, want %v", gotTypes, want)
 	}
 }
 
@@ -515,6 +653,7 @@ func TestArrowKeysNavigateList(t *testing.T) {
 	m = send(m, keyMsg("up")) // 순이동 확인: 아래 2 위 1 = 한 칸 아래
 	m = send(m, keyMsg("space"))
 	m = send(m, keyMsg("enter")) // 타입
+	m = send(m, keyMsg("enter")) // 세부 항목
 	_ = step(m, keyMsg("enter")) // 조회
 
 	if len(gotRegions) != 1 {
@@ -548,6 +687,7 @@ func TestArrowSelectsRegionUnderCursor(t *testing.T) {
 	m = send(m, keyMsg("down"))
 	m = send(m, keyMsg("space"))
 	m = send(m, keyMsg("enter")) // 타입 화면
+	m = send(m, keyMsg("enter")) // 세부 항목 화면
 	_ = step(m, keyMsg("enter")) // 조회
 
 	if len(gotRegions) != 1 {
@@ -674,6 +814,7 @@ func TestRegionEnterReplacesPreviousBareSelectionAfterBack(t *testing.T) {
 	m = send(m, keyMsg("left"))  // 타입 → 리전
 	m = send(m, keyMsg("down"))  // 두 번째 리전으로 이동
 	m = send(m, keyMsg("enter")) // 두 번째 리전 선택 → 타입
+	m = send(m, keyMsg("enter")) // 세부 항목
 	_ = step(m, keyMsg("enter")) // 조회
 
 	if got, want := gotRegions, []string{regions[1].Code}; !slices.Equal(got, want) {
@@ -749,7 +890,8 @@ func TestChangingRegionResetsResourceSelection(t *testing.T) {
 
 	m = send(m, keyMsg("r"))
 	m = send(m, keyMsg("down"), keyMsg("enter")) // 다른 리전 → 타입
-	_ = step(m, keyMsg("enter"))                 // 초기화된 첫 타입으로 두 번째 조회
+	m = send(m, keyMsg("enter"))                 // 초기화된 첫 그룹의 세부 항목
+	_ = step(m, keyMsg("enter"))                 // 그룹 전체로 두 번째 조회
 
 	if len(calls) != 2 {
 		t.Fatalf("Collect 호출 = %d, want 2", len(calls))
@@ -758,7 +900,7 @@ func TestChangingRegionResetsResourceSelection(t *testing.T) {
 	if got, want := calls[1].regions, []string{regions[1].Code}; !slices.Equal(got, want) {
 		t.Errorf("두 번째 조회 리전 = %v, want %v", got, want)
 	}
-	wantTypes := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	wantTypes := []string{model.TypeEC2Instance}
 	if !slices.Equal(calls[1].types, wantTypes) {
 		t.Errorf("리전 변경 후 조회 타입 = %v, want 초기 타입 %v", calls[1].types, wantTypes)
 	}
@@ -807,12 +949,13 @@ func TestChangingExplicitMultiRegionSelectionResetsResourceSelection(t *testing.
 	m = send(m, keyMsg("space"), keyMsg("down"), keyMsg("space"), keyMsg("enter"))
 	m = send(m, keyMsg("down"), keyMsg("space"))                  // ELB를 명시적으로 선택한다.
 	m = send(m, keyMsg("left"), keyMsg("space"), keyMsg("enter")) // 두 번째 리전을 해제한다.
+	m = send(m, keyMsg("enter"))                                  // 초기화된 첫 그룹의 세부 항목
 	_ = step(m, keyMsg("enter"))
 
 	if got, want := gotRegions, []string{regions[0].Code}; !slices.Equal(got, want) {
 		t.Errorf("다중 선택 변경 후 조회 리전 = %v, want %v", got, want)
 	}
-	wantTypes := []string{model.TypeEC2Instance, model.TypeEC2Volume}
+	wantTypes := []string{model.TypeEC2Instance}
 	if !slices.Equal(gotTypes, wantTypes) {
 		t.Errorf("다중 선택 변경 후 조회 타입 = %v, want 초기 타입 %v", gotTypes, wantTypes)
 	}

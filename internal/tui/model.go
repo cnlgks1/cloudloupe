@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -32,7 +33,8 @@ const (
 	ScreenProfile
 	ScreenIdentity
 	ScreenRegion
-	ScreenResourceType // 조회할 리소스 타입 선택
+	ScreenResourceType // 조회할 리소스 그룹 선택
+	ScreenResourceItem // 그룹 안의 세부 리소스 항목 선택
 	ScreenCollecting
 	ScreenList
 	ScreenResourceKind // 수집 결과 안의 세부 종류 필터 선택
@@ -112,6 +114,7 @@ type Model struct {
 	profileTable table.Model
 	regionTable  table.Model
 	typeTable    table.Model
+	itemTable    table.Model
 	kindTable    table.Model
 	errorTable   table.Model
 	detail       viewport.Model
@@ -135,10 +138,18 @@ type Model struct {
 	confirmedRegions []string
 	chosenTypes      []string
 
+	// itemGroup은 세부 항목 화면이 보여주는 그룹의 인덱스다. 그룹을 되짚어 올라가거나
+	// 창 크기가 바뀔 때 어떤 그룹을 다시 그려야 하는지 알아야 한다.
+	itemGroup int
+
 	// replace...OnEnter는 목록 화면에서 리전/타입을 바꾸러 들어왔을 때 기존 선택보다
 	// 현재 커서 행을 우선하도록 한다. space로 다중 선택을 조작하면 false로 바뀐다.
 	replaceRegionOnEnter bool
 	replaceTypeOnEnter   bool
+
+	// collectFromItem은 조회를 세부 항목 화면에서 시작했는지 나타낸다. 뒤로 가기는 건너뛴
+	// 화면이 아니라 실제로 지나온 화면으로 돌아가야 한다.
+	collectFromItem bool
 
 	// explicit...Selection은 space로 명시적으로 체크한 다중 선택인지 나타낸다.
 	// false면 이전 Enter 선택이 남아 있어도 현재 커서 항목으로 교체한다.
@@ -303,23 +314,26 @@ func (m Model) View() string {
 			[2]string{"↑↓/jk", "이동"},
 			[2]string{"enter/→", "선택"},
 			[2]string{"c", "AWS 설정 파일 경로 지정"},
-			[2]string{"q", "종료"},
 		)
 	case ScreenIdentity:
 		return m.centered(m.spinner.View() + " " + m.loading)
 	case ScreenRegion:
 		return m.screenWithHelp("리전 선택", m.regionTable,
 			[2]string{"↑↓/jk", "이동"},
-			[2]string{"space", "선택"},
-			[2]string{"enter/→", "다음"},
-			[2]string{"esc/←", "뒤로"},
+			[2]string{"enter/→", "이 리전 조회"},
+			[2]string{"space", "여러 개 선택"},
 		)
 	case ScreenResourceType:
 		return m.screenWithHelp("리소스 선택", m.typeTable,
 			[2]string{"↑↓/jk", "이동"},
+			[2]string{"enter/→", "세부 항목"},
+			[2]string{"space", "그룹 전체 조회"},
+		)
+	case ScreenResourceItem:
+		return m.screenWithHelp(m.resourceItemTitle(), m.itemTable,
+			[2]string{"↑↓/jk", "이동"},
+			[2]string{"enter/→", "이 항목 조회"},
 			[2]string{"space", "여러 개 선택"},
-			[2]string{"enter/→", "이 리소스 조회"},
-			[2]string{"esc/←", "뒤로"},
 		)
 	case ScreenCollecting:
 		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: 취소"))
@@ -329,23 +343,19 @@ func (m Model) View() string {
 		return m.screenWithHelp("종류 필터", m.kindTable,
 			[2]string{"↑↓/jk", "이동"},
 			[2]string{"enter/→", "적용"},
-			[2]string{"esc/←", "취소"},
 		)
 	case ScreenDetail:
 		return m.detail.View() + m.helpBar(
 			[2]string{"↑↓/jk", "스크롤"},
-			[2]string{"esc/←/q", "목록으로"},
 		)
 	case ScreenCollectErrors:
 		return m.screenWithHelp("수집 오류", m.errorTable,
 			[2]string{"↑↓/jk", "이동"},
 			[2]string{"enter/→", "원본 상세"},
-			[2]string{"esc/←", "리소스 목록"},
 		)
 	case ScreenCollectErrorDetail:
 		return m.detail.View() + m.helpBar(
 			[2]string{"↑↓/jk", "스크롤"},
-			[2]string{"esc/←/q", "오류 목록"},
 		)
 	case ScreenError:
 		return m.errorView()
@@ -365,8 +375,6 @@ func (m Model) resourceListView() string {
 		{"/", "검색"},
 		{"p", "프로필 전환"},
 		{"r", "리전 전환"},
-		{"esc", "뒤로"},
-		{"q", "종료"},
 	}
 
 	if len(m.collectErrors) > 0 {
@@ -460,6 +468,12 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.typeTable.SetCursor(cursor)
 	}
 
+	if len(m.itemTable.Rows()) > 0 {
+		cursor := m.itemTable.Cursor()
+		m.itemTable = buildResourceItemTable(m.theme, m.currentResourceGroup(), m.chosenTypes, msg.Width, h)
+		m.itemTable.SetCursor(cursor)
+	}
+
 	if m.hasResourceKindFilter() && len(m.kindTable.Rows()) > 0 {
 		cursor := m.kindTable.Cursor()
 		m.kindTable = buildResourceKindTable(m.theme, m.resourceKinds, msg.Width, h)
@@ -491,6 +505,8 @@ func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.regionTable, cmd = m.regionTable.Update(msg)
 	case ScreenResourceType:
 		m.typeTable, cmd = m.typeTable.Update(msg)
+	case ScreenResourceItem:
+		m.itemTable, cmd = m.itemTable.Update(msg)
 	case ScreenResourceKind:
 		m.kindTable, cmd = m.kindTable.Update(msg)
 	case ScreenCollectErrors:
@@ -603,8 +619,15 @@ func (m Model) shouldShowRegion() bool {
 
 // helpBar는 화면 하단에 그릴 한국어 키 안내를 만든다.
 //
-// 각 항목을 "키 = 뜻"으로 또렷하게 보여준다. 검색이 / 라는 것도 여기서 분명히 알린다.
+// 각 항목을 "키 = 뜻"으로 또렷하게 보여준다. 화면마다 다른 것은 앞쪽 동작 키뿐이고,
+// 뒤로·종료는 모든 화면에서 같은 자리에 같은 문구로 붙는다. 같은 키가 화면마다 다른
+// 이름으로 보이면 사용자가 매 화면에서 도움말을 다시 읽어야 한다.
 func (m Model) helpBar(pairs ...[2]string) string {
+	pairs = append(pairs,
+		[2]string{"esc/←", "뒤로"},
+		[2]string{"q", "종료"},
+	)
+
 	parts := make([]string, 0, len(pairs))
 	for _, p := range pairs {
 		parts = append(parts, m.theme.Title.Render(p[0])+" "+m.theme.Faint.Render(p[1]))
@@ -638,33 +661,121 @@ func (m Model) breadcrumb() string {
 		region = strings.Join(m.chosenRegions, ",")
 	}
 
-	resource := "-"
-	if labels := selectedResourceGroupLabels(m.deps.ResourceGroups, m.chosenTypes); len(labels) > 0 {
-		resource = strings.Join(labels, ",")
-	}
-
 	label := func(k, v string) string {
 		return m.theme.Faint.Render(k+": ") + m.theme.Title.Render(v)
 	}
 
-	parts := []string{
-		label("프로필", profile),
-		label("리전", region),
-		label("리소스", resource),
+	depth := m.breadcrumbDepth()
+	parts := []string{label("프로필", profile)}
+
+	if depth >= breadcrumbRegion {
+		parts = append(parts, label("리전", region))
+	}
+	if depth >= breadcrumbGroup {
+		parts = append(parts, label("리소스", orDashUI(m.breadcrumbGroups())))
+	}
+
+	// 세부 항목은 고른 것이 있을 때만 붙인다. 항상 "-"로 자리를 차지하면 좁은 터미널에서
+	// 프로필·리전이 먼저 밀린다.
+	if items := m.breadcrumbItems(); depth >= breadcrumbItem && items != "" {
+		parts = append(parts, label("세부 항목", items))
 	}
 
 	return strings.Join(parts, m.theme.Faint.Render("   "))
 }
 
-func selectedResourceGroupLabels(groups []ResourceGroup, chosenTypes []string) []string {
+// 경로 헤더에 보여줄 단계. 뒤 단계는 앞 단계를 모두 포함한다.
+const (
+	breadcrumbProfile = iota + 1
+	breadcrumbRegion
+	breadcrumbGroup
+	breadcrumbItem
+)
+
+// breadcrumbDepth는 현재 화면까지 확정된 경로 단계를 반환한다.
+//
+// 뒤로 나온 화면에서 아직 고르지 않은 뒷단계 값을 계속 보여주면, 지금 어디를 고치고 있는지
+// 헷갈린다. 리전 화면에서는 리전까지만 보여준다.
+func (m Model) breadcrumbDepth() int {
+	switch m.screen {
+	case ScreenConfigPath, ScreenProfile, ScreenIdentity, ScreenError:
+		return breadcrumbProfile
+	case ScreenRegion:
+		return breadcrumbRegion
+	case ScreenResourceType:
+		return breadcrumbGroup
+	default:
+		// 수집 중과 그 이후 화면은 선택이 모두 확정된 상태다.
+		return breadcrumbItem
+	}
+}
+
+// breadcrumbGroups는 경로 헤더에 보여줄 리소스 그룹 이름을 만든다.
+//
+// 그룹 전체를 고른 경우만이 아니라 세부 항목 하나만 고른 경우에도 그룹을 보여준다.
+// 아직 아무것도 고르지 않았으면 지금 보고 있는 그룹을 쓴다.
+func (m Model) breadcrumbGroups() string {
 	var labels []string
-	for _, group := range groups {
-		if resourceGroupSelected(group, chosenTypes) {
-			labels = append(labels, group.Label)
+
+	for _, group := range m.deps.ResourceGroups {
+		for _, resourceType := range group.Types {
+			if slices.Contains(m.chosenTypes, resourceType.ID) {
+				labels = append(labels, group.Label)
+
+				break
+			}
 		}
 	}
 
-	return labels
+	if len(labels) == 0 && m.screen == ScreenResourceItem {
+		return m.currentResourceGroup().Label
+	}
+
+	return strings.Join(labels, ",")
+}
+
+// breadcrumbItems는 경로 헤더에 보여줄 세부 항목 이름을 만든다.
+//
+// 그룹의 모든 항목을 고른 경우에는 항목을 늘어놓지 않는다. 그룹 이름이 이미 같은 정보를
+// 담고 있어 줄만 길어진다.
+func (m Model) breadcrumbItems() string {
+	var labels []string
+
+	for _, group := range m.deps.ResourceGroups {
+		chosen := make([]string, 0, len(group.Types))
+		for _, resourceType := range group.Types {
+			if slices.Contains(m.chosenTypes, resourceType.ID) {
+				chosen = append(chosen, resourceType.Label)
+			}
+		}
+		if len(chosen) > 0 && len(chosen) < len(group.Types) {
+			labels = append(labels, chosen...)
+		}
+	}
+
+	return strings.Join(labels, ",")
+}
+
+// currentResourceGroup은 세부 항목 화면이 보여주는 그룹을 반환한다.
+//
+// 인덱스가 범위를 벗어나면 빈 그룹을 반환한다. 그룹 목록이 비어 있어도 렌더링이 깨지지
+// 않아야 한다.
+func (m Model) currentResourceGroup() ResourceGroup {
+	if m.itemGroup < 0 || m.itemGroup >= len(m.deps.ResourceGroups) {
+		return ResourceGroup{}
+	}
+
+	return m.deps.ResourceGroups[m.itemGroup]
+}
+
+// resourceItemTitle은 세부 항목 화면의 제목을 만든다.
+func (m Model) resourceItemTitle() string {
+	group := m.currentResourceGroup()
+	if group.Label == "" {
+		return "세부 항목 선택"
+	}
+
+	return group.Label + " 세부 항목"
 }
 
 func renderCollectErrorDetail(

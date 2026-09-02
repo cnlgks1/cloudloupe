@@ -510,10 +510,10 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 
 // buildTypeTable은 AWS 서비스별 큰 리소스 선택 테이블을 만든다.
 //
-// 세부 타입 ID를 노출하지 않고 그룹에 포함되는 리소스 이름만 보여준다. 선택 결과는
-// resourceGroupTypeIDs로 펼쳐 실제 수집기에는 기존의 정밀한 타입 ID가 전달된다.
+// 포함 항목을 한 줄에 나열하지 않고 개수만 보여준다. 세부 항목은 다음 화면에서 한 행씩
+// 보여주므로, 지원 리소스가 늘어나도 이 화면의 폭이 부족해지지 않는다.
 func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width, height int) table.Model {
-	titles := []string{"", "리소스", "포함 항목"}
+	titles := []string{"", "리소스", "세부 항목"}
 	columns := layoutColumns(titles, width)
 	if len(columns) > 0 {
 		columns[0].Width = 3
@@ -526,11 +526,42 @@ func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width,
 			mark = theme.Glyphs.Healthy
 		}
 
-		labels := make([]string, 0, len(group.Types))
-		for _, resourceType := range group.Types {
-			labels = append(labels, resourceType.Label)
+		rows = append(rows, table.Row{mark, group.Label, strconv.Itoa(len(group.Types)) + "개"})
+	}
+
+	return newDataTable(theme, columns, rows, height)
+}
+
+// buildResourceItemTable은 한 그룹 안의 세부 리소스 항목 표를 만든다.
+//
+// 그룹 화면에 포함 항목을 한 줄로 나열하면 리소스를 추가할수록 잘려서 무엇을 수집하는지
+// 읽을 수 없다. 항목마다 한 행을 주면 개수가 늘어도 화면이 무너지지 않고, 타입 하나만
+// 골라 조회할 수도 있다.
+func buildResourceItemTable(
+	theme Theme,
+	group ResourceGroup,
+	chosen []string,
+	width, height int,
+) table.Model {
+	titles := []string{"", "항목", "타입 ID"}
+	columns := layoutColumns(titles, width)
+	if len(columns) > 0 {
+		columns[0].Width = 3
+	}
+
+	selected := make(map[string]struct{}, len(chosen))
+	for _, typ := range chosen {
+		selected[typ] = struct{}{}
+	}
+
+	rows := make([]table.Row, 0, len(group.Types))
+	for _, resourceType := range group.Types {
+		mark := " "
+		if _, exists := selected[resourceType.ID]; exists {
+			mark = theme.Glyphs.Healthy
 		}
-		rows = append(rows, table.Row{mark, group.Label, strings.Join(labels, ", ")})
+
+		rows = append(rows, table.Row{mark, resourceType.Label, resourceType.ID})
 	}
 
 	return newDataTable(theme, columns, rows, height)

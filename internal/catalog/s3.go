@@ -31,11 +31,13 @@ func s3Definitions(cfg aws.Config) []Definition {
 
 	return []Definition{
 		{
-			Type:           model.TypeS3Bucket,
-			Label:          "Buckets",
-			Scope:          Regional,
-			Columns:        []string{"BucketRegion", "CreationDate"},
-			SummaryColumns: []string{"BucketRegion", "CreationDate"},
+			Type:  model.TypeS3Bucket,
+			Label: "Buckets",
+			Scope: Regional,
+			// CreationDate는 필드로 계속 수집하지만 목록 열에는 넣지 않는다. TUI가 CreatedAt에서
+			// Age 열을 파생시키므로 같은 정보가 두 번 나온다. 정확한 시각은 상세 화면에 있다.
+			Columns:        []string{"BucketRegion"},
+			SummaryColumns: []string{"BucketRegion"},
 			newCollector: func() collect.Collector {
 				return s3.NewBucket(clientFor())
 			},

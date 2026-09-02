@@ -111,7 +111,9 @@ func TestDetailShowsIdentityAndTags(t *testing.T) {
 		"prod",
 		res.ARN,
 		"available",
-		"2025-11-14T03:22:05Z",
+		// 화면은 실행한 사람의 지역 시간으로 보여준다. 테스트가 특정 시간대에 묶이지 않도록
+		// 기대값도 같은 방식으로 만든다.
+		created.Local().Format(time.RFC3339),
 		"Tags (2)",
 		"env",
 		"prod",

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -968,5 +969,62 @@ func TestRegionEnterSynchronizesChosenRowsAndCursor(t *testing.T) {
 	}
 	if m.regionTable.Cursor() != 1 {
 		t.Errorf("리전 테이블 커서 = %d, want 1", m.regionTable.Cursor())
+	}
+}
+
+// TestFormatAgeUsesSingleUnit은 경과 시간이 큰 단위 하나로 압축되는지 확인한다.
+//
+// 목록 열은 좁아야 하고, 정확한 시각은 상세 화면에 있다. kubectl과 k9s의 AGE 열과 같은 규칙이다.
+func TestFormatAgeUsesSingleUnit(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		from time.Time
+		want string
+	}{
+		{name: "초", from: now.Add(-45 * time.Second), want: "45s"},
+		{name: "분", from: now.Add(-12 * time.Minute), want: "12m"},
+		{name: "시간", from: now.Add(-5 * time.Hour), want: "5h"},
+		{name: "이틀 미만은 시간", from: now.Add(-47 * time.Hour), want: "47h"},
+		{name: "일", from: now.Add(-30 * 24 * time.Hour), want: "30d"},
+		{name: "해를 넘기면 년과 일", from: now.Add(-400 * 24 * time.Hour), want: "1y35d"},
+		// 시계 오차로 생성 시각이 미래로 오는 경우가 있다. 음수를 그대로 찍지 않는다.
+		{name: "미래 시각", from: now.Add(time.Hour), want: "0s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := formatAge(tt.from, now); got != tt.want {
+				t.Errorf("formatAge() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestResourceTableShowsAgeColumn은 생성 시각이 있는 리소스에만 Age 열이 붙는지 확인한다.
+func TestResourceTableShowsAgeColumn(t *testing.T) {
+	t.Parallel()
+
+	created := time.Now().Add(-72 * time.Hour)
+	withTime := []model.Resource{
+		{Type: model.TypeEC2Instance, ID: "i-1", Name: "web", CreatedAt: &created},
+	}
+	withoutTime := []model.Resource{
+		{Type: model.TypeEC2RouteTable, ID: "rtb-1", Name: "main"},
+	}
+
+	withAge := buildTestTable(New(true), withTime, withTime, nil, nil, false, 120, 10)
+	if got := columnTitles(withAge); !slices.Contains(got, "Age") {
+		t.Errorf("생성 시각이 있는데 Age 열이 없다: %v", got)
+	}
+
+	noAge := buildTestTable(New(true), withoutTime, withoutTime, nil, nil, false, 120, 10)
+	if got := columnTitles(noAge); slices.Contains(got, "Age") {
+		t.Errorf("생성 시각이 없는데 Age 열이 있다: %v", got)
 	}
 }

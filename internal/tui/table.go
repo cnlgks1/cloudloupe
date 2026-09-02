@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
@@ -171,6 +172,23 @@ func resourceColumns(
 		}})
 	}
 
+	// 생성 시각이 있는 리소스에는 경과 시간을 붙인다. kubectl과 k9s의 AGE 열과 같은 것이다.
+	// 절대 시각은 25자를 차지하지만 경과 시간은 두세 자면 되고, 조사할 때 실제로 쓰는 판단은
+	// "언제 만들어졌나"보다 "얼마나 오래됐나"이다. 오래 방치된 리소스를 찾는 것이 이 도구의
+	// 목적이기도 하다. 절대 시각은 상세 화면에 있다.
+	//
+	// 기준 시각을 한 번만 읽어 열 전체가 같은 순간을 기준으로 계산되게 한다.
+	if hasResourceCreatedAt(resources) {
+		now := time.Now()
+		columns = append(columns, resourceColumn{title: "Age", value: func(resource model.Resource) string {
+			if resource.CreatedAt == nil {
+				return "-"
+			}
+
+			return formatAge(*resource.CreatedAt, now)
+		}})
+	}
+
 	if mixedTypes {
 		if hasSummaryColumns(groups, selectedTypes) {
 			columns = append(columns, resourceColumn{title: "Summary", value: func(resource model.Resource) string {
@@ -226,6 +244,43 @@ func hasResourceStatus(resources []model.Resource) bool {
 	}
 
 	return false
+}
+
+func hasResourceCreatedAt(resources []model.Resource) bool {
+	for _, resource := range resources {
+		if resource.CreatedAt != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// formatAge는 생성 시각을 경과 시간으로 바꾼다.
+//
+// 큰 단위 하나만 남긴다. 조사 화면에서 필요한 정밀도는 "며칠 됐나" 수준이고, 정확한 시각은
+// 상세 화면에 있다. 미래 시각(시계 오차)은 0초로 다룬다.
+func formatAge(createdAt, now time.Time) string {
+	d := now.Sub(createdAt)
+	if d < 0 {
+		d = 0
+	}
+
+	switch {
+	case d < time.Minute:
+		return strconv.Itoa(int(d.Seconds())) + "s"
+	case d < time.Hour:
+		return strconv.Itoa(int(d.Minutes())) + "m"
+	case d < 48*time.Hour:
+		return strconv.Itoa(int(d.Hours())) + "h"
+	case d < 365*24*time.Hour:
+		return strconv.Itoa(int(d.Hours()/24)) + "d"
+	default:
+		years := int(d.Hours() / 24 / 365)
+		days := int(d.Hours()/24) - years*365
+
+		return strconv.Itoa(years) + "y" + strconv.Itoa(days) + "d"
+	}
 }
 
 func resourceTypeMetadata(groups []ResourceGroup, typeID string) (ResourceType, bool) {
@@ -400,7 +455,7 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 	titleWidth := lipgloss.Width(title) + 2
 
 	switch title {
-	case "Port", "Targets", "Iops", "TTL", "Rules", "Size", "Associations", "Routes",
+	case "Age", "Port", "Targets", "Iops", "TTL", "Rules", "Size", "Associations", "Routes",
 		"InboundRules", "OutboundRules", "SubnetIds", "RouteTableIds", "SecurityGroups",
 		"PropagatingVgws", "AvailableIpAddressCount", "Count", "Items":
 		return max(6, titleWidth), max(10, titleWidth), false

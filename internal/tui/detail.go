@@ -80,11 +80,15 @@ func detailBasics(res model.Resource) []model.Field {
 		fields = append(fields, model.Field{Key: "Status", Value: res.Status})
 	}
 	if res.CreatedAt != nil {
-		// 도메인 모델은 UTC로 들고, 표시 직전에만 포맷한다. 수집기가 만드는 시각 필드와 같은
-		// RFC 3339를 쓰는 이유는 화면의 모든 값이 aws CLI 출력과 대조 가능해야 하기 때문이다.
+		// 도메인 모델은 UTC로 들고 표시 직전에만 포맷한다(원칙 8). 화면에는 실행한 사람의
+		// 지역 시간으로 보여준다. UTC로 찍으면 조사할 때마다 머릿속에서 시차를 더해야 한다.
+		//
+		// 오프셋을 남기는 RFC 3339를 쓰므로 어느 시간대인지 분명하고, 같은 순간을 가리키므로
+		// aws CLI 출력과 대조할 수 있다. Go는 TZ 환경변수를 따르니 UTC로 보려면
+		// TZ=UTC cloudloupe 로 실행한다.
 		fields = append(fields, model.Field{
 			Key:   "Created",
-			Value: res.CreatedAt.UTC().Format(time.RFC3339),
+			Value: res.CreatedAt.Local().Format(time.RFC3339),
 		})
 	}
 

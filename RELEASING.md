@@ -1,17 +1,17 @@
 # 릴리스 운영
 
-관리자용 문서입니다. 릴리스 원본은 GitHub Releases이고, 설치 스크립트와 (연결 후) Homebrew는
-같은 자산을 씁니다.
+관리자용 문서입니다. 릴리스 원본은 GitHub Releases입니다. 설치 스크립트는 Release 바이너리를
+사용하고, Homebrew Formula는 같은 태그의 소스를 빌드합니다.
 
 ## 자동화 범위
 
 `v*` 태그를 push하면 `.github/workflows/release.yml`이 전체 CI를 먼저 돌리고, 성공한 뒤에만
 GoReleaser `v2.18.0`으로 게시합니다. 산출물은 6개 아카이브(Unix `tar.gz`, Windows `zip`)와
 `checksums.txt`(SHA-256)이며, 각 아카이브에 `README.md`와 `LICENSE`가 들어가고 바이너리에는
-버전·커밋·빌드 날짜가 주입됩니다. `GITHUB_TOKEN`은 GitHub가 자동 제공합니다.
+버전·커밋·커밋 날짜가 주입됩니다. `GITHUB_TOKEN`은 GitHub가 자동 제공합니다.
 
-아직 연결되지 않은 것: Homebrew Tap 게시, macOS 코드 서명과 공증, Winget·Scoop. Tap과 서명을
-실제로 시험하기 전에는 `brew install`을 공개 설치 방법으로 안내하지 않습니다.
+아직 연결되지 않은 것은 Homebrew Formula 게시입니다. Formula를 실제로 시험하기 전에는
+`brew install`을 공개 설치 방법으로 안내하지 않습니다.
 
 ## 버전 규칙
 
@@ -67,67 +67,82 @@ CLOUDLOUPE_VERSION=v0.1.0 sh install.sh
 
 ## 실패 대응
 
-실패한 커밋의 workflow를 재실행하면 같은 파일과 설정을 쓰므로, 원인을 고친 새 커밋을 push해
-새 실행을 만듭니다.
+태그에서 실패한 workflow를 재실행하면 같은 커밋과 설정을 사용합니다. 원인을 고친 새 커밋을
+`main`에 반영한 뒤 patch 버전을 올린 새 태그로 릴리스를 게시합니다. 일반 `main` push만으로는
+태그용 Release workflow가 시작되지 않습니다.
 
-이미 공개한 태그는 다른 커밋으로 옮기지 않습니다. 수정 커밋 후 patch를 올려 새 릴리스를
-게시합니다(`v0.1.0` 문제 → `v0.1.1`).
+이미 공개한 태그는 다른 커밋으로 옮기지 않습니다(`v0.1.0` 문제 → 수정 커밋 → `v0.1.1`).
 
 자산이 일부만 올라갔으면 workflow 로그와 Release 상태를 먼저 확인합니다. 태그나 Release
 삭제는 사용자에게 영향을 주므로 자동으로 하지 않고 명시적으로 결정합니다.
 
-## Homebrew Tap 연결
+## Homebrew Formula 게시
 
-Tap은 소스 저장소와 분리된 공개 저장소(`cnlgks1/homebrew-tap`, 기본 브랜치 `main`)로
-운영합니다. 기본 `GITHUB_TOKEN`은 다른 저장소에 쓸 수 없어 별도 토큰이 필요합니다.
+Homebrew는 공개 태그의 소스를 사용자의 환경에서 빌드하는 Formula로 제공합니다. Formula는
+별도 공개 저장소 `cnlgks1/homebrew-tap`의 `Formula/cloudloupe.rb`에서 수동으로 관리합니다.
+Homebrew의 [Tap 관리 문서](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap)에 따라 Formula를
+커밋하고 push하면 사용자가 직접 설치할 수 있습니다.
 
-1. fine-grained PAT을 만든다. Resource owner `cnlgks1`, 대상 저장소는 `homebrew-tap` 하나,
-   권한은 `Contents: Read and write`만, 만료 기간 설정.
-2. cloudloupe 저장소의 `Settings → Secrets and variables → Actions`에 `TAP_GITHUB_TOKEN`으로
-   저장한다. 저장소 파일이나 로그에 넣지 않는다.
-3. `.goreleaser.yaml`에 cask 구성을 추가한다.
-4. `.github/workflows/release.yml`의 GoReleaser 단계에 `TAP_GITHUB_TOKEN` 환경 변수를 넘긴다.
+첫 공개 태그를 게시한 뒤 소스 아카이브의 SHA-256을 구합니다.
 
-```yaml
-homebrew_casks:
-  - name: cloudloupe
-    ids: [cloudloupe]
-    binaries: [cloudloupe]
-    repository:
-      owner: cnlgks1
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/cnlgks1/cloudloupe
-    description: 조회 전용 AWS 인프라 조사 TUI
-    license: MIT
+```sh
+curl -L https://github.com/cnlgks1/cloudloupe/archive/refs/tags/v0.1.0.tar.gz \
+  | shasum -a 256
 ```
 
-필드 이름과 기본 동작은 도구 버전을 올릴 때마다
-[GoReleaser Homebrew 문서](https://goreleaser.com/customization/homebrew_casks/)와 대조합니다.
-토큰 권한 원칙은
-[GitHub PAT 문서](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)를
-참고합니다.
+`homebrew-tap` 저장소에 다음 Formula를 추가하고 `url`, `sha256`과 버전을 실제 태그에 맞춥니다.
+Homebrew의 Go 빌드 인자는 [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)의
+`std_go_args`를 사용합니다.
 
-macOS 서명·공증 정책은 Tap 연결보다 먼저 정합니다. 서명하지 않은 바이너리는 Gatekeeper에
-막힐 수 있고, `xattr`로 검사를 우회하는 post-install hook은 해법으로 쓰지 않습니다. 준비되지
-않았다면 Tap을 보류하고 Release와 설치 스크립트만 제공합니다.
+```ruby
+class Cloudloupe < Formula
+  desc "Read-only AWS infrastructure investigation TUI"
+  homepage "https://github.com/cnlgks1/cloudloupe"
+  url "https://github.com/cnlgks1/cloudloupe/archive/refs/tags/v0.1.0.tar.gz"
+  sha256 "소스_아카이브의_SHA256"
+  license "MIT"
 
-연결 후에는 새 릴리스가 `homebrew-tap`의 `Casks/cloudloupe.rb`를 갱신하는지 확인하고, 깨끗한
-macOS에서 설치와 제거를 시험한 뒤 README에 `brew` 명령을 추가합니다.
+  depends_on "go" => :build
+
+  def install
+    ENV["CGO_ENABLED"] = "0"
+
+    ldflags = "-s -w -X main.version=v#{version}"
+    system "go", "build",
+           *std_go_args(output: bin/"cloudloupe", ldflags:),
+           "./cmd/cloudloupe"
+  end
+
+  test do
+    assert_match "v#{version}", shell_output("#{bin}/cloudloupe --version")
+  end
+end
+```
+
+관리자는 평소 Git push에 사용하는 로컬 GitHub 인증으로 Formula 변경을 커밋하고 push합니다.
+릴리스마다 새 태그의 URL과 SHA-256으로 Formula를 갱신합니다.
+
+Formula를 push한 뒤 깨끗한 환경에서 감사, 소스 빌드, 테스트와 제거를 확인합니다.
 
 ```sh
 brew tap cnlgks1/tap
-brew install --cask cnlgks1/tap/cloudloupe
+brew audit --strict --online cnlgks1/tap/cloudloupe
+brew install --build-from-source cnlgks1/tap/cloudloupe
+brew test cnlgks1/tap/cloudloupe
 cloudloupe --version
-brew uninstall --cask cloudloupe
+brew uninstall cloudloupe
+```
+
+검증이 끝나면 README의 공개 설치 방법으로 다음 명령을 안내합니다.
+
+```sh
+brew install cnlgks1/tap/cloudloupe
 ```
 
 ## 보안 원칙
 
 - 쓰기 권한은 게시 잡에만 둔다.
 - 외부 Action은 전체 커밋 SHA로 고정한다.
-- Tap 토큰은 `homebrew-tap`의 Contents 쓰기만 허용한다.
-- 토큰과 AWS 자격증명을 릴리스 자산에 넣지 않는다.
-- 체크섬은 손상 검출용이며 코드 서명을 대신하지 않는다.
+- AWS 자격증명을 릴리스 자산에 넣지 않는다.
+- 체크섬으로 다운로드한 아카이브의 무결성을 검증한다.
 - 태그와 자산을 강제로 덮어쓰지 않는다.

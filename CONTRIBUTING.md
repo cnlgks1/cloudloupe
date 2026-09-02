@@ -6,7 +6,9 @@
 
 ## 준비
 
-Go(`go.mod`에 지정된 버전 이상), Git, Make가 필요합니다.
+Go(`go.mod`에 지정된 버전 이상), Git, Make와 POSIX 셸 도구가 필요합니다. `make test-race`를
+실행하려면 현재 플랫폼의 C 컴파일러도 설치되어 있어야 합니다. Windows 런타임은 지원하지만
+전체 Makefile 검증은 Git Bash나 WSL 같은 POSIX 환경에서 실행합니다.
 
 ```sh
 git clone https://github.com/cnlgks1/cloudloupe.git
@@ -37,15 +39,15 @@ race·cross가 빠져 있으므로 따로 실행합니다.
 make ci && make tidy-check && make lint && make test-race && make cross && git diff --check
 ```
 
-| 명령                    | 검사 내용                                                          |
-| ----------------------- | ------------------------------------------------------------------ |
-| `make ci`               | gofmt, go vet, 조회 전용 가드와 자체 검사, 테스트, 현재 플랫폼 빌드 |
-| `make tidy-check`       | `go.mod`, `go.sum`이 정리된 상태인지                               |
-| `make lint`             | golangci-lint (`.golangci.yml` 설정)                               |
-| `make test-race`        | `CGO_ENABLED=1`로 데이터 레이스 검사                               |
-| `make cross`            | 6종 OS/아키텍처 빌드                                               |
-| `make verify-readonly`  | 조회 API만 호출하는지                                              |
-| `make snapshot`         | 게시 없이 GoReleaser 산출물 생성                                   |
+| 명령 | 검사 내용 |
+| --- | --- |
+| `make ci` | gofmt, go vet, 조회 전용 가드와 자체 검사, 테스트, 현재 플랫폼 빌드 |
+| `make tidy-check` | `go.mod`, `go.sum`이 정리된 상태인지 |
+| `make lint` | golangci-lint (`.golangci.yml` 설정) |
+| `make test-race` | `CGO_ENABLED=1`로 데이터 레이스 검사 |
+| `make cross` | 6종 OS/아키텍처 빌드 |
+| `make verify-readonly` | 조회 API만 호출하는지 |
+| `make snapshot` | 게시 없이 GoReleaser 산출물 생성 |
 
 테스트는 실제 AWS를 호출하지 않습니다. 자격증명이나 네트워크를 전제로 한 테스트는 추가하지
 않습니다. Windows 런타임의 최종 근거는 GitHub Actions의 `windows-latest` 잡입니다.
@@ -69,7 +71,7 @@ make ci && make tidy-check && make lint && make test-race && make cross && git d
 - [ ] 위 검증 명령이 모두 통과한다
 - [ ] 새 테스트가 실제 AWS나 사용자 자격증명을 쓰지 않는다
 - [ ] AWS 호출은 조회 API뿐이며 `make verify-readonly`를 우회하지 않았다
-- [ ] 실제 계정 ID, ARN, 자격증명, 리포트 데이터가 diff에 없다
+- [ ] 실제 계정 ID, ARN, 자격증명, AWS 리소스 데이터가 diff에 없다
 - [ ] 새 리소스라면 README 표와 IAM 예제를 갱신했다
 - [ ] 사용자 출력과 주석은 한국어, 식별자와 출력 계약은 영어다
 
@@ -81,7 +83,7 @@ make ci && make tidy-check && make lint && make test-race && make cross && git d
 
 ```sh
 sh -n install.sh
-goreleaser check
+go run github.com/goreleaser/goreleaser/v2@v2.18.0 check
 make snapshot
 ```
 

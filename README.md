@@ -10,13 +10,6 @@
   <img alt="상태" src="https://img.shields.io/badge/status-개발%20중-orange.svg">
 </p>
 
-<!--
-CI·Go Report Card 배지는 저장소를 공개로 전환한 뒤 추가한다. 비공개 상태에서는
-badge.svg가 인증을 요구해 깨진 이미지로 보인다. 공개 전환 시 아래를 되살릴 것:
-  [CI](actions/workflows/ci.yml/badge.svg)
-  [Go Report Card](goreportcard.com/badge/github.com/cnlgks1/cloudloupe)
--->
-
 AWS 인프라를 조회하는 터미널 UI입니다. `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의
 리소스를 수집하고, 리소스 필드 상세와 수집기가 기록한 관계 메타데이터를 보여줍니다.
 
@@ -40,7 +33,7 @@ AWS 리소스를 생성·수정·삭제하지 않습니다.
 
 - SDK 호출은 allow-list로 제한합니다. `Describe`, `List`, `Get`, `Lookup`, `Search`,
   `BatchGet` 접두사만 허용하고, 그 외 호출이 있으면 `make verify-readonly`가 실패합니다.
-- 수집기 인터페이스의 메서드는 `Collect` 하나입니다.
+- 수집기 인터페이스에는 타입 식별용 `Type`과 조회 동작 `Collect`만 있습니다.
 - 설정 파일은 파싱만 하고 수정하거나 전송하지 않습니다.
 - 현재 실행 경로는 로컬 파일을 쓰지 않습니다.
 
@@ -49,27 +42,25 @@ AWS 리소스를 생성·수정·삭제하지 않습니다.
 TUI에서는 그룹 단위로 선택하고, 내부에서 세부 타입을 함께 수집합니다. 모든 조회는 아래
 AWS SDK for Go v2 API만 사용합니다.
 
-| 그룹     | 타입 ID                | SDK API                                                       |
-| -------- | ---------------------- | ------------------------------------------------------------- |
-| EC2      | `ec2:instance`         | `ec2.DescribeInstances`                                       |
-| EC2      | `ec2:volume`           | `ec2.DescribeVolumes`                                         |
-| EC2      | `ec2:networkInterface` | `ec2.DescribeNetworkInterfaces`                               |
-| EC2      | `ec2:address`          | `ec2.DescribeAddresses`                                       |
-| VPC      | `ec2:vpc`              | `ec2.DescribeVpcs`                                            |
-| VPC      | `ec2:subnet`           | `ec2.DescribeSubnets`                                         |
-| VPC      | `ec2:securityGroup`    | `ec2.DescribeSecurityGroups`                                  |
-| ELB      | `elbv2:loadBalancer`   | `elbv2.DescribeLoadBalancers`                                 |
-| ELB      | `elbv2:listener`       | `elbv2.DescribeLoadBalancers`, `DescribeListeners`, `DescribeRules` |
-| ELB      | `elbv2:targetGroup`    | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth`          |
-| Route 53 | `route53:recordSet`    | `route53.ListHostedZones`, `ListResourceRecordSets`           |
-| WAF      | `wafv2:webAcl`         | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프)            |
+| 그룹 | 타입 ID | SDK API |
+| --- | --- | --- |
+| EC2 | `ec2:instance` | `ec2.DescribeInstances` |
+| EC2 | `ec2:volume` | `ec2.DescribeVolumes` |
+| EC2 | `ec2:networkInterface` | `ec2.DescribeNetworkInterfaces` |
+| EC2 | `ec2:address` | `ec2.DescribeAddresses` |
+| VPC | `ec2:vpc` | `ec2.DescribeVpcs` |
+| VPC | `ec2:subnet` | `ec2.DescribeSubnets` |
+| VPC | `ec2:securityGroup` | `ec2.DescribeSecurityGroups` |
+| ELB | `elbv2:loadBalancer` | `elbv2.DescribeLoadBalancers` |
+| ELB | `elbv2:listener` | `elbv2.DescribeLoadBalancers`, `DescribeListeners`, `DescribeRules` |
+| ELB | `elbv2:targetGroup` | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth` |
+| Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
+| WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 
 `elbv2`는 SDK 패키지 `elasticloadbalancingv2`입니다. Route 53은 글로벌 서비스라 리전 선택과
 무관하게 한 번만 조회합니다.
 
-타입 ID는 관계 식별과 수집기 선택에 그대로 쓰이는 출력 계약입니다. 스냅샷은
-`schemaVersion: 2`이며, v1 소비자는 관계 namespace와 식별자 의미가 달라 자동 변환 없이
-버전을 확인해야 합니다.
+타입 ID는 관계 식별과 수집기 선택에 쓰이는 내부 계약입니다.
 
 ## 사용법
 
@@ -98,12 +89,12 @@ cloudloupe --config PATH --credentials PATH
 경로는 빌드 시점에 굽지 않고 실행할 때마다 해석합니다. 설치 방식과 무관하게 실행한 사용자의
 환경과 홈 디렉터리를 씁니다. 우선순위는 AWS CLI와 동일합니다.
 
-| 대상        | 우선순위                                          |
-| ----------- | ------------------------------------------------- |
-| config      | `AWS_CONFIG_FILE` → `~/.aws/config`               |
+| 대상 | 우선순위 |
+| --- | --- |
+| config | `AWS_CONFIG_FILE` → `~/.aws/config` |
 | credentials | `AWS_SHARED_CREDENTIALS_FILE` → `~/.aws/credentials` |
-| 기본 프로필 | `AWS_PROFILE` → `AWS_DEFAULT_PROFILE`             |
-| 기본 리전   | `AWS_REGION` → `AWS_DEFAULT_REGION`               |
+| 기본 프로필 | `AWS_PROFILE` → `AWS_DEFAULT_PROFILE` |
+| 기본 리전 | `AWS_REGION` → `AWS_DEFAULT_REGION` |
 
 Windows에서는 `%USERPROFILE%`, 비어 있으면 `%HOMEDRIVE%%HOMEPATH%`를 씁니다.
 
@@ -139,11 +130,9 @@ CLOUDLOUPE_VERSION=v0.1.0 CLOUDLOUPE_INSTALL_DIR="$HOME/bin" sh install.sh
 파이프로 실행하기 전에 스크립트를 읽고 싶다면 `curl -fsSLO .../install.sh && less install.sh`
 후 `sh install.sh`를 실행하세요.
 
-`go install`은 Release 자산을 쓰지 않으므로 Release 게시와 무관합니다. 저장소가 비공개인
-동안에는 `GOPRIVATE`이 필요합니다.
+공개 태그 이후에는 Release 자산과 무관하게 Go 도구 체인으로도 설치할 수 있습니다.
 
 ```sh
-export GOPRIVATE=github.com/cnlgks1/*
 go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
 ```
 
@@ -151,8 +140,9 @@ Windows는 [Releases](https://github.com/cnlgks1/cloudloupe/releases)에서
 `cloudloupe_windows_{amd64,arm64}.zip`과 `checksums.txt`를 받아
 `Get-FileHash -Algorithm SHA256`으로 검증한 뒤 `cloudloupe.exe`를 PATH에 둡니다.
 
-Homebrew tap은 별도 저장소와 토큰이 필요해 Release 게시 후 연결합니다. 순서는
-[RELEASING.md](RELEASING.md#homebrew-tap-연결)에 있습니다.
+Homebrew는 첫 Release 후 공개 태그의 소스를 로컬에서 빌드하는 Formula로 제공할 예정입니다.
+`brew install cnlgks1/tap/cloudloupe`를 검증한 뒤 설치 방법을 공개하며, 관리 절차는
+[RELEASING.md](RELEASING.md#homebrew-formula-게시)에 있습니다.
 
 ### 지원 플랫폼
 
@@ -162,14 +152,14 @@ macOS, Linux, Windows × amd64, arm64 6종을 `CGO_ENABLED=0` 정적 바이너�
 
 ## 로드맵
 
-| 단계 | 범위                                                                    | 상태    |
-| ---- | ----------------------------------------------------------------------- | ------- |
-| 1    | 프로필·신원·리전 선택과 EC2 인스턴스 조회 TUI                           | 완료    |
-| 2    | EBS, ENI, EIP, VPC, 서브넷, 보안 그룹, ALB/NLB, 타깃 그룹, Route 53, WAF | 완료    |
-| 3    | 관계 그래프 코어와 TUI 그래프 탐색 연결                                 | 진행 중 |
-| 4    | 근거·신뢰도를 갖춘 미사용 후보 탐지 (CloudWatch, CloudTrail)            | 예정    |
-| 5    | JSON / CSV / Markdown 리포트                                            | 예정    |
-| 6    | GoReleaser Release·체크섬, 설치 스크립트, Homebrew tap                  | 진행 중 |
+| 단계 | 범위 | 상태 |
+| --- | --- | --- |
+| 1 | 프로필·신원·리전 선택과 EC2 인스턴스 조회 TUI | 완료 |
+| 2 | EBS, ENI, EIP, VPC, 서브넷, 보안 그룹, ALB/NLB, 타깃 그룹, Route 53, WAF | 완료 |
+| 3 | 관계 그래프 코어와 TUI 그래프 탐색 연결 | 진행 중 |
+| 4 | 근거·신뢰도를 갖춘 미사용 후보 탐지 (CloudWatch, CloudTrail) | 예정 |
+| 5 | JSON / CSV / Markdown 리포트 | 예정 |
+| 6 | GoReleaser Release·체크섬, 설치 스크립트, Homebrew Formula | 진행 중 |
 
 4단계 판정 결과에는 **확정**, **추정**, **확인 필요** 신뢰도와 판단에 사용한 API 응답·지표를
 함께 붙입니다.

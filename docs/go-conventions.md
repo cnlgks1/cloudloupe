@@ -9,7 +9,7 @@ cloudloupe의 코드 리뷰 기준입니다. 원칙이 서로 충돌하면 1번(
   `Search`, `BatchGet`이고, 나머지는 `scripts/verify-readonly.sh`가 CI에서 실패시킵니다.
   deny-list는 AWS에 새 쓰기 API가 생기면 뚫립니다.
 - `~/.aws/*`는 읽기만 합니다.
-- 로컬 쓰기는 사용자가 지정한 리포트 출력 경로에만 허용합니다.
+- 현재 실행 경로는 로컬 파일을 쓰지 않습니다.
 
 ```go
 // 여기에 Apply/Delete/Modify가 생기면 설계 위반이다.
@@ -22,9 +22,12 @@ type Collector interface {
 ## 2. 의존성은 한 방향으로 흐른다
 
 ```text
-cmd/cloudloupe → internal/tui → internal/app → internal/collect → internal/collector/* → AWS SDK
-                                                      ↓
-                              internal/graph, internal/catalog → internal/model
+cmd/cloudloupe
+├─ internal/tui
+├─ internal/app → internal/awsclient, internal/catalog, internal/collect, internal/model
+└─ internal/catalog → internal/collector/* → AWS SDK
+internal/collector/* → internal/collect, internal/model
+internal/collect, internal/graph → internal/model
 ```
 
 - `internal/model`은 표준 라이브러리만 import합니다. `graph`나 앞으로 추가될 `findings`,
@@ -63,7 +66,6 @@ type instancesAPI interface {
   문자열 매칭은 최후 수단입니다.
 - 사용자 메시지와 진단 메시지를 분리합니다. `awsclient.Explain`이 자격증명 없음, 권한 부족,
   토큰 만료, 리전 미지원을 사람이 읽을 문장으로 바꾸고 원본은 상세 뷰에 남깁니다.
-- `panic`은 프로그래밍 오류에만 씁니다. TUI는 최상위에서 recover하고 터미널을 복구합니다.
 
 ## 6. 고루틴은 상한을 두고 호출자가 소유한다
 
@@ -71,7 +73,7 @@ type instancesAPI interface {
   리전 × 타입은 곱셈으로 늘어나고, 무제한 고루틴은 스로틀링을 부릅니다.
 - 함수가 만든 고루틴은 그 함수가 리턴하기 전에 정리됩니다.
 - 채널 파이프라인보다 뮤텍스로 보호한 슬라이스가 단순하면 그쪽을 씁니다.
-- 수집 결과는 완성 후 불변 스냅샷으로 넘깁니다.
+- 모든 수집 고루틴이 끝난 뒤 완성된 `collect.Result`를 반환합니다.
 
 ## 7. Bubble Tea는 Elm 규율을 지킨다
 
@@ -113,7 +115,7 @@ type instancesAPI interface {
 ## 11. 테스트는 자격증명 없이 돌아간다
 
 - AWS 호출은 좁은 인터페이스 경계에서 fake로 대체합니다. 테스트는 실제 AWS를 때리지 않습니다.
-- 순수 로직은 테이블 드리븐으로 덮고, 리포트 출력은 golden 파일로 검증합니다.
+- 순수 로직은 테이블 드리븐 테스트로 검증합니다.
 - TUI는 `Update(msg)`를 직접 호출해 "메시지 입력 → 기대 상태"로 테스트합니다. 렌더링 문자열
   비교는 깨지기 쉽습니다.
 

@@ -1,0 +1,15 @@
+{
+  "MD013": false,
+  "MD033": {
+    "allowed_elements": [
+      "a",
+      "em",
+      "h1",
+      "img",
+      "p"
+    ]
+  },
+  "MD060": {
+    "style": "compact"
+  }
+}

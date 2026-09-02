@@ -32,24 +32,26 @@ go install github.com/goreleaser/goreleaser/v2@v2.18.0
 go test ./internal/collector/elbv2
 ```
 
-PR 전에는 전체 검사를 돌립니다. `make ci`에는 외부 도구가 필요한 lint와 비용이 큰
-race·cross가 빠져 있으므로 따로 실행합니다. 특히 `make cross`는 CI가 태그와 수동 실행에서만
-돌리므로(잡 하나가 10분 이상 걸립니다) 로컬 실행이 사실상 유일한 사전 확인입니다. 빌드 태그,
-OS별 파일, 새 의존성을 건드렸다면 반드시 돌리세요.
+PR 전에는 전체 검사를 돌립니다. `make ci`가 크로스 컴파일까지 포함하므로 남는 것은 외부 도구가
+필요한 lint와 C 컴파일러가 필요한 race입니다.
 
 ```sh
-make ci && make tidy-check && make lint && make test-race && make cross && git diff --check
+make ci && make tidy-check && make lint && make test-race && git diff --check
 ```
 
 | 명령 | 검사 내용 |
 | --- | --- |
-| `make ci` | gofmt, go vet, 조회 전용 가드와 자체 검사, 테스트, 현재 플랫폼 빌드 |
+| `make ci` | gofmt, go vet, 조회 전용 가드와 자체 검사, 테스트, 빌드, 6종 크로스 컴파일 |
 | `make tidy-check` | `go.mod`, `go.sum`이 정리된 상태인지 |
 | `make lint` | golangci-lint (`.golangci.yml` 설정) |
 | `make test-race` | `CGO_ENABLED=1`로 데이터 레이스 검사 |
-| `make cross` | 6종 OS/아키텍처 빌드 |
+| `make cross` | 6종 OS/아키텍처 빌드 (`make ci`에 포함) |
 | `make verify-readonly` | 조회 API만 호출하는지 |
 | `make snapshot` | 게시 없이 GoReleaser 산출물 생성 |
+
+크로스 컴파일을 `make ci`에 넣은 이유는 CI가 이 검사를 태그와 수동 실행으로 미뤘기 때문입니다.
+로컬은 빌드 캐시가 살아 있으면 몇 초로 끝나지만 CI는 매번 캐시가 비어 10분이 걸립니다. 의존성을
+추가한 직후에는 캐시가 무효화되어 1분대로 늘어납니다.
 
 테스트는 실제 AWS를 호출하지 않습니다. 자격증명이나 네트워크를 전제로 한 테스트는 추가하지
 않습니다. Windows 런타임의 최종 근거는 GitHub Actions의 `windows-latest` 잡입니다.

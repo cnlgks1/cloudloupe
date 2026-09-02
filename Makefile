@@ -135,8 +135,14 @@ snapshot: ## 태그 없이 릴리스 파이프라인을 로컬에서 시험
 		exit 1; \
 	fi
 
+# cross를 여기 넣은 이유는 GitHub Actions에서 이 검사를 태그와 수동 실행으로 미뤘기 때문이다.
+# 크로스 컴파일은 로컬에서 빌드 캐시가 살아 있으면 몇 초로 끝나지만, CI에서는 매번 캐시가 비어
+# 10분이 걸리고 비공개 저장소의 무료 실행 분을 깎는다. 같은 검증을 싼 쪽에서 한다.
+#
+# 의존성을 추가하면 캐시가 무효화되어 이 타깃이 1분대로 늘어난다. 그 시점이 곧 크로스 컴파일이
+# 깨질 위험이 가장 큰 때이므로 그대로 둔다.
 .PHONY: ci
-ci: fmt-check vet verify-readonly-self-test verify-readonly test build ## CI와 같은 검사 실행 (lint 도구 제외)
+ci: fmt-check vet verify-readonly-self-test verify-readonly test build cross ## 커밋 전 로컬 검사 (lint 도구 제외)
 	@echo
 	@echo "ci: 모든 검사 통과"
 

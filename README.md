@@ -171,7 +171,7 @@ internal/tui              Bubble Tea 상태 전이와 렌더링
 ## 개발
 
 ```sh
-make ci         # gofmt 검사, vet, 조회 전용 가드, 테스트, 빌드
+make ci         # gofmt 검사, vet, 조회 전용 가드, 테스트, 빌드, 6종 크로스 컴파일
 make test       # 단위 테스트
 make lint       # golangci-lint
 make test-race  # 데이터 레이스 검사
@@ -179,7 +179,9 @@ make cross      # 6종 OS/아키텍처 빌드
 make help       # 전체 타깃
 ```
 
-`make ci`는 로컬 묶음 검사이며 GitHub Actions 행렬과 동일하지 않습니다.
+`make ci`는 커밋 전 로컬 검사이며 GitHub Actions 행렬과 동일하지 않습니다. 크로스 컴파일은
+로컬이 훨씬 싸므로(빌드 캐시가 있으면 몇 초) CI는 태그와 수동 실행에서만 돌립니다. 릴리스는
+GoReleaser가 6종을 다시 빌드하고 하나라도 실패하면 게시하지 않습니다.
 
 기여 절차는 [CONTRIBUTING.md](CONTRIBUTING.md), 릴리스 운영은 [RELEASING.md](RELEASING.md),
 설계 규칙은 [docs/go-conventions.md](docs/go-conventions.md)에 있습니다.

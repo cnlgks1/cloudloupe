@@ -22,8 +22,11 @@ Homebrew Formula 게시는 자동화되지 않았습니다. 아래 절차로 수
 
 ```sh
 git switch main && git pull --ff-only && git status --short
-make ci && make tidy-check && make lint && make test-race && make cross
+make ci && make tidy-check && make lint && make test-race
 ```
+
+`make ci`가 6종 크로스 컴파일까지 돌립니다. 태그를 붙이면 CI가 같은 검사를 한 번 더 하고,
+성공한 뒤 GoReleaser가 배포 아카이브를 만듭니다.
 
 CI와 같은 GoReleaser 버전으로 구성과 산출물을 확인합니다.
 

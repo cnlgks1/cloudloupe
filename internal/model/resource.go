@@ -35,7 +35,15 @@ const (
 	TypeELBv2TargetGroup    = "elbv2:targetGroup"
 	TypeRoute53RecordSet    = "route53:recordSet"
 	TypeWAFv2WebACL         = "wafv2:webAcl"
+	TypeIAMRole             = "iam:role"
+	TypeKMSKey              = "kms:key"
 )
+
+// RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
+//
+// IAM이나 Route 53처럼 계정 단위로만 존재하는 리소스가 쓴다. 출력 계약이므로 수집기마다
+// 문자열을 따로 적지 않고 이 상수를 쓴다.
+const RegionGlobal = "global"
 
 // [Ref]에서 사용하는 관계 이름.
 //
@@ -248,6 +256,10 @@ func typeRank(resourceType string) int {
 		return 14
 	case TypeWAFv2WebACL:
 		return 15
+	case TypeIAMRole:
+		return 16
+	case TypeKMSKey:
+		return 17
 	default:
 		return 1000
 	}

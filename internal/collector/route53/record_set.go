@@ -133,7 +133,7 @@ func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route
 		ID:        resourceID,
 		Namespace: zoneID,
 		Name:      name,
-		Region:    "global",
+		Region:    model.RegionGlobal,
 		Profile:   scope.Profile,
 		AccountID: scope.AccountID,
 		Status:    recType,

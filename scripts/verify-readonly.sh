@@ -47,7 +47,13 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #                            (조회)를 감싼다
 #   webACLToResource       - wafv2 수집기의 내부 메서드. 요약을 리소스로 바꾸며 내부에서
 #                            GetWebACL(조회)을 부른다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource'
+#   FanOut                 - collect의 팬아웃 헬퍼. 호출자가 넘긴 함수를 상한 있는 동시성으로
+#                            실행할 뿐 AWS를 직접 부르지 않는다. 실제 호출은 호출자 쪽에서
+#                            이 검사를 받는다
+#   keyEntries             - kms 수집기의 내부 메서드. ListKeys(조회)를 페이지째 감싼다
+#   aliasesByKeyID         - kms 수집기의 내부 메서드. ListAliases(조회)를 감싸 키 ID로
+#                            색인한다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

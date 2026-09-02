@@ -36,6 +36,24 @@
       "Resource": "*"
     },
     {
+      "Sid": "Identities",
+      "Effect": "Allow",
+      "Action": [
+        "iam:List*",
+        "iam:Get*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Encryption",
+      "Effect": "Allow",
+      "Action": [
+        "kms:List*",
+        "kms:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "WebAcls",
       "Effect": "Allow",
       "Action": [

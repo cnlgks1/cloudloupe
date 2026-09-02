@@ -268,5 +268,7 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "elbv2", Label: "ELB", Types: elbv2Definitions(cfg)},
 		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
 		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
+		Group{ID: "iam", Label: "IAM", Types: iamDefinitions(cfg)},
+		Group{ID: "kms", Label: "KMS", Types: kmsDefinitions(cfg)},
 	)
 }

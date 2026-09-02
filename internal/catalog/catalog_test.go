@@ -48,6 +48,8 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeELBv2TargetGroup,
 		model.TypeRoute53RecordSet,
 		model.TypeWAFv2WebACL,
+		model.TypeIAMRole,
+		model.TypeKMSKey,
 	}
 
 	got := make([]string, 0, len(definitions))
@@ -76,7 +78,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "network", "elbv2", "route53", "wafv2"}
+	wantIDs := []string{"ec2", "vpc", "network", "elbv2", "route53", "wafv2", "iam", "kms"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)

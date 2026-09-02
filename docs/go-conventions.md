@@ -23,7 +23,7 @@ type Collector interface {
 
 ```text
 cmd/cloudloupe
-├─ internal/tui
+├─ internal/tui → internal/awsclient, internal/collect, internal/model
 ├─ internal/app → internal/awsclient, internal/catalog, internal/collect, internal/model
 └─ internal/catalog → internal/collector/* → AWS SDK
 internal/collector/* → internal/collect, internal/model
@@ -84,7 +84,9 @@ type instancesAPI interface {
   경로만 씁니다.
 - 화면 전환은 상태 enum + `switch`. 화면 로직이 커지면 자체 `Update`/`View`를 가진 서브모델로
   분리합니다.
-- 키 바인딩은 `key.Binding`으로 모아 help 뷰와 공유합니다.
+- 키 바인딩은 `keyMap`에 모읍니다. 이동 키는 표 위젯 기본 바인딩을 씁니다. 현재 하단 도움말
+  문구는 `View`에 따로 적혀 있어 바인딩과 이중 관리 상태입니다. 새 키를 넣을 때는 두 곳을
+  함께 고쳐야 하며, `/` 검색처럼 `Update`에서 문자열을 직접 비교하는 곳도 남아 있습니다.
 - ASCII 분기는 렌더링 코드에 넣지 않고 테마가 글리프를 들고 있게 합니다.
 
 ## 8. 렌더링은 결정적으로

@@ -57,11 +57,13 @@ make ci && make tidy-check && make lint && make test-race && make cross && git d
 1. `internal/model`에 타입 ID와 도메인 값을 정의하고, `SortResources`의 출력 순서에 새 타입을
    넣습니다. 빼먹으면 모르는 타입으로 취급되어 결과 맨 뒤로 밀립니다.
 2. `internal/collector/<service>`에 수집기를 구현합니다. SDK 호출은 메서드 1~3개의 좁은
-   인터페이스로 받고, 포인터는 이 경계에서 값으로 변환합니다.
+   인터페이스로 받고, 포인터는 이 경계에서 값으로 변환합니다. 필드 이름은 SDK 구조체 필드
+   이름을, 값은 API 값을 그대로 씁니다. 목록을 받은 뒤 항목마다 다시 조회해야 하면
+   `collect.FanOut`으로 동시 호출 수에 상한을 둡니다.
 3. fake로 수집기 테스트를 작성합니다.
-4. `internal/catalog`에 명시적으로 등록합니다. `init()`은 쓰지 않습니다. 목록 열(`Columns`)의
-   문자열은 수집기가 만드는 `Fields` 키와 정확히 같아야 하고, 타입이 둘 이상인 그룹은
-   `SummaryColumns`도 채워야 합니다.
+4. `internal/catalog`에 명시적으로 등록합니다. `init()`은 쓰지 않습니다. 목록 열(`Columns`)은
+   수집기가 만드는 `Fields` 키와 문자열이 정확히 같아야 하고(다르면 열은 보이는데 셀이 빕니다),
+   타입이 둘 이상인 그룹은 `SummaryColumns`도 채워야 합니다.
 5. 관계가 있으면 `model.Ref`를 만들고 `internal/graph` 해석 결과를 검증합니다.
 6. README 지원 리소스 표와 `examples/iam`의 조회 전용 예제 정책을 갱신합니다.
 7. `make verify-readonly`로 새 호출이 allow-list 안인지 확인합니다.
@@ -76,7 +78,7 @@ make ci && make tidy-check && make lint && make test-race && make cross && git d
 - [ ] AWS 호출은 조회 API뿐이며 `make verify-readonly`를 우회하지 않았다
 - [ ] 실제 계정 ID, ARN, 자격증명, AWS 리소스 데이터가 diff에 없다
 - [ ] 새 리소스라면 README 표와 IAM 예제를 갱신했다
-- [ ] 사용자 출력과 주석은 한국어, 식별자와 출력 계약은 영어다
+- [ ] TUI에 보이는 문자열은 영어(AWS 용어), 주석과 문서는 한국어다
 
 커밋 제목은 Conventional Commit 접두사(`feat:`, `fix:`, `ci:`, `docs:`)를 씁니다.
 

@@ -10,12 +10,9 @@ GoReleaser `v2.18.0`으로 게시합니다. 산출물은 6개 아카이브(Unix 
 `checksums.txt`(SHA-256)이며, 각 아카이브에 `README.md`와 `LICENSE`가 들어가고 바이너리에는
 버전·커밋·커밋 날짜가 주입됩니다. `GITHUB_TOKEN`은 GitHub가 자동 제공합니다.
 
-아직 연결되지 않은 것은 Homebrew Formula 게시입니다. Formula를 실제로 시험하기 전에는
-`brew install`을 공개 설치 방법으로 안내하지 않습니다.
+Homebrew Formula 게시는 자동화되지 않았습니다. 아래 절차로 수동 관리합니다.
 
-## 버전 규칙
-
-[Semantic Versioning](https://semver.org/) 형식(`v0.1.0`)을 씁니다. 이미 공개한 태그는
+버전은 [Semantic Versioning](https://semver.org/) 형식(`v0.1.0`)을 쓰고, 이미 공개한 태그는
 이동하거나 재사용하지 않습니다.
 
 ## 태그 전 검증
@@ -78,21 +75,17 @@ CLOUDLOUPE_VERSION=v0.1.0 sh install.sh
 
 ## Homebrew Formula 게시
 
-Homebrew는 공개 태그의 소스를 사용자의 환경에서 빌드하는 Formula로 제공합니다. Formula는
-별도 공개 저장소 `cnlgks1/homebrew-tap`의 `Formula/cloudloupe.rb`에서 수동으로 관리합니다.
-Homebrew의 [Tap 관리 문서](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap)에 따라 Formula를
-커밋하고 push하면 사용자가 직접 설치할 수 있습니다.
+공개 태그의 소스를 사용자 환경에서 빌드하는 Formula로 제공합니다. 별도 저장소
+`cnlgks1/homebrew-tap`의 `Formula/cloudloupe.rb`를 수동으로 관리합니다
+([Tap 관리 문서](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap)).
 
-첫 공개 태그를 게시한 뒤 소스 아카이브의 SHA-256을 구합니다.
+태그를 게시한 뒤 소스 아카이브의 SHA-256을 구해 Formula의 `url`, `sha256`, 버전에 반영합니다.
+Go 빌드 인자는 [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)의 `std_go_args`를 씁니다.
 
 ```sh
 curl -L https://github.com/cnlgks1/cloudloupe/archive/refs/tags/v0.1.0.tar.gz \
   | shasum -a 256
 ```
-
-`homebrew-tap` 저장소에 다음 Formula를 추가하고 `url`, `sha256`과 버전을 실제 태그에 맞춥니다.
-Homebrew의 Go 빌드 인자는 [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)의
-`std_go_args`를 사용합니다.
 
 ```ruby
 class Cloudloupe < Formula
@@ -119,10 +112,8 @@ class Cloudloupe < Formula
 end
 ```
 
-관리자는 평소 Git push에 사용하는 로컬 GitHub 인증으로 Formula 변경을 커밋하고 push합니다.
-릴리스마다 새 태그의 URL과 SHA-256으로 Formula를 갱신합니다.
-
-Formula를 push한 뒤 깨끗한 환경에서 감사, 소스 빌드, 테스트와 제거를 확인합니다.
+push에는 평소 쓰는 로컬 GitHub 인증만 필요합니다. 릴리스마다 URL과 SHA-256을 갱신합니다.
+push한 뒤 깨끗한 환경에서 확인합니다.
 
 ```sh
 brew tap cnlgks1/tap

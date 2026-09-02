@@ -299,6 +299,30 @@ func TestUsageMentionsReadOnly(t *testing.T) {
 	}
 }
 
+// TestUsageDescribesCurrentBehavior는 --help가 실제로 되는 것만 안내하는지 확인한다.
+//
+// 사용자가 이 도구를 처음 보는 문자열이다. 한동안 "프로필 탐색만 구현됐다"고 적혀 있었는데
+// 그 사이 TUI 조회가 동작하게 되어 안내가 사실과 어긋났다. 문구가 다시 낡는 것을 막는다.
+func TestUsageDescribesCurrentBehavior(t *testing.T) {
+	useFixtures(t)
+
+	_, stderr, _ := runCLI(t, "--help")
+
+	// 없어진 문서 구조나 구현 이전 상태를 가리키면 안 된다.
+	for _, stale := range []string{"로드맵", "다음 단계로 들어갑니다", "현재 구현된 기능"} {
+		if strings.Contains(stderr, stale) {
+			t.Errorf("사용법에 낡은 문구 %q가 남아 있다:\n%s", stale, stderr)
+		}
+	}
+
+	// 지금 실제로 되는 것을 안내해야 한다.
+	for _, want := range []string{"프로필", "리전", "TUI"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("사용법에 %q 안내가 없다:\n%s", want, stderr)
+		}
+	}
+}
+
 func TestOutputShowsWhereConfigWasRead(t *testing.T) {
 	useFixtures(t)
 

@@ -350,6 +350,54 @@ func TestHelpBarAlwaysEndsWithBackAndQuit(t *testing.T) {
 	}
 }
 
+// TestSingleTypeGroupSkipsItemScreen은 세부 항목이 하나뿐인 그룹에서 그 화면을 건너뛰고
+// 바로 조회하는지, 그리고 뒤로 가기가 보지 않은 화면으로 내려가지 않는지 확인한다.
+//
+// IAM·KMS처럼 타입이 하나인 그룹은 세부 항목 화면에 한 줄만 나와 고를 것이 없다.
+func TestSingleTypeGroupSkipsItemScreen(t *testing.T) {
+	t.Parallel()
+
+	var gotTypes []string
+	deps := okDeps(sampleResources())
+	deps.ResourceGroups = append(deps.ResourceGroups, tui.ResourceGroup{
+		ID:    "kms",
+		Label: "KMS",
+		Types: []tui.ResourceType{{ID: model.TypeKMSKey, Label: "키"}},
+	})
+	deps.Collect = func(_ context.Context, _ string, _, types []string) collect.Result {
+		gotTypes = append([]string(nil), types...)
+
+		return collect.Result{Resources: sampleResources()}
+	}
+
+	m := newTestModel(t, deps)
+	m = step(m, keyMsg("enter")) // 리전
+	m = send(m, keyMsg("enter")) // 리소스 그룹
+	m = send(m, keyMsg("down"))  // ELBv2
+	m = send(m, keyMsg("down"))  // KMS (타입 1개)
+	m = step(m, keyMsg("enter")) // 세부 항목을 건너뛰고 바로 조회
+
+	if m.Screen() != tui.ScreenList {
+		t.Fatalf("단일 타입 그룹 enter 후 화면 = %v, want 목록", m.Screen())
+	}
+	if want := []string{model.TypeKMSKey}; !slices.Equal(gotTypes, want) {
+		t.Errorf("조회 타입 = %v, want %v", gotTypes, want)
+	}
+
+	// 보지 않은 세부 항목 화면이 뒤로 가기에 끼어들면 안 된다.
+	m = send(m, keyMsg("esc"))
+	if m.Screen() != tui.ScreenResourceType {
+		t.Errorf("목록에서 esc 후 화면 = %v, want 리소스 그룹 선택", m.Screen())
+	}
+
+	// 타입이 여럿인 그룹은 그대로 세부 항목 화면을 거친다.
+	m = send(m, keyMsg("up"), keyMsg("up")) // EC2로 복귀
+	m = send(m, keyMsg("enter"))
+	if m.Screen() != tui.ScreenResourceItem {
+		t.Errorf("다중 타입 그룹 enter 후 화면 = %v, want 세부 항목 선택", m.Screen())
+	}
+}
+
 // TestListBackReturnsToGroupWhenGroupShortcutUsed는 그룹 화면에서 space로 바로 조회한
 // 경우에는 보지 않은 세부 항목 화면으로 내려가지 않는지 확인한다.
 func TestListBackReturnsToGroupWhenGroupShortcutUsed(t *testing.T) {

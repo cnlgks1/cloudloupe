@@ -329,13 +329,40 @@ func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.replaceTypeOnEnter = false
 
-		return m.gotoResourceItem(m.typeTable.Cursor()), nil
+		return m.enterResourceGroup(m.typeTable.Cursor())
 	}
 
 	return m.delegateToActiveList(msg)
 }
 
 // --- 세부 리소스 항목 ---
+
+// enterResourceGroup은 그룹을 골랐을 때 다음 화면을 정한다.
+//
+// 세부 항목이 하나뿐인 그룹은 그 화면을 건너뛰고 바로 조회한다. 고를 것이 없는 목록을 한 번 더
+// 보여주고 enter를 다시 받는 것은 사용자에게 아무것도 알려주지 않는다. 그룹에 타입이 늘어나면
+// 이 조건이 자연히 풀려 다시 세부 항목 화면으로 들어간다.
+//
+// 건너뛴 화면은 뒤로 가기에도 끼어들지 않는다. collectFromItem을 false로 두므로 목록에서
+// 뒤로 가면 사용자가 실제로 지나온 그룹 화면으로 돌아간다.
+func (m Model) enterResourceGroup(groupIndex int) (tea.Model, tea.Cmd) {
+	if groupIndex < 0 || groupIndex >= len(m.deps.ResourceGroups) {
+		return m, nil
+	}
+
+	group := m.deps.ResourceGroups[groupIndex]
+	if len(group.Types) != 1 {
+		return m.gotoResourceItem(groupIndex), nil
+	}
+
+	m.itemGroup = groupIndex
+	m.itemTable = table.Model{}
+	m.chosenTypes = resourceGroupTypeIDs(group)
+	m.explicitTypeSelection = false
+	m.collectFromItem = false
+
+	return m.startCollecting()
+}
 
 // gotoResourceItem은 선택한 그룹의 세부 항목 화면으로 들어간다.
 func (m Model) gotoResourceItem(groupIndex int) Model {

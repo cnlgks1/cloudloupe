@@ -130,8 +130,8 @@ func permissionsBoundary(boundary *iamtypes.AttachedPermissionsBoundary) string 
 
 // lastUsed는 마지막 사용 시각과 그때의 리전을 한 값으로 만든다.
 //
-// 이 값은 로드맵 4단계의 미사용 후보 판정에 쓸 근거이기도 하다. 다만 IAM은 최근 400일만
-// 추적하므로 "기록 없음"이 곧 "쓰지 않는 역할"은 아니다.
+// 나중에 미사용 후보를 판정할 때 이 값이 근거가 된다. 다만 IAM은 최근 400일만 추적하므로
+// "기록 없음"이 곧 "쓰지 않는 역할"은 아니다.
 func lastUsed(used *iamtypes.RoleLastUsed) string {
 	if used == nil || used.LastUsedDate == nil {
 		return "-"

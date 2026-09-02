@@ -122,11 +122,6 @@ cross: ## 모든 릴리스 대상으로 크로스 컴파일
 
 .PHONY: snapshot
 snapshot: ## 태그 없이 릴리스 파이프라인을 로컬에서 시험
-	@if [ ! -f .goreleaser.yaml ]; then \
-		echo ".goreleaser.yaml이 아직 없습니다. 릴리스 파이프라인은 로드맵 6단계입니다."; \
-		echo "지금 배포 대상 바이너리를 만들려면: make cross"; \
-		exit 1; \
-	fi
 	@if command -v goreleaser >/dev/null 2>&1; then \
 		goreleaser release --snapshot --clean; \
 	else \

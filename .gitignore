@@ -33,7 +33,6 @@ cloudloupe-report.*
 # 돌아간다.
 /credentials
 **/.aws/credentials
-!examples/aws/credentials.example
 !**/testdata/credentials
 *.pem
 *.key

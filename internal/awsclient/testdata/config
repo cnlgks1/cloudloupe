@@ -1,4 +1,5 @@
-# examples/aws/config.example의 형태를 그대로 옮긴 픽스처.
+# AWS 공유 설정 파일 픽스처. 프로필 종류(정적 키, SSO, assume role)를 한 파일에 모아
+# 파서가 각각을 어떻게 분류하는지 검사한다.
 
 [default]
 region = ap-northeast-2

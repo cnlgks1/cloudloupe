@@ -54,11 +54,14 @@ make ci && make tidy-check && make lint && make test-race && make cross && git d
 
 ## 새 AWS 리소스 추가
 
-1. `internal/model`에 타입 ID와 도메인 값을 정의합니다.
+1. `internal/model`에 타입 ID와 도메인 값을 정의하고, `SortResources`의 출력 순서에 새 타입을
+   넣습니다. 빼먹으면 모르는 타입으로 취급되어 결과 맨 뒤로 밀립니다.
 2. `internal/collector/<service>`에 수집기를 구현합니다. SDK 호출은 메서드 1~3개의 좁은
    인터페이스로 받고, 포인터는 이 경계에서 값으로 변환합니다.
 3. fake로 수집기 테스트를 작성합니다.
-4. `internal/catalog`에 명시적으로 등록합니다. `init()`은 쓰지 않습니다.
+4. `internal/catalog`에 명시적으로 등록합니다. `init()`은 쓰지 않습니다. 목록 열(`Columns`)의
+   문자열은 수집기가 만드는 `Fields` 키와 정확히 같아야 하고, 타입이 둘 이상인 그룹은
+   `SummaryColumns`도 채워야 합니다.
 5. 관계가 있으면 `model.Ref`를 만들고 `internal/graph` 해석 결과를 검증합니다.
 6. README 지원 리소스 표와 `examples/iam`의 조회 전용 예제 정책을 갱신합니다.
 7. `make verify-readonly`로 새 호출이 allow-list 안인지 확인합니다.

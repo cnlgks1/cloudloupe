@@ -18,10 +18,13 @@ go 1.25.0
 require (
 	github.com/aws/aws-sdk-go-v2 v1.45.1
 	github.com/aws/aws-sdk-go-v2/config v1.33.1
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.325.1
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.60.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.47.0
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.106.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.127.0
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.67.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.93.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.47.1
@@ -35,7 +38,7 @@ require (
 
 require (
 	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.20 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.1 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.19.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.1 // indirect

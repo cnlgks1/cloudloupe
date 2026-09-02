@@ -19,6 +19,31 @@
       "Resource": "*"
     },
     {
+      "Sid": "AutoScalingInventory",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LambdaInventory",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DatabaseInventory",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBClusters",
+        "rds:DescribeDBInstances"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

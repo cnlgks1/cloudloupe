@@ -38,6 +38,10 @@ const (
 	TypeIAMRole             = "iam:role"
 	TypeKMSKey              = "kms:key"
 	TypeS3Bucket            = "s3:bucket"
+	TypeRDSDBCluster        = "rds:dbCluster"
+	TypeRDSDBInstance       = "rds:dbInstance"
+	TypeLambdaFunction      = "lambda:function"
+	TypeAutoScalingGroup    = "autoscaling:autoScalingGroup"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -233,36 +237,44 @@ func typeRank(resourceType string) int {
 		return 2
 	case TypeELBv2TargetGroup:
 		return 3
-	case TypeEC2Instance:
+	case TypeAutoScalingGroup:
 		return 4
-	case TypeEC2Volume:
+	case TypeEC2Instance:
 		return 5
-	case TypeEC2NetworkInterface:
+	case TypeEC2Volume:
 		return 6
-	case TypeEC2Address:
+	case TypeEC2NetworkInterface:
 		return 7
-	case TypeEC2VPC:
+	case TypeEC2Address:
 		return 8
-	case TypeEC2Subnet:
+	case TypeLambdaFunction:
 		return 9
-	case TypeEC2RouteTable:
+	case TypeRDSDBCluster:
 		return 10
-	case TypeEC2InternetGateway:
+	case TypeRDSDBInstance:
 		return 11
-	case TypeEC2NATGateway:
+	case TypeEC2VPC:
 		return 12
-	case TypeEC2VPCEndpoint:
+	case TypeEC2Subnet:
 		return 13
-	case TypeEC2SecurityGroup:
+	case TypeEC2RouteTable:
 		return 14
-	case TypeWAFv2WebACL:
+	case TypeEC2InternetGateway:
 		return 15
-	case TypeIAMRole:
+	case TypeEC2NATGateway:
 		return 16
-	case TypeKMSKey:
+	case TypeEC2VPCEndpoint:
 		return 17
-	case TypeS3Bucket:
+	case TypeEC2SecurityGroup:
 		return 18
+	case TypeWAFv2WebACL:
+		return 19
+	case TypeIAMRole:
+		return 20
+	case TypeKMSKey:
+		return 21
+	case TypeS3Bucket:
+		return 22
 	default:
 		return 1000
 	}

@@ -153,7 +153,7 @@ func TestSortResourcesPlacesUnknownTypesLast(t *testing.T) {
 
 	// 새 수집기가 기존 출력 순서를 실수로 뒤바꿀 수 없어야 한다.
 	resources := []model.Resource{
-		{Type: "rds:dbInstance", ID: "db-1"},
+		{Type: "zzz:unknown", ID: "unknown-1"},
 		{Type: model.TypeEC2Instance, ID: "i-1"},
 		{Type: "aaa:first-alphabetically", ID: "x-1"},
 	}
@@ -164,7 +164,7 @@ func TestSortResourcesPlacesUnknownTypesLast(t *testing.T) {
 		t.Errorf("알려진 타입이 먼저 와야 한다, got %q", resources[0].Type)
 	}
 
-	if resources[1].Type != "aaa:first-alphabetically" || resources[2].Type != "rds:dbInstance" {
+	if resources[1].Type != "aaa:first-alphabetically" || resources[2].Type != "zzz:unknown" {
 		t.Errorf("모르는 타입은 알파벳 순으로 맨 뒤여야 한다: %q 다음 %q",
 			resources[1].Type, resources[2].Type)
 	}

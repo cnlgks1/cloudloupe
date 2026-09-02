@@ -265,7 +265,10 @@ func allGroups(cfg aws.Config) []Group {
 	groups := ec2Groups(cfg)
 
 	return append(groups,
+		Group{ID: "autoscaling", Label: "Auto Scaling", Types: autoscalingDefinitions(cfg)},
 		Group{ID: "elbv2", Label: "ELB", Types: elbv2Definitions(cfg)},
+		Group{ID: "lambda", Label: "Lambda", Types: lambdaDefinitions(cfg)},
+		Group{ID: "rds", Label: "RDS", Types: rdsDefinitions(cfg)},
 		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
 		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
 		Group{ID: "iam", Label: "IAM", Types: iamDefinitions(cfg)},

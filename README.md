@@ -13,7 +13,7 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 9개 그룹 19개 타입 조회가 동작합니다. 그래프 탐색, 미사용 탐지, 리포트는
+> **개발 중.** 12개 그룹 23개 타입 조회가 동작합니다. 그래프 탐색, 미사용 탐지, 리포트는
 > 아직 없습니다.
 
 ## 빠른 시작
@@ -56,6 +56,10 @@ make build
 | ELB | `elbv2:loadBalancer` | `elbv2.DescribeLoadBalancers` |
 | ELB | `elbv2:listener` | `elbv2.DescribeLoadBalancers`, `DescribeListeners`, `DescribeRules` |
 | ELB | `elbv2:targetGroup` | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth` |
+| Auto Scaling | `autoscaling:autoScalingGroup` | `autoscaling.DescribeAutoScalingGroups` |
+| Lambda | `lambda:function` | `lambda.ListFunctions` |
+| RDS | `rds:dbCluster` | `rds.DescribeDBClusters` |
+| RDS | `rds:dbInstance` | `rds.DescribeDBInstances` |
 | Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
 | WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 | IAM | `iam:role` | `iam.ListRoles` |
@@ -75,7 +79,8 @@ RFC 3339입니다. `aws` CLI 출력과 그대로 대조할 수 있게 하려는 
 
 항목마다 추가 호출이 필요한 값은 아직 가져오지 않습니다. 그래서 열은 있어도 값이 `-`로 비는
 것이 있습니다. IAM 역할의 `RoleLastUsed`·`PermissionsBoundary`·태그, KMS 키 태그, S3 버킷의
-암호화·퍼블릭 액세스 차단·버전 관리·태그입니다. API 스로틀링을 피하려는 것입니다.
+암호화·퍼블릭 액세스 차단·버전 관리·태그, Lambda 함수 태그입니다. API 스로틀링을 피하려는
+것입니다.
 
 ## 사용법
 

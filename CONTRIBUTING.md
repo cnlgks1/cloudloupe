@@ -33,7 +33,9 @@ go test ./internal/collector/elbv2
 ```
 
 PR 전에는 전체 검사를 돌립니다. `make ci`에는 외부 도구가 필요한 lint와 비용이 큰
-race·cross가 빠져 있으므로 따로 실행합니다.
+race·cross가 빠져 있으므로 따로 실행합니다. 특히 `make cross`는 CI가 태그와 수동 실행에서만
+돌리므로(잡 하나가 10분 이상 걸립니다) 로컬 실행이 사실상 유일한 사전 확인입니다. 빌드 태그,
+OS별 파일, 새 의존성을 건드렸다면 반드시 돌리세요.
 
 ```sh
 make ci && make tidy-check && make lint && make test-race && make cross && git diff --check

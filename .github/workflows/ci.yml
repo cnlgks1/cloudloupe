@@ -1,9 +1,26 @@
 name: CI
 
 on:
+  # 문서와 무시 규칙만 바뀐 변경은 Go 검증을 건너뛴다. 이 파일들은 어떤 잡의 입력도 아니다.
+  # 코드가 하나라도 함께 바뀌면 정상적으로 전체 검증이 돈다. 릴리스가 호출하는
+  # workflow_call과 수동 실행에는 이 필터가 적용되지 않으므로 게시 전 검증은 그대로다.
+  #
+  # 목록을 두 번 적는다. GitHub Actions는 YAML 앵커는 받아들이지만 머지 키는 지원하지 않아
+  # 재사용 방식이 제한적이고, 트리거 정의는 한눈에 보이는 편이 낫다. 한쪽만 고치지 않도록
+  # 두 목록을 항상 같이 수정한다.
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - ".markdownlint.json"
+      - ".gitignore"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - ".markdownlint.json"
+      - ".gitignore"
+      - "LICENSE"
   workflow_dispatch:
   # 릴리스 워크플로가 태그에서 이 전체 검증을 호출하고 성공한 뒤에만 자산을 게시한다.
   workflow_call:
@@ -90,8 +107,27 @@ jobs:
 
       # Windows는 곁다리가 아니라 지원 대상이다. 경로 처리와 터미널 렌더링이 실제로
       # 다르므로 테스트가 거기서도 통과해야 한다.
+      #
+      # 커버리지는 리눅스에서만 측정한다. 예전에는 별도 잡이 같은 테스트를 한 번 더 돌렸다.
+      # 커버리지는 OS별로 달라지는 값이 아니므로 한 번만 재면 된다.
       - name: 테스트
+        if: matrix.os != 'ubuntu-latest'
         run: go test -count=1 ./...
+
+      - name: 테스트 (커버리지 포함)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: 커버리지 보고
+        if: matrix.os == 'ubuntu-latest'
+        run: go tool cover -func=coverage.out | tail -20
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
 
       - name: 빌드
         run: go build -trimpath ./...
@@ -127,6 +163,12 @@ jobs:
   cross:
     name: 크로스 컴파일
     runs-on: ubuntu-latest
+    # 6개 플랫폼을 각각 처음부터 컴파일하므로 이 잡 하나가 CI 전체 시간을 지배한다(10분 이상).
+    # AWS SDK 서비스 패키지가 늘 때마다 더 길어진다. 릴리스 워크플로가 태그에서 이 워크플로를
+    # 호출하므로 게시 전에는 반드시 한 번 돌고, 일상 push에서 매번 돌릴 필요는 없다.
+    # 크로스 컴파일이 깨지는 변경(빌드 태그, OS별 파일, 새 의존성)을 만졌으면 수동 실행으로
+    # 확인한다.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -139,26 +181,3 @@ jobs:
       # 아카이브 6개를 만들어야 한다.
       - name: 모든 릴리스 대상 빌드
         run: make cross
-
-  coverage:
-    name: 커버리지
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: 커버리지 포함 테스트
-        run: go test -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: 결과 보고
-        run: go tool cover -func=coverage.out | tail -20
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage
-          path: coverage.out
-          retention-days: 7

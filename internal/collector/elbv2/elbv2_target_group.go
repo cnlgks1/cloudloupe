@@ -128,7 +128,7 @@ func targetGroupRelations(tg elbv2types.TargetGroup, health []elbv2types.TargetH
 			Type:           model.TypeELBv2LoadBalancer,
 			ID:             arn,
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationForwardsTo,
+			Relation:       "LoadBalancerArns",
 		})
 	}
 
@@ -152,7 +152,7 @@ func targetGroupRelations(tg elbv2types.TargetGroup, health []elbv2types.TargetH
 			Type:           typeID,
 			ID:             id,
 			IdentifierKind: identifierKind,
-			Relation:       model.RelationTargets,
+			Relation:       "TargetHealthDescriptions.Target.Id",
 			Via:            state,
 		})
 	}

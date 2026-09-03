@@ -91,18 +91,18 @@ func vpcEndpointToResource(scope collect.Scope, endpoint ec2types.VpcEndpoint) m
 func vpcEndpointRelations(endpoint ec2types.VpcEndpoint) []model.Ref {
 	var refs []model.Ref
 
-	refs = appendResourceRef(refs, model.TypeEC2VPC, aws.ToString(endpoint.VpcId), model.RelationAssociatedWith)
+	refs = appendResourceRef(refs, model.TypeEC2VPC, aws.ToString(endpoint.VpcId), "VpcId")
 	for _, id := range endpoint.SubnetIds {
-		refs = appendResourceRef(refs, model.TypeEC2Subnet, id, model.RelationAssociatedWith)
+		refs = appendResourceRef(refs, model.TypeEC2Subnet, id, "SubnetIds")
 	}
 	for _, id := range endpoint.RouteTableIds {
-		refs = appendResourceRef(refs, model.TypeEC2RouteTable, id, model.RelationAssociatedWith)
+		refs = appendResourceRef(refs, model.TypeEC2RouteTable, id, "RouteTableIds")
 	}
 	for _, group := range endpoint.Groups {
-		refs = appendResourceRef(refs, model.TypeEC2SecurityGroup, aws.ToString(group.GroupId), model.RelationAssociatedWith)
+		refs = appendResourceRef(refs, model.TypeEC2SecurityGroup, aws.ToString(group.GroupId), "Groups.GroupId")
 	}
 	for _, id := range endpoint.NetworkInterfaceIds {
-		refs = appendResourceRef(refs, model.TypeEC2NetworkInterface, id, model.RelationAttachedENI)
+		refs = appendResourceRef(refs, model.TypeEC2NetworkInterface, id, "NetworkInterfaceIds")
 	}
 
 	return refs

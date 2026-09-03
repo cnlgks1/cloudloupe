@@ -119,13 +119,13 @@ func TestDBInstanceCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeRDSDBCluster, ID: "orders-aurora", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeRDSDBCluster, ID: "orders-aurora", Relation: "DBClusterIdentifier"},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "DBSubnetGroup.VpcId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "DBSubnetGroup.Subnets.SubnetIdentifier"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: "DBSubnetGroup.Subnets.SubnetIdentifier"},
+		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: "VpcSecurityGroups.VpcSecurityGroupId"},
 		// key ID 형태이므로 ARN이 아니라 리소스 ID로 참조해야 한다.
-		{Type: model.TypeKMSKey, ID: "key-1", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeKMSKey, ID: "key-1", Relation: "KmsKeyId"},
 	}
 	if !slices.Equal(instance.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", instance.Related, wantRefs)

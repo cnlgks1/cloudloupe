@@ -98,6 +98,6 @@ func networkInterfaceRelations(eni ec2types.NetworkInterface) []model.Ref {
 	return []model.Ref{{
 		Type:     model.TypeEC2Instance,
 		ID:       id,
-		Relation: model.RelationAttachedTo,
+		Relation: "Attachment.InstanceId",
 	}}
 }

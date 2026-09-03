@@ -142,7 +142,7 @@ func TestSnapshotJSONMatchesDocumentedSchema(t *testing.T) {
 				Type:           model.TypeELBv2TargetGroup,
 				ID:             "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web-prod-tg/abc",
 				IdentifierKind: model.IdentifierARN,
-				Relation:       model.RelationTargetOf,
+				Relation:       "reverse-only",
 			}},
 		}}, nil)
 
@@ -162,7 +162,7 @@ func TestSnapshotJSONMatchesDocumentedSchema(t *testing.T) {
 		`"errorCount":0`,
 		`"createdAt":"2025-03-11T02:51:19Z"`,
 		`"identifiers":[{"kind":"dns","value":"web.internal.example.com"}]`,
-		`"related":[{"type":"elbv2:targetGroup","id":"arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web-prod-tg/abc","identifierKind":"arn","relation":"target-of"}]`,
+		`"related":[{"type":"elbv2:targetGroup","id":"arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web-prod-tg/abc","identifierKind":"arn","relation":"reverse-only"}]`,
 	} {
 		if !strings.Contains(body, key) {
 			t.Errorf("출력에 %s가 없다\n%s", key, body)
@@ -179,7 +179,7 @@ func TestSnapshotKeysAndTypeIDsStayEnglish(t *testing.T) {
 		[]model.Resource{{
 			Type:    model.TypeELBv2TargetGroup,
 			ID:      "web-tg",
-			Related: []model.Ref{{Type: model.TypeEC2Instance, ID: "i-a", Relation: model.RelationTargets}},
+			Related: []model.Ref{{Type: model.TypeEC2Instance, ID: "i-a", Relation: "TargetHealthDescriptions.Target.Id"}},
 		}}, nil)
 
 	out, err := json.Marshal(snap)
@@ -190,7 +190,7 @@ func TestSnapshotKeysAndTypeIDsStayEnglish(t *testing.T) {
 	body := string(out)
 	for _, want := range []string{
 		`"schemaVersion"`, `"generatedAt"`, `"resources"`, `"errors"`,
-		`"elbv2:targetGroup"`, `"ec2:instance"`, `"targets"`,
+		`"elbv2:targetGroup"`, `"ec2:instance"`, `"TargetHealthDescriptions.Target.Id"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("출력에 %s가 없다\n%s", want, body)

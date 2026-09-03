@@ -17,6 +17,7 @@ import (
 
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/collect"
+	"github.com/cnlgks1/cloudloupe/internal/graph"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
@@ -127,8 +128,15 @@ type Model struct {
 	detail       viewport.Model
 	spinner      spinner.Model
 
-	resourceList       resourceListModel
-	listCaption        string
+	resourceList resourceListModel
+	listCaption  string
+
+	// relations는 조회 결과의 관계 그래프다. 상세 화면이 대상 이름과 역방향을 여기서
+	// 얻는다. 수집기가 남긴 원본 Ref는 대상 ID만 있고 이름도, 나를 가리키는 관계도 없다.
+	//
+	// 조회가 끝난 뒤 백그라운드에서 한 번 빌드한다. 상세를 열 때마다 만들지 않는다.
+	relations *graph.Graph
+
 	filterInput        textinput.Model
 	filtering          bool
 	filterQuery        string

@@ -27,7 +27,7 @@ func TestDetailAlignsValuesByDisplayWidth(t *testing.T) {
 		},
 	}
 
-	view := renderDetail(New(true), res)
+	view := renderDetail(New(true), nil, res, nil)
 
 	starts := make(map[int][]string)
 	for _, line := range strings.Split(view, "\n") {
@@ -60,12 +60,12 @@ func TestDetailKeepsFieldOrder(t *testing.T) {
 			{Key: "SubnetId", Value: "subnet-1"},
 		},
 		Related: []model.Ref{
-			{Type: model.TypeEC2VPC, ID: "vpc-1", Relation: model.RelationAssociatedWith},
-			{Type: model.TypeEC2RouteTable, ID: "rtb-1", Relation: model.RelationRoutesTo, Via: "0.0.0.0/0"},
+			{Type: model.TypeEC2VPC, ID: "vpc-1", Relation: "VpcId"},
+			{Type: model.TypeEC2RouteTable, ID: "rtb-1", Relation: "Routes.NatGatewayId", Via: "0.0.0.0/0"},
 		},
 	}
 
-	view := renderDetail(New(true), res)
+	view := renderDetail(New(true), nil, res, nil)
 
 	if got := []int{
 		strings.Index(view, "ConnectivityType"),
@@ -104,7 +104,7 @@ func TestDetailShowsIdentityAndTags(t *testing.T) {
 		},
 	}
 
-	view := renderDetail(New(true), res)
+	view := renderDetail(New(true), nil, res, nil)
 
 	for _, want := range []string{
 		"123456789012",
@@ -136,7 +136,7 @@ func TestDetailOmitsEmptySections(t *testing.T) {
 		Fields: []model.Field{{Key: "VPC", Value: "vpc-1"}},
 	}
 
-	view := renderDetail(New(true), res)
+	view := renderDetail(New(true), nil, res, nil)
 
 	for _, unwanted := range []string{"ARN", "Status", "Created", "Tags", "Relations"} {
 		if strings.Contains(view, unwanted) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/cnlgks1/cloudloupe/internal/graph"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
@@ -25,7 +26,7 @@ const detailLabelGap = 2
 // 계정의 무엇인지, 언제 만들어졌는지가 빠진다. 멀티 계정·멀티 리전 조회에서는 그 값이 필드
 // 자체보다 먼저 필요하다. Fields와 Tags는 순서 있는 슬라이스이므로 렌더링할 때마다 같은
 // 순서로 나온다.
-func renderDetail(theme Theme, res model.Resource) string {
+func renderDetail(theme Theme, groups []ResourceGroup, res model.Resource, g *graph.Graph) string {
 	lines := []string{
 		theme.Title.Render(res.DisplayName()),
 		theme.Faint.Render(detailContext(res)),
@@ -34,21 +35,143 @@ func renderDetail(theme Theme, res model.Resource) string {
 	lines = appendDetailSection(lines, theme, "Basics", detailBasics(res))
 	lines = appendDetailSection(lines, theme, "Attributes", res.Fields)
 	lines = appendDetailSection(lines, theme, "Tags", res.Tags)
+	lines = append(lines, relationLines(theme, groups, res, g)...)
 
-	if len(res.Related) > 0 {
-		lines = append(lines, "", theme.Title.Render(detailSectionTitle("Relations", len(res.Related))))
+	return strings.Join(lines, "\n")
+}
 
-		for _, ref := range res.Related {
-			via := ""
-			if ref.Via != "" {
-				via = "  (" + ref.Via + ")"
-			}
+// relationLines는 관계 섹션을 만든다.
+//
+// 그래프가 있으면 대상 이름과 역방향(나를 가리키는 관계)까지 보여준다. 그래프가 없으면
+// (빌드 실패) 수집기가 남긴 원본 Ref로 폴백해 최소한 관계 종류와 대상 ID는 보여준다.
+//
+// 관계는 남긴 필드 경로(DBClusterIdentifier, VpcConfig.SubnetIds 등)로 묶는다. 같은
+// 필드에서 나온 대상이 함께 보이고, 각 줄이 어느 API 응답에서 왔는지 스스로 설명한다.
+func relationLines(theme Theme, groups []ResourceGroup, res model.Resource, g *graph.Graph) []string {
+	if g == nil {
+		return fallbackRelationLines(theme, res)
+	}
 
-			lines = append(lines, theme.Glyphs.TreeBranch+" "+ref.Relation+" "+ref.ID+via)
+	key := res.Key()
+	outgoing := g.Outgoing(key)
+	incoming := g.Incoming(key)
+	if len(outgoing) == 0 && len(incoming) == 0 {
+		return nil
+	}
+
+	var lines []string
+	if len(outgoing) > 0 {
+		lines = append(lines, "", theme.Title.Render(detailSectionTitle("Relations", len(outgoing))))
+		lines = append(lines, relationGroupLines(theme, groups, g, outgoing, false)...)
+	}
+	if len(incoming) > 0 {
+		lines = append(lines, "", theme.Title.Render("Referenced by ("+strconv.Itoa(len(incoming))+")"))
+		lines = append(lines, relationGroupLines(theme, groups, g, incoming, true)...)
+	}
+
+	return lines
+}
+
+// relationGroupLines는 간선들을 관계 이름(응답 필드 경로)으로 묶어 렌더링한다.
+//
+// byIncoming이 true면 이 리소스가 대상인 관계이므로, 대상이 아니라 출발 리소스를 보여준다.
+func relationGroupLines(
+	theme Theme,
+	groups []ResourceGroup,
+	g *graph.Graph,
+	edges []graph.Edge,
+	byIncoming bool,
+) []string {
+	var lines []string
+
+	relation := ""
+	for _, edge := range edges {
+		if edge.Ref.Relation != relation {
+			relation = edge.Ref.Relation
+			lines = append(lines, "  "+theme.Faint.Render(relation))
+		}
+
+		for _, line := range edgeTargetLines(theme, groups, g, edge, byIncoming) {
+			lines = append(lines, "  "+line)
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return lines
+}
+
+// edgeTargetLines는 한 간선의 대상을 "타입  이름  경유" 형태로 만든다.
+//
+// 역방향이면 출발 리소스가 대상이므로 SourceKey를 해석한다. 정방향이면 TargetKeys를
+// 해석하되, 조회 범위에 없어 해석하지 못한 대상도 감추지 않고 대상 ID와 함께 "not queried"로
+// 남긴다. 관계가 통째로 사라진 것처럼 보이면 안 된다.
+func edgeTargetLines(
+	theme Theme,
+	groups []ResourceGroup,
+	g *graph.Graph,
+	edge graph.Edge,
+	byIncoming bool,
+) []string {
+	via := ""
+	if edge.Ref.Via != "" {
+		via = "  " + theme.Faint.Render("via "+edge.Ref.Via)
+	}
+
+	if byIncoming {
+		source, ok := g.Resource(edge.SourceKey)
+		if !ok {
+			return []string{theme.Glyphs.TreeBranch + " " + edge.SourceKey}
+		}
+
+		return []string{relationTargetLine(theme, groups, source, via)}
+	}
+
+	if len(edge.TargetKeys) == 0 {
+		typeLabel := resourceTypeLabel(groups, edge.Ref.Type)
+
+		return []string{
+			theme.Glyphs.TreeBranch + " " + typeLabel + "  " + edge.Ref.ID +
+				"  " + theme.Faint.Render("not queried") + via,
+		}
+	}
+
+	lines := make([]string, 0, len(edge.TargetKeys))
+	for _, targetKey := range edge.TargetKeys {
+		target, ok := g.Resource(targetKey)
+		if !ok {
+			lines = append(lines, theme.Glyphs.TreeBranch+" "+targetKey+via)
+
+			continue
+		}
+		lines = append(lines, relationTargetLine(theme, groups, target, via))
+	}
+
+	return lines
+}
+
+// relationTargetLine은 대상 리소스 한 줄을 "타입  이름  경유"로 만든다.
+func relationTargetLine(theme Theme, groups []ResourceGroup, target model.Resource, via string) string {
+	typeLabel := resourceTypeLabel(groups, target.Type)
+	name := target.DisplayName()
+
+	return theme.Glyphs.TreeBranch + " " + typeLabel + "  " + name + via
+}
+
+// fallbackRelationLines는 그래프가 없을 때 수집기 원본 Ref를 그대로 보여준다.
+func fallbackRelationLines(theme Theme, res model.Resource) []string {
+	if len(res.Related) == 0 {
+		return nil
+	}
+
+	lines := []string{"", theme.Title.Render(detailSectionTitle("Relations", len(res.Related)))}
+	for _, ref := range res.Related {
+		via := ""
+		if ref.Via != "" {
+			via = "  " + theme.Faint.Render("via "+ref.Via)
+		}
+		lines = append(lines, theme.Glyphs.TreeBranch+" "+ref.Relation+" "+ref.ID+via)
+	}
+
+	return lines
 }
 
 // detailContext는 제목 아래에 둘 위치 정보를 만든다. 비어 있는 값은 자리를 차지하지 않는다.

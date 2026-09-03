@@ -98,7 +98,7 @@ func securityGroupToResource(scope collect.Scope, group ec2types.SecurityGroup) 
 		r.Related = []model.Ref{{
 			Type:     model.TypeEC2VPC,
 			ID:       vpcID,
-			Relation: model.RelationAssociatedWith,
+			Relation: "VpcId",
 		}}
 	}
 

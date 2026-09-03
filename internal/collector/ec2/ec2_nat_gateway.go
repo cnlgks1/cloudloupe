@@ -96,13 +96,15 @@ func natGatewayToResource(scope collect.Scope, gateway ec2types.NatGateway) mode
 func natGatewayRelations(gateway ec2types.NatGateway) []model.Ref {
 	var refs []model.Ref
 
-	refs = appendResourceRef(refs, model.TypeEC2VPC, aws.ToString(gateway.VpcId), model.RelationAssociatedWith)
-	refs = appendResourceRef(refs, model.TypeEC2Subnet, aws.ToString(gateway.SubnetId), model.RelationAssociatedWith)
-	refs = appendResourceRef(refs, model.TypeEC2RouteTable, aws.ToString(gateway.RouteTableId), model.RelationAssociatedWith)
+	refs = appendResourceRef(refs, model.TypeEC2VPC, aws.ToString(gateway.VpcId), "VpcId")
+	refs = appendResourceRef(refs, model.TypeEC2Subnet, aws.ToString(gateway.SubnetId), "SubnetId")
+	refs = appendResourceRef(refs, model.TypeEC2RouteTable, aws.ToString(gateway.RouteTableId), "RouteTableId")
 
 	for _, address := range gateway.NatGatewayAddresses {
-		refs = appendResourceRef(refs, model.TypeEC2NetworkInterface, aws.ToString(address.NetworkInterfaceId), model.RelationAttachedENI)
-		refs = appendResourceRef(refs, model.TypeEC2Address, aws.ToString(address.AllocationId), model.RelationAssociatedWith)
+		refs = appendResourceRef(refs, model.TypeEC2NetworkInterface,
+			aws.ToString(address.NetworkInterfaceId), "NatGatewayAddresses.NetworkInterfaceId")
+		refs = appendResourceRef(refs, model.TypeEC2Address,
+			aws.ToString(address.AllocationId), "NatGatewayAddresses.AllocationId")
 	}
 
 	return refs

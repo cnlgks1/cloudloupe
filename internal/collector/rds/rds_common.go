@@ -83,7 +83,10 @@ func utcTime(value *time.Time) *time.Time {
 }
 
 // appendIDRelation은 빈 ID를 제외하고 ID 기반 관계를 추가한다.
-func appendIDRelation(refs []model.Ref, resourceType, id string) []model.Ref {
+//
+// relation에는 이 관계를 만든 SDK 응답 필드명을 넣는다(예: DBClusterIdentifier). 상세
+// 화면이 그대로 보여주므로, aws CLI 출력에서 같은 필드를 찾아 대조할 수 있다.
+func appendIDRelation(refs []model.Ref, resourceType, relation, id string) []model.Ref {
 	if id == "" {
 		return refs
 	}
@@ -91,7 +94,7 @@ func appendIDRelation(refs []model.Ref, resourceType, id string) []model.Ref {
 	return append(refs, model.Ref{
 		Type:     resourceType,
 		ID:       id,
-		Relation: model.RelationAssociatedWith,
+		Relation: relation,
 	})
 }
 
@@ -108,7 +111,7 @@ func appendKMSRelation(refs []model.Ref, identifier string) []model.Ref {
 	ref := model.Ref{
 		Type:     model.TypeKMSKey,
 		ID:       identifier,
-		Relation: model.RelationAssociatedWith,
+		Relation: "KmsKeyId",
 	}
 	if strings.HasPrefix(identifier, "arn:") {
 		ref.IdentifierKind = model.IdentifierARN

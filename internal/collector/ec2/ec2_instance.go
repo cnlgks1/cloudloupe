@@ -118,7 +118,7 @@ func instanceRelations(inst ec2types.Instance) []model.Ref {
 			refs = append(refs, model.Ref{
 				Type:     model.TypeEC2NetworkInterface,
 				ID:       id,
-				Relation: model.RelationAttachedENI,
+				Relation: "NetworkInterfaces.NetworkInterfaceId",
 			})
 		}
 	}
@@ -132,7 +132,7 @@ func instanceRelations(inst ec2types.Instance) []model.Ref {
 			refs = append(refs, model.Ref{
 				Type:     model.TypeEC2Volume,
 				ID:       id,
-				Relation: model.RelationAttachedVolume,
+				Relation: "BlockDeviceMappings.Ebs.VolumeId",
 				Via:      aws.ToString(bd.DeviceName),
 			})
 		}

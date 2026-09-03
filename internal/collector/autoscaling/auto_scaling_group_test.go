@@ -135,15 +135,15 @@ func TestGroupCollectorConvertsFields(t *testing.T) {
 
 	// VPCZoneIdentifier는 쉼표로 이어진 문자열이므로 서브넷마다 관계를 나눠야 한다.
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2Instance, ID: "i-0a1b", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Instance, ID: "i-0c2d", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2Instance, ID: "i-0a1b", Relation: "Instances.InstanceId"},
+		{Type: model.TypeEC2Instance, ID: "i-0c2d", Relation: "Instances.InstanceId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "VPCZoneIdentifier"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: "VPCZoneIdentifier"},
 		{
 			Type:           model.TypeELBv2TargetGroup,
 			ID:             "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:targetgroup/web/abc",
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationAssociatedWith,
+			Relation:       "TargetGroupARNs",
 		},
 	}
 	if !slices.Equal(got.Related, wantRefs) {

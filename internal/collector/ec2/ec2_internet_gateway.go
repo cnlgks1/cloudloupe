@@ -60,7 +60,7 @@ func internetGatewayToResource(scope collect.Scope, gateway ec2types.InternetGat
 	for _, attachment := range gateway.Attachments {
 		if id := aws.ToString(attachment.VpcId); id != "" {
 			vpcIDs = append(vpcIDs, id)
-			refs = append(refs, model.Ref{Type: model.TypeEC2VPC, ID: id, Relation: model.RelationAttachedTo})
+			refs = append(refs, model.Ref{Type: model.TypeEC2VPC, ID: id, Relation: "Attachments.VpcId"})
 		}
 		if state := string(attachment.State); state != "" {
 			states = append(states, state)

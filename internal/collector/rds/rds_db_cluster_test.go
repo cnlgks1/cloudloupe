@@ -144,15 +144,15 @@ func TestDBClusterCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeRDSDBInstance, ID: "orders-aurora-1", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeRDSDBInstance, ID: "orders-aurora-2", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeRDSDBInstance, ID: "orders-aurora-1", Relation: "DBClusterMembers.DBInstanceIdentifier"},
+		{Type: model.TypeRDSDBInstance, ID: "orders-aurora-2", Relation: "DBClusterMembers.DBInstanceIdentifier"},
 		{
 			Type:           model.TypeKMSKey,
 			ID:             "arn:aws:kms:ap-northeast-2:123456789012:key/key-1",
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationAssociatedWith,
+			Relation:       "KmsKeyId",
 		},
-		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: "VpcSecurityGroups.VpcSecurityGroupId"},
 	}
 	if !slices.Equal(cluster.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", cluster.Related, wantRefs)
@@ -181,7 +181,7 @@ func TestDBClusterCollectorClassifiesKMSIdentifier(t *testing.T) {
 				Type:           model.TypeKMSKey,
 				ID:             keyARN,
 				IdentifierKind: model.IdentifierARN,
-				Relation:       model.RelationAssociatedWith,
+				Relation:       "KmsKeyId",
 			}},
 		},
 		{
@@ -190,7 +190,7 @@ func TestDBClusterCollectorClassifiesKMSIdentifier(t *testing.T) {
 			wantRefs: []model.Ref{{
 				Type:     model.TypeKMSKey,
 				ID:       "key-1",
-				Relation: model.RelationAssociatedWith,
+				Relation: "KmsKeyId",
 			}},
 		},
 		{

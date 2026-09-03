@@ -99,6 +99,7 @@ func dbClusterToResource(scope collect.Scope, cluster rdstypes.DBCluster) model.
 		resource.Related = appendIDRelation(
 			resource.Related,
 			model.TypeRDSDBInstance,
+			"DBClusterMembers.DBInstanceIdentifier",
 			aws.ToString(member.DBInstanceIdentifier),
 		)
 	}
@@ -107,6 +108,7 @@ func dbClusterToResource(scope collect.Scope, cluster rdstypes.DBCluster) model.
 		resource.Related = appendIDRelation(
 			resource.Related,
 			model.TypeEC2SecurityGroup,
+			"VpcSecurityGroups.VpcSecurityGroupId",
 			aws.ToString(group.VpcSecurityGroupId),
 		)
 	}

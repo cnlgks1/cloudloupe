@@ -114,7 +114,7 @@ func groupRelations(group autoscalingtypes.AutoScalingGroup) []model.Ref {
 			refs = append(refs, model.Ref{
 				Type:     model.TypeEC2Instance,
 				ID:       id,
-				Relation: model.RelationAssociatedWith,
+				Relation: "Instances.InstanceId",
 			})
 		}
 	}
@@ -124,7 +124,7 @@ func groupRelations(group autoscalingtypes.AutoScalingGroup) []model.Ref {
 			refs = append(refs, model.Ref{
 				Type:     model.TypeEC2Subnet,
 				ID:       subnetID,
-				Relation: model.RelationAssociatedWith,
+				Relation: "VPCZoneIdentifier",
 			})
 		}
 	}
@@ -138,7 +138,7 @@ func groupRelations(group autoscalingtypes.AutoScalingGroup) []model.Ref {
 			Type:           model.TypeELBv2TargetGroup,
 			ID:             arn,
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationAssociatedWith,
+			Relation:       "TargetGroupARNs",
 		})
 	}
 

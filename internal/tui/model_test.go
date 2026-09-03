@@ -37,7 +37,7 @@ func sampleResources() []model.Resource {
 			Region: "ap-northeast-2",
 			Fields: []model.Field{{Key: "스킴", Value: "internet-facing"}},
 			Related: []model.Ref{
-				{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Relation: model.RelationForwardsTo},
+				{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Relation: "Actions.TargetGroupArn"},
 			},
 		},
 		{Type: model.TypeEC2Instance, ID: "i-0a1b", Name: "web-01", Region: "ap-northeast-2"},

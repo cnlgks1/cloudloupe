@@ -170,7 +170,7 @@ func listenerToResource(
 			Type:           model.TypeELBv2LoadBalancer,
 			ID:             loadBalancerARN,
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationListenerOf,
+			Relation:       "LoadBalancerArn",
 		})
 	}
 
@@ -246,7 +246,7 @@ func targetGroupRef(arn, via string) model.Ref {
 		Type:           model.TypeELBv2TargetGroup,
 		ID:             arn,
 		IdentifierKind: model.IdentifierARN,
-		Relation:       model.RelationForwardsTo,
+		Relation:       "Actions.TargetGroupArn",
 		Via:            via,
 	}
 }

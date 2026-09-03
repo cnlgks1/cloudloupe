@@ -162,7 +162,7 @@ func recordSetToResource(scope collect.Scope, zoneID, zoneName string, rec route
 			Type:           model.TypeELBv2LoadBalancer,
 			ID:             strings.TrimSuffix(target, "."),
 			IdentifierKind: model.IdentifierDNS,
-			Relation:       model.RelationResolvesTo,
+			Relation:       "AliasTarget.DNSName",
 		}}
 
 		return r

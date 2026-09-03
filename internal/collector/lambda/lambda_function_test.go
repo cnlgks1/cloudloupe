@@ -119,21 +119,21 @@ func TestFunctionCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcConfig.VpcId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "VpcConfig.SubnetIds"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: "VpcConfig.SubnetIds"},
+		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: "VpcConfig.SecurityGroupIds"},
 		{
 			Type:           model.TypeIAMRole,
 			ID:             "arn:aws:iam::123456789012:role/order-worker",
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationAssociatedWith,
+			Relation:       "Role",
 		},
 		{
 			Type:           model.TypeKMSKey,
 			ID:             "arn:aws:kms:ap-northeast-2:123456789012:key/key-1",
 			IdentifierKind: model.IdentifierARN,
-			Relation:       model.RelationAssociatedWith,
+			Relation:       "KMSKeyArn",
 		},
 	}
 	if !slices.Equal(function.Related, wantRefs) {

@@ -90,7 +90,7 @@ func TestSubnetCollectorConvertsFieldsAndRelation(t *testing.T) {
 	if !slices.Equal(got.Fields, wantFields) {
 		t.Errorf("Fields = %+v, want %+v", got.Fields, wantFields)
 	}
-	wantRelated := []model.Ref{{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith}}
+	wantRelated := []model.Ref{{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcId"}}
 	if !slices.Equal(got.Related, wantRelated) {
 		t.Errorf("Related = %+v, want %+v", got.Related, wantRelated)
 	}

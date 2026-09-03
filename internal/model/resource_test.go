@@ -74,9 +74,9 @@ func TestResourceLookups(t *testing.T) {
 			{Key: "Environment", Value: "production"},
 		},
 		Related: []model.Ref{
-			{Type: model.TypeEC2Volume, ID: "vol-1", Relation: model.RelationAttachedVolume, Via: "/dev/xvda"},
-			{Type: model.TypeEC2Volume, ID: "vol-2", Relation: model.RelationAttachedVolume, Via: "/dev/xvdb"},
-			{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Relation: model.RelationTargetOf},
+			{Type: model.TypeEC2Volume, ID: "vol-1", Relation: "BlockDeviceMappings.Ebs.VolumeId", Via: "/dev/xvda"},
+			{Type: model.TypeEC2Volume, ID: "vol-2", Relation: "BlockDeviceMappings.Ebs.VolumeId", Via: "/dev/xvdb"},
+			{Type: model.TypeELBv2TargetGroup, ID: "web-tg", Relation: "reverse-only"},
 		},
 	}
 
@@ -96,7 +96,7 @@ func TestResourceLookups(t *testing.T) {
 		t.Errorf("Tag(Name) = %q, want 빈 문자열", got)
 	}
 
-	volumes := res.RelatedBy(model.RelationAttachedVolume)
+	volumes := res.RelatedBy("BlockDeviceMappings.Ebs.VolumeId")
 	if len(volumes) != 2 {
 		t.Fatalf("RelatedBy(attached-volume)가 ref %d개를 반환했다, want 2", len(volumes))
 	}
@@ -105,7 +105,7 @@ func TestResourceLookups(t *testing.T) {
 		t.Errorf("RelatedBy가 순서를 유지하지 않았다: %+v", volumes)
 	}
 
-	if got := res.RelatedBy(model.RelationForwardsTo); got != nil {
+	if got := res.RelatedBy("Actions.TargetGroupArn"); got != nil {
 		t.Errorf("RelatedBy(forwards-to) = %+v, want nil", got)
 	}
 }

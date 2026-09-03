@@ -146,12 +146,12 @@ func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
 
 	// 관계를 양쪽 끝에서 기록하는 원칙: 인스턴스는 ENI와 볼륨으로의 관계를 남겨야 한다.
 	// 3단계 그래프가 이 ref로부터 만들어진다.
-	eni := got[0].RelatedBy(model.RelationAttachedENI)
+	eni := got[0].RelatedBy("NetworkInterfaces.NetworkInterfaceId")
 	if len(eni) != 1 || eni[0].ID != "eni-1" {
 		t.Errorf("ENI 관계가 없다: %+v", got[0].Related)
 	}
 
-	vol := got[0].RelatedBy(model.RelationAttachedVolume)
+	vol := got[0].RelatedBy("BlockDeviceMappings.Ebs.VolumeId")
 	if len(vol) != 1 || vol[0].ID != "vol-1" || vol[0].Via != "/dev/xvda" {
 		t.Errorf("볼륨 관계가 없거나 디바이스가 빠졌다: %+v", got[0].Related)
 	}

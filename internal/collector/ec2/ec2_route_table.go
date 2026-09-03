@@ -85,15 +85,15 @@ func routeTableRelations(routeTable ec2types.RouteTable) []model.Ref {
 	var refs []model.Ref
 
 	if id := aws.ToString(routeTable.VpcId); id != "" {
-		refs = append(refs, model.Ref{Type: model.TypeEC2VPC, ID: id, Relation: model.RelationAssociatedWith})
+		refs = append(refs, model.Ref{Type: model.TypeEC2VPC, ID: id, Relation: "VpcId"})
 	}
 
 	for _, association := range routeTable.Associations {
 		if id := aws.ToString(association.SubnetId); id != "" {
-			refs = append(refs, model.Ref{Type: model.TypeEC2Subnet, ID: id, Relation: model.RelationAssociatedWith})
+			refs = append(refs, model.Ref{Type: model.TypeEC2Subnet, ID: id, Relation: "Associations.SubnetId"})
 		}
 		if id := aws.ToString(association.GatewayId); strings.HasPrefix(id, "igw-") {
-			refs = append(refs, model.Ref{Type: model.TypeEC2InternetGateway, ID: id, Relation: model.RelationAssociatedWith})
+			refs = append(refs, model.Ref{Type: model.TypeEC2InternetGateway, ID: id, Relation: "Associations.GatewayId"})
 		}
 	}
 
@@ -107,22 +107,22 @@ func routeTableRelations(routeTable ec2types.RouteTable) []model.Ref {
 }
 
 func routeTargetRef(route ec2types.Route) (model.Ref, bool) {
-	var typ, id string
+	var typ, id, field string
 
 	switch {
 	case aws.ToString(route.NatGatewayId) != "":
-		typ, id = model.TypeEC2NATGateway, aws.ToString(route.NatGatewayId)
+		typ, id, field = model.TypeEC2NATGateway, aws.ToString(route.NatGatewayId), "Routes.NatGatewayId"
 	case strings.HasPrefix(aws.ToString(route.GatewayId), "igw-"):
-		typ, id = model.TypeEC2InternetGateway, aws.ToString(route.GatewayId)
+		typ, id, field = model.TypeEC2InternetGateway, aws.ToString(route.GatewayId), "Routes.GatewayId"
 	case aws.ToString(route.NetworkInterfaceId) != "":
-		typ, id = model.TypeEC2NetworkInterface, aws.ToString(route.NetworkInterfaceId)
+		typ, id, field = model.TypeEC2NetworkInterface, aws.ToString(route.NetworkInterfaceId), "Routes.NetworkInterfaceId"
 	case aws.ToString(route.InstanceId) != "":
-		typ, id = model.TypeEC2Instance, aws.ToString(route.InstanceId)
+		typ, id, field = model.TypeEC2Instance, aws.ToString(route.InstanceId), "Routes.InstanceId"
 	default:
 		return model.Ref{}, false
 	}
 
-	return model.Ref{Type: typ, ID: id, Relation: model.RelationRoutesTo, Via: routeDestination(route)}, true
+	return model.Ref{Type: typ, ID: id, Relation: field, Via: routeDestination(route)}, true
 }
 
 func routeDestination(route ec2types.Route) string {

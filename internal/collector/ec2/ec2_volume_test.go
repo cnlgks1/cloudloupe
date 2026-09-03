@@ -127,7 +127,7 @@ func TestEC2VolumeCollectorRecordsAttachment(t *testing.T) {
 	}
 
 	// 관계를 양쪽 끝에서 기록: 볼륨은 자신이 붙은 인스턴스로의 attached-to를 남긴다.
-	att := got[0].RelatedBy(model.RelationAttachedTo)
+	att := got[0].RelatedBy("Attachments.InstanceId")
 	if len(att) != 1 || att[0].ID != "i-1" || att[0].Via != "/dev/sdf" {
 		t.Errorf("인스턴스 attached-to 관계가 없거나 디바이스가 빠졌다: %+v", got[0].Related)
 	}

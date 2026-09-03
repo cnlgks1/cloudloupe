@@ -93,27 +93,30 @@ func functionToResource(scope collect.Scope, function lambdatypes.FunctionConfig
 }
 
 // functionRelations는 함수와 네트워크, IAM 역할, KMS 키의 관계를 만든다.
+//
+// 관계 이름에는 값을 꺼낸 SDK 응답 필드 경로를 넣는다. 상세 화면이 그대로 보여주므로
+// aws lambda list-functions 출력에서 같은 경로를 찾아 대조할 수 있다.
 func functionRelations(function lambdatypes.FunctionConfiguration) []model.Ref {
 	var refs []model.Ref
 
 	if function.VpcConfig != nil {
-		refs = appendIDRef(refs, model.TypeEC2VPC, aws.ToString(function.VpcConfig.VpcId))
+		refs = appendIDRef(refs, model.TypeEC2VPC, "VpcConfig.VpcId", aws.ToString(function.VpcConfig.VpcId))
 		for _, subnetID := range function.VpcConfig.SubnetIds {
-			refs = appendIDRef(refs, model.TypeEC2Subnet, subnetID)
+			refs = appendIDRef(refs, model.TypeEC2Subnet, "VpcConfig.SubnetIds", subnetID)
 		}
 		for _, securityGroupID := range function.VpcConfig.SecurityGroupIds {
-			refs = appendIDRef(refs, model.TypeEC2SecurityGroup, securityGroupID)
+			refs = appendIDRef(refs, model.TypeEC2SecurityGroup, "VpcConfig.SecurityGroupIds", securityGroupID)
 		}
 	}
 
-	refs = appendARNRef(refs, model.TypeIAMRole, aws.ToString(function.Role))
-	refs = appendARNRef(refs, model.TypeKMSKey, aws.ToString(function.KMSKeyArn))
+	refs = appendARNRef(refs, model.TypeIAMRole, "Role", aws.ToString(function.Role))
+	refs = appendARNRef(refs, model.TypeKMSKey, "KMSKeyArn", aws.ToString(function.KMSKeyArn))
 
 	return refs
 }
 
 // appendIDRef는 비어 있지 않은 리소스 ID 관계를 추가한다.
-func appendIDRef(refs []model.Ref, typeID, id string) []model.Ref {
+func appendIDRef(refs []model.Ref, typeID, relation, id string) []model.Ref {
 	if id == "" {
 		return refs
 	}
@@ -121,12 +124,12 @@ func appendIDRef(refs []model.Ref, typeID, id string) []model.Ref {
 	return append(refs, model.Ref{
 		Type:     typeID,
 		ID:       id,
-		Relation: model.RelationAssociatedWith,
+		Relation: relation,
 	})
 }
 
 // appendARNRef는 비어 있지 않은 ARN 관계를 추가한다.
-func appendARNRef(refs []model.Ref, typeID, arn string) []model.Ref {
+func appendARNRef(refs []model.Ref, typeID, relation, arn string) []model.Ref {
 	if arn == "" {
 		return refs
 	}
@@ -135,7 +138,7 @@ func appendARNRef(refs []model.Ref, typeID, arn string) []model.Ref {
 		Type:           typeID,
 		ID:             arn,
 		IdentifierKind: model.IdentifierARN,
-		Relation:       model.RelationAssociatedWith,
+		Relation:       relation,
 	})
 }
 

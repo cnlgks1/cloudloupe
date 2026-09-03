@@ -106,12 +106,12 @@ func TestRouteTableCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "Associations.SubnetId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: "Associations.SubnetId"},
 		{
 			Type: model.TypeEC2NATGateway, ID: "nat-0a1b",
-			Relation: model.RelationRoutesTo, Via: "0.0.0.0/0",
+			Relation: "Routes.NatGatewayId", Via: "0.0.0.0/0",
 		},
 	}
 	if !slices.Equal(table.Related, wantRefs) {
@@ -164,7 +164,7 @@ func TestRouteTableCollectorResolvesRouteTargets(t *testing.T) {
 			},
 			want: []model.Ref{{
 				Type: model.TypeEC2NATGateway, ID: "nat-1",
-				Relation: model.RelationRoutesTo, Via: "0.0.0.0/0",
+				Relation: "Routes.NatGatewayId", Via: "0.0.0.0/0",
 			}},
 		},
 		{
@@ -175,7 +175,7 @@ func TestRouteTableCollectorResolvesRouteTargets(t *testing.T) {
 			},
 			want: []model.Ref{{
 				Type: model.TypeEC2InternetGateway, ID: "igw-1",
-				Relation: model.RelationRoutesTo, Via: "0.0.0.0/0",
+				Relation: "Routes.GatewayId", Via: "0.0.0.0/0",
 			}},
 		},
 		{
@@ -186,7 +186,7 @@ func TestRouteTableCollectorResolvesRouteTargets(t *testing.T) {
 			},
 			want: []model.Ref{{
 				Type: model.TypeEC2NetworkInterface, ID: "eni-1",
-				Relation: model.RelationRoutesTo, Via: "192.168.0.0/16",
+				Relation: "Routes.NetworkInterfaceId", Via: "192.168.0.0/16",
 			}},
 		},
 		{
@@ -197,7 +197,7 @@ func TestRouteTableCollectorResolvesRouteTargets(t *testing.T) {
 			},
 			want: []model.Ref{{
 				Type: model.TypeEC2NATGateway, ID: "nat-6",
-				Relation: model.RelationRoutesTo, Via: "::/0",
+				Relation: "Routes.NatGatewayId", Via: "::/0",
 			}},
 		},
 		{
@@ -262,7 +262,7 @@ func TestRouteTableCollectorLinksGatewayAssociation(t *testing.T) {
 	}
 
 	want := []model.Ref{
-		{Type: model.TypeEC2InternetGateway, ID: "igw-1", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2InternetGateway, ID: "igw-1", Relation: "Associations.GatewayId"},
 	}
 	if !slices.Equal(got[0].Related, want) {
 		t.Errorf("Related = %+v, want %+v", got[0].Related, want)

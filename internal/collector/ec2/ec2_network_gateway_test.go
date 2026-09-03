@@ -84,7 +84,7 @@ func TestInternetGatewayCollectorReportsAttachment(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAttachedTo},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "Attachments.VpcId"},
 	}
 	if !slices.Equal(gateway.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", gateway.Related, wantRefs)
@@ -237,10 +237,10 @@ func TestNATGatewayCollectorConvertsFields(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2NetworkInterface, ID: "eni-0123", Relation: model.RelationAttachedENI},
-		{Type: model.TypeEC2Address, ID: "eipalloc-0123", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "SubnetId"},
+		{Type: model.TypeEC2NetworkInterface, ID: "eni-0123", Relation: "NatGatewayAddresses.NetworkInterfaceId"},
+		{Type: model.TypeEC2Address, ID: "eipalloc-0123", Relation: "NatGatewayAddresses.AllocationId"},
 	}
 	if !slices.Equal(gateway.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", gateway.Related, wantRefs)
@@ -421,12 +421,12 @@ func TestVPCEndpointCollectorConvertsInterfaceEndpoint(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2NetworkInterface, ID: "eni-1", Relation: model.RelationAttachedENI},
-		{Type: model.TypeEC2NetworkInterface, ID: "eni-2", Relation: model.RelationAttachedENI},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcId"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-a", Relation: "SubnetIds"},
+		{Type: model.TypeEC2Subnet, ID: "subnet-c", Relation: "SubnetIds"},
+		{Type: model.TypeEC2SecurityGroup, ID: "sg-0123", Relation: "Groups.GroupId"},
+		{Type: model.TypeEC2NetworkInterface, ID: "eni-1", Relation: "NetworkInterfaceIds"},
+		{Type: model.TypeEC2NetworkInterface, ID: "eni-2", Relation: "NetworkInterfaceIds"},
 	}
 	if !slices.Equal(endpoint.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", endpoint.Related, wantRefs)
@@ -465,9 +465,9 @@ func TestVPCEndpointCollectorConvertsGatewayEndpoint(t *testing.T) {
 	}
 
 	wantRefs := []model.Ref{
-		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2RouteTable, ID: "rtb-a", Relation: model.RelationAssociatedWith},
-		{Type: model.TypeEC2RouteTable, ID: "rtb-b", Relation: model.RelationAssociatedWith},
+		{Type: model.TypeEC2VPC, ID: "vpc-0123", Relation: "VpcId"},
+		{Type: model.TypeEC2RouteTable, ID: "rtb-a", Relation: "RouteTableIds"},
+		{Type: model.TypeEC2RouteTable, ID: "rtb-b", Relation: "RouteTableIds"},
 	}
 	if !slices.Equal(endpoint.Related, wantRefs) {
 		t.Errorf("Related = %+v, want %+v", endpoint.Related, wantRefs)

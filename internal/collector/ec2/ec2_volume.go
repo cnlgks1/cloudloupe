@@ -98,7 +98,7 @@ func volumeRelations(vol ec2types.Volume) []model.Ref {
 			refs = append(refs, model.Ref{
 				Type:     model.TypeEC2Instance,
 				ID:       id,
-				Relation: model.RelationAttachedTo,
+				Relation: "Attachments.InstanceId",
 				Via:      aws.ToString(att.Device),
 			})
 		}

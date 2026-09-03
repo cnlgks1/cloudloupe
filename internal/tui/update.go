@@ -12,6 +12,7 @@ import (
 
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/collect"
+	"github.com/cnlgks1/cloudloupe/internal/graph"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
 
@@ -23,10 +24,15 @@ type identityMsg struct {
 }
 
 // collectDoneMsg는 수집과 표시 데이터 준비가 끝났을 때 Update로 전달되는 메시지다.
+//
+// relations는 백그라운드에서 미리 빌드한 관계 그래프다. 빌드가 실패하면 nil이고, 상세
+// 화면은 수집기가 남긴 원본 Ref로 폴백한다. 그래프 빌드를 이 Cmd 안에서 하는 이유는
+// 정렬·표 준비와 마찬가지로 UI 고루틴을 막지 않기 위해서다.
 type collectDoneMsg struct {
 	requestID  uint64
 	result     collect.Result
 	data       resourceTableData
+	relations  *graph.Graph
 	showRegion bool
 	canceled   bool
 }
@@ -496,10 +502,15 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 
 		data, prepared := buildResourceData(ctx, result.Resources, groups, types, showRegion)
 
+		// 관계 그래프도 이 백그라운드 Cmd 안에서 만든다. 빌드 실패(중복 키 같은 입력 문제)는
+		// 조회 결과 표시를 막지 않으므로 nil로 두고 계속 진행한다.
+		relations, _ := graph.Build(result.Resources)
+
 		return collectDoneMsg{
 			requestID:  requestID,
 			result:     result,
 			data:       data,
+			relations:  relations,
 			showRegion: showRegion,
 			canceled:   !prepared,
 		}
@@ -537,6 +548,7 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 	m.resourceKindFilter = ""
 	m.resourceList.setResources(
 		m.theme, msg.result.Resources, msg.data, m.width, m.resourceListHeight())
+	m.relations = msg.relations
 	m.collectErrors = append([]model.CollectError(nil), msg.result.Errors...)
 	m.errorTable = buildCollectErrorTable(
 		m.theme, m.collectErrors, m.deps.ResourceGroups, m.width, m.listHeight())
@@ -607,7 +619,7 @@ func (m Model) keyList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		m.detail.SetContent(renderDetail(m.theme, resource))
+		m.detail.SetContent(renderDetail(m.theme, m.deps.ResourceGroups, resource, m.relations))
 		m.detail.GotoTop()
 		m.screen = ScreenDetail
 

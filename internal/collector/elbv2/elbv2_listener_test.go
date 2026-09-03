@@ -135,11 +135,11 @@ func TestELBv2ListenerCollectorBuildsRuleRelations(t *testing.T) {
 		t.Errorf("DescribeListeners 호출 = %d, want 2", api.listenerCalls[lbARN])
 	}
 
-	listenerOf := listener.RelatedBy(model.RelationListenerOf)
+	listenerOf := listener.RelatedBy("LoadBalancerArn")
 	if len(listenerOf) != 1 || listenerOf[0].ID != lbARN || listenerOf[0].IdentifierKind != model.IdentifierARN {
 		t.Errorf("listener-of = %+v", listenerOf)
 	}
-	forward := listener.RelatedBy(model.RelationForwardsTo)
+	forward := listener.RelatedBy("Actions.TargetGroupArn")
 	gotARNs := make([]string, 0, len(forward))
 	for _, ref := range forward {
 		gotARNs = append(gotARNs, ref.ID)
@@ -184,7 +184,7 @@ func TestELBv2ListenerCollectorKeepsDefaultRelationWhenRulesFail(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("Listener는 보존되어야 함: %+v", resources)
 	}
-	forward := resources[0].RelatedBy(model.RelationForwardsTo)
+	forward := resources[0].RelatedBy("Actions.TargetGroupArn")
 	if len(forward) != 1 || forward[0].ID != tgARN || forward[0].Via != "default" {
 		t.Errorf("기본 동작 fallback = %+v", forward)
 	}

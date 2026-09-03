@@ -100,6 +100,7 @@ func dbInstanceToResource(scope collect.Scope, instance rdstypes.DBInstance) mod
 	resource.Related = appendIDRelation(
 		resource.Related,
 		model.TypeRDSDBCluster,
+		"DBClusterIdentifier",
 		aws.ToString(instance.DBClusterIdentifier),
 	)
 	resource.Related = appendDBSubnetGroupRelations(resource.Related, instance.DBSubnetGroup)
@@ -107,6 +108,7 @@ func dbInstanceToResource(scope collect.Scope, instance rdstypes.DBInstance) mod
 		resource.Related = appendIDRelation(
 			resource.Related,
 			model.TypeEC2SecurityGroup,
+			"VpcSecurityGroups.VpcSecurityGroupId",
 			aws.ToString(group.VpcSecurityGroupId),
 		)
 	}
@@ -130,9 +132,10 @@ func appendDBSubnetGroupRelations(refs []model.Ref, group *rdstypes.DBSubnetGrou
 		return refs
 	}
 
-	refs = appendIDRelation(refs, model.TypeEC2VPC, aws.ToString(group.VpcId))
+	refs = appendIDRelation(refs, model.TypeEC2VPC, "DBSubnetGroup.VpcId", aws.ToString(group.VpcId))
 	for _, subnet := range group.Subnets {
-		refs = appendIDRelation(refs, model.TypeEC2Subnet, aws.ToString(subnet.SubnetIdentifier))
+		refs = appendIDRelation(refs, model.TypeEC2Subnet,
+			"DBSubnetGroup.Subnets.SubnetIdentifier", aws.ToString(subnet.SubnetIdentifier))
 	}
 
 	return refs

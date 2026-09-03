@@ -81,7 +81,7 @@ func subnetToResource(scope collect.Scope, subnet ec2types.Subnet) model.Resourc
 		r.Related = []model.Ref{{
 			Type:     model.TypeEC2VPC,
 			ID:       vpcID,
-			Relation: model.RelationAssociatedWith,
+			Relation: "VpcId",
 		}}
 	}
 

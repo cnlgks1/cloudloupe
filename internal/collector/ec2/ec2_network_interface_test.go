@@ -106,7 +106,7 @@ func TestEC2NetworkInterfaceCollectorRecordsAttachment(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	att := got[0].RelatedBy(model.RelationAttachedTo)
+	att := got[0].RelatedBy("Attachment.InstanceId")
 	if len(att) != 1 || att[0].ID != "i-1" {
 		t.Errorf("인스턴스 attached-to 관계가 없다: %+v", got[0].Related)
 	}

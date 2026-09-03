@@ -141,7 +141,7 @@ func TestRoute53RecordSetCollectorAliasResolvesTo(t *testing.T) {
 		t.Error("별칭 대상 필드가 비었다")
 	}
 
-	res := got[0].RelatedBy(model.RelationResolvesTo)
+	res := got[0].RelatedBy("AliasTarget.DNSName")
 	if len(res) != 1 {
 		t.Fatalf("resolves-to 관계 1개여야 한다: %+v", got[0].Related)
 	}

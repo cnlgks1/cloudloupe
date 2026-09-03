@@ -50,25 +50,19 @@ const (
 // 문자열을 따로 적지 않고 이 상수를 쓴다.
 const RegionGlobal = "global"
 
-// [Ref]에서 사용하는 관계 이름.
+// [Ref.Relation]에는 이 관계를 만든 SDK 응답 필드 경로를 넣는다(예: "DBClusterIdentifier",
+// "VpcConfig.SubnetIds", "Routes.NatGatewayId").
 //
-// 의미가 있는 경우 관계를 양쪽 끝에서 모두 기록한다. 타깃 그룹은 자신이 대상으로
-// 삼는 인스턴스를 나열하고, 각 인스턴스는 자신이 그 그룹의 타깃임을 기록한다.
-// 관계 그래프는 이 ref로부터 만들어지므로, ref를 빼먹은 수집기는 연결이 끊긴
-// 노드를 만들어낸다.
-const (
-	RelationForwardsTo     = "forwards-to"
-	RelationListenerOf     = "listener-of"
-	RelationTargets        = "targets"
-	RelationTargetOf       = "target-of"
-	RelationAttachedTo     = "attached-to"
-	RelationAttachedENI    = "attached-eni"
-	RelationAttachedVolume = "attached-volume"
-	RelationAssociatedWith = "associated-with"
-	RelationRoutesTo       = "routes-to"
-	RelationResolvesTo     = "resolves-to"
-	RelationProtects       = "protects"
-)
+// 관계 이름을 상수로 고정하지 않는 이유가 있다. 한때 열 몇 개의 관계 상수로 모든 연결을
+// 표현하려다 보니 대부분이 "associated-with" 하나로 쏠렸다. 어느 응답 필드에서 나온
+// 연결인지 화면에서 알 수 없었고, aws CLI 출력과 대조할 수도 없었다. 필드 경로를 그대로
+// 쓰면 각 관계가 스스로를 설명하고, 수집기를 쓰는 사람은 값을 꺼낸 경로를 적기만 하면 된다.
+//
+// 관계 이름으로 분기하는 코드는 없다. 표시와 그래프 색인에만 쓰이므로 자유 문자열이어도
+// 안전하다. 반면 연결 대상은 [Ref.Type]에 model.Type* 상수를 쓰므로 컴파일 시점에 검사된다.
+//
+// 역방향은 [graph]가 만든다. 한쪽 끝에서만 관계를 기록해도 상세 화면의 "Referenced by"에
+// 반대 방향이 나오므로, 수집기가 같은 관계를 양쪽에 중복 기록할 필요가 없다.
 
 // Field는 화면 표시에 쓰이는 순서 있는 키/값 쌍이다.
 //

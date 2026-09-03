@@ -102,7 +102,7 @@ func addressRelations(addr ec2types.Address) []model.Ref {
 		refs = append(refs, model.Ref{
 			Type:     model.TypeEC2Instance,
 			ID:       id,
-			Relation: model.RelationAssociatedWith,
+			Relation: "InstanceId",
 		})
 	}
 
@@ -110,7 +110,7 @@ func addressRelations(addr ec2types.Address) []model.Ref {
 		refs = append(refs, model.Ref{
 			Type:     model.TypeEC2NetworkInterface,
 			ID:       id,
-			Relation: model.RelationAssociatedWith,
+			Relation: "NetworkInterfaceId",
 		})
 	}
 

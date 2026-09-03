@@ -106,7 +106,7 @@ func TestELBv2TargetGroupCollectorConvertsFieldsAndTargets(t *testing.T) {
 	}
 
 	// 로드밸런서로의 forwards-to 관계는 ARN을 파싱하지 않고 그대로 보존한다.
-	fwd := r.RelatedBy(model.RelationForwardsTo)
+	fwd := r.RelatedBy("LoadBalancerArns")
 	if len(fwd) != 1 ||
 		fwd[0].ID != "arn:aws:elasticloadbalancing:ap-northeast-2:123456789012:loadbalancer/app/web-alb/def456" ||
 		fwd[0].IdentifierKind != model.IdentifierARN {
@@ -114,7 +114,7 @@ func TestELBv2TargetGroupCollectorConvertsFieldsAndTargets(t *testing.T) {
 	}
 
 	// 타깃으로의 targets 관계 2개, 헬스 상태가 Via에 담겨야 한다.
-	targets := r.RelatedBy(model.RelationTargets)
+	targets := r.RelatedBy("TargetHealthDescriptions.Target.Id")
 	if len(targets) != 2 {
 		t.Fatalf("targets 관계 2개여야 한다, got %d: %+v", len(targets), r.Related)
 	}
@@ -149,7 +149,7 @@ func TestELBv2TargetGroupCollectorSurvivesHealthError(t *testing.T) {
 		t.Fatalf("그룹은 살아야 한다, got %d", len(got))
 	}
 
-	if len(got[0].RelatedBy(model.RelationTargets)) != 0 {
+	if len(got[0].RelatedBy("TargetHealthDescriptions.Target.Id")) != 0 {
 		t.Errorf("헬스 실패 시 타깃 관계는 비어야 한다: %+v", got[0].Related)
 	}
 }
@@ -205,7 +205,7 @@ func TestELBv2TargetGroupCollectorDoesNotMisclassifyIPTargets(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("Resources = %+v, want 1", resources)
 	}
-	if targets := resources[0].RelatedBy(model.RelationTargets); len(targets) != 0 {
+	if targets := resources[0].RelatedBy("TargetHealthDescriptions.Target.Id"); len(targets) != 0 {
 		t.Errorf("IP 타깃을 지원되지 않는 리소스 타입에 연결함: %+v", targets)
 	}
 }

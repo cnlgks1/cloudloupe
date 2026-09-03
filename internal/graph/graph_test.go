@@ -38,8 +38,8 @@ func TestBuildResolvesIDARNAndDNS(t *testing.T) {
 		Type: model.TypeELBv2Listener, ID: listener, ARN: listener,
 		Profile: "prod", Region: "ap-northeast-2", AccountID: accountID,
 		Related: []model.Ref{
-			{Type: model.TypeELBv2LoadBalancer, ID: lbARN, IdentifierKind: model.IdentifierARN, Relation: model.RelationListenerOf},
-			{Type: model.TypeELBv2TargetGroup, ID: tgARN, IdentifierKind: model.IdentifierARN, Relation: model.RelationForwardsTo},
+			{Type: model.TypeELBv2LoadBalancer, ID: lbARN, IdentifierKind: model.IdentifierARN, Relation: "LoadBalancerArn"},
+			{Type: model.TypeELBv2TargetGroup, ID: tgARN, IdentifierKind: model.IdentifierARN, Relation: "Actions.TargetGroupArn"},
 		},
 	}
 	record := model.Resource{
@@ -47,7 +47,7 @@ func TestBuildResolvesIDARNAndDNS(t *testing.T) {
 		Profile: "prod", Region: "global", AccountID: accountID,
 		Related: []model.Ref{{
 			Type: model.TypeELBv2LoadBalancer, ID: "dualstack.web-123.ap-northeast-2.elb.amazonaws.com",
-			IdentifierKind: model.IdentifierDNS, Relation: model.RelationResolvesTo,
+			IdentifierKind: model.IdentifierDNS, Relation: "AliasTarget.DNSName",
 		}},
 	}
 

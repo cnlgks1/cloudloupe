@@ -133,9 +133,13 @@ func TestEC2AddressCollectorRecordsAssociations(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	assoc := got[0].RelatedBy(model.RelationAssociatedWith)
-	if len(assoc) != 2 {
-		t.Fatalf("associated-with 관계 2개(인스턴스+ENI)여야 한다, got %d: %+v", len(assoc), got[0].Related)
+	if len(got[0].Related) != 2 {
+		t.Fatalf("관계 2개(인스턴스+ENI)여야 한다, got %d: %+v", len(got[0].Related), got[0].Related)
+	}
+	instance := got[0].RelatedBy("InstanceId")
+	eni := got[0].RelatedBy("NetworkInterfaceId")
+	if len(instance) != 1 || len(eni) != 1 {
+		t.Fatalf("InstanceId·NetworkInterfaceId 관계가 각 1개여야 한다: %+v", got[0].Related)
 	}
 }
 

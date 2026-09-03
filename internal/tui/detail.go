@@ -102,8 +102,8 @@ func relationGroupLines(
 // edgeTargetLines는 한 간선의 대상을 "타입  이름  경유" 형태로 만든다.
 //
 // 역방향이면 출발 리소스가 대상이므로 SourceKey를 해석한다. 정방향이면 TargetKeys를
-// 해석하되, 조회 범위에 없어 해석하지 못한 대상도 감추지 않고 대상 ID와 함께 "not queried"로
-// 남긴다. 관계가 통째로 사라진 것처럼 보이면 안 된다.
+// 해석하되, 조회 범위에 없어 해석하지 못한 대상도 감추지 않는다. 그때는 대상 이름을 알 수
+// 없으므로 ID만 보여준다. 관계가 통째로 사라진 것처럼 보이면 안 된다.
 func edgeTargetLines(
 	theme Theme,
 	groups []ResourceGroup,
@@ -126,12 +126,11 @@ func edgeTargetLines(
 	}
 
 	if len(edge.TargetKeys) == 0 {
+		// 대상을 같이 조회하지 않아 이름을 모른다. 타입과 ID만 보여준다. 그 타입도 함께
+		// 조회하면 다음 조회에서 이름이 채워진다.
 		typeLabel := resourceTypeLabel(groups, edge.Ref.Type)
 
-		return []string{
-			theme.Glyphs.TreeBranch + " " + typeLabel + "  " + edge.Ref.ID +
-				"  " + theme.Faint.Render("not queried") + via,
-		}
+		return []string{theme.Glyphs.TreeBranch + " " + typeLabel + "  " + edge.Ref.ID + via}
 	}
 
 	lines := make([]string, 0, len(edge.TargetKeys))

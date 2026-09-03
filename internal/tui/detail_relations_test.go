@@ -93,10 +93,10 @@ func TestRelationShowsReverseDirection(t *testing.T) {
 }
 
 // TestRelationMarksUnresolvedTargets는 조회 범위에 없어 해석하지 못한 대상을 감추지 않고
-// not queried로 표시하는지 확인한다.
+// ID로 보여주는지 확인한다.
 //
-// 감추면 관계가 통째로 사라진 것처럼 보인다. "이 서브넷은 조회하지 않았다"는 사용자가 할
-// 일(그 타입도 함께 조회)을 알려주는 신호다.
+// 감추면 관계가 통째로 사라진 것처럼 보인다. 같이 조회하지 않은 대상은 이름을 알 수 없으므로
+// ID만 보여주고, 그 타입도 함께 조회하면 다음에 이름이 채워진다.
 func TestRelationMarksUnresolvedTargets(t *testing.T) {
 	t.Parallel()
 
@@ -114,12 +114,12 @@ func TestRelationMarksUnresolvedTargets(t *testing.T) {
 
 	view := renderDetail(New(true), relationGroups(), resources[1], g)
 
-	// 해석된 대상은 이름으로, 미조회 대상은 ID와 not queried로.
+	// 해석된 대상은 이름으로, 미조회 대상은 ID로.
 	if !strings.Contains(view, "private-a") {
 		t.Errorf("해석된 대상이 없다:\n%s", view)
 	}
-	if !strings.Contains(view, "subnet-x") || !strings.Contains(view, "not queried") {
-		t.Errorf("미조회 대상을 not queried로 표시하지 않았다:\n%s", view)
+	if !strings.Contains(view, "subnet-x") {
+		t.Errorf("미조회 대상 ID가 보이지 않는다:\n%s", view)
 	}
 }
 

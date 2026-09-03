@@ -133,14 +133,29 @@ func (t resourceTree) currentRow() (treeRow, bool) {
 	return t.rows[i], true
 }
 
-// toggleExpand는 커서의 서비스를 펼치거나 접는다. 타입 줄에서는 아무 일도 하지 않는다.
+// expandable은 서비스가 펼칠 만한지 알려준다.
+//
+// resource type이 하나뿐이면 펼쳐도 서비스 줄과 같은 것을 한 줄 더 보여줄 뿐이다. 그 하나의
+// Type ID는 서비스 줄에 함께 표시한다.
+func (t resourceTree) expandable(group ResourceGroup) bool {
+	return len(group.Types) > 1
+}
+
+// toggleExpand는 커서의 서비스를 펼치거나 접는다.
+//
+// 펼칠 수 없는 줄에서는 false를 반환해, 호출자가 → 를 조회로 넘길 수 있게 한다.
 func (t *resourceTree) toggleExpand(theme Theme, want bool, width, height int) bool {
 	row, ok := t.currentRow()
 	if !ok || row.kind != treeRowService || t.query != "" {
 		return false
 	}
 
-	id := t.groups[row.groupIdx].ID
+	group := t.groups[row.groupIdx]
+	if !t.expandable(group) {
+		return false
+	}
+
+	id := group.ID
 	if t.expanded[id] == want {
 		return false
 	}
@@ -332,7 +347,7 @@ func (t resourceTree) buildRows() []treeRow {
 	rows := make([]treeRow, 0, len(t.groups)*2)
 	for groupIdx, group := range t.groups {
 		rows = append(rows, treeRow{kind: treeRowService, groupIdx: groupIdx})
-		if !t.expanded[group.ID] {
+		if !t.expandable(group) || !t.expanded[group.ID] {
 			continue
 		}
 		for typeIdx := range group.Types {
@@ -373,6 +388,17 @@ func (t resourceTree) buildFilteredRows() []treeRow {
 	return rows
 }
 
+// 열 폭을 균등 배분하지 않고 직접 잡는다.
+//
+// 균등 배분은 선택 표시와 개수처럼 좁아도 되는 열에 과한 폭을 주고, 정작 잘리면 안 되는
+// Type ID를 좁게 만든다. Type ID는 aws CLI와 리포트에서 그대로 쓰는 값이라 잘리면 쓸모가 없다.
+const (
+	treeMarkWidth  = 4
+	treeCountWidth = 16 // "Resource types" 머리글이 들어가는 최소 폭
+	treeLabelWidth = 26 // 들여쓴 resource type 이름까지 담는 폭
+	treeIDMinWidth = 24
+)
+
 func (t resourceTree) buildTable(theme Theme, width, height int) table.Model {
 	titles := []string{"", serviceColumn, resourceTypeColumn, typeIDColumn}
 	if t.query == "" {
@@ -381,8 +407,19 @@ func (t resourceTree) buildTable(theme Theme, width, height int) table.Model {
 	}
 
 	columns := layoutColumns(titles, width)
-	if len(columns) > 0 {
-		columns[0].Width = 4
+	if len(columns) == 4 {
+		usable := max(width-2, treeMarkWidth+treeLabelWidth+treeCountWidth+treeIDMinWidth)
+
+		columns[0].Width = treeMarkWidth
+		columns[1].Width = treeLabelWidth
+		columns[2].Width = treeCountWidth
+		if t.query != "" {
+			// 검색 모드에서는 세 번째 열이 개수가 아니라 이름이므로 좁히지 않는다.
+			columns[1].Width = 18
+			columns[2].Width = treeLabelWidth - 4
+		}
+		columns[3].Width = max(
+			usable-columns[0].Width-columns[1].Width-columns[2].Width, treeIDMinWidth)
 	}
 
 	rows := make([]table.Row, 0, len(t.rows))
@@ -397,16 +434,28 @@ func (t resourceTree) renderRow(theme Theme, row treeRow) table.Row {
 	group := t.groups[row.groupIdx]
 
 	if row.kind == treeRowService {
-		marker := theme.Glyphs.Collapsed
-		if t.expanded[group.ID] {
-			marker = theme.Glyphs.Expanded
+		// 펼칠 것이 없는 서비스에는 펼침 표시를 두지 않는다. 트리에서 잎 노드에 펼침
+		// 손잡이를 그리지 않는 것과 같다. 대신 하나뿐인 Type ID를 이 줄에 바로 보여주므로
+		// 펼치지 않아도 숨는 정보가 없다.
+		marker := "  "
+		typeID := ""
+
+		switch {
+		case !t.expandable(group):
+			if len(group.Types) == 1 {
+				typeID = group.Types[0].ID
+			}
+		case t.expanded[group.ID]:
+			marker = theme.Glyphs.Expanded + " "
+		default:
+			marker = theme.Glyphs.Collapsed + " "
 		}
 
 		return table.Row{
 			t.selectionMark(theme, t.serviceSelection(group)),
-			marker + " " + group.Label,
+			marker + group.Label,
 			strconv.Itoa(len(group.Types)),
-			"",
+			typeID,
 		}
 	}
 

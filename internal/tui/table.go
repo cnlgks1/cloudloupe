@@ -469,10 +469,11 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 		"AvailabilityMode", "IpAddressType", "KeyManager", "KeyUsage", "KeySpec", "Origin",
 		"AttachmentState", "InstanceTenancy", "Domain":
 		return max(10, titleWidth), max(22, titleWidth), false
+	// Type ID는 aws CLI와 리포트에서 그대로 쓰는 값이라 잘리면 쓸모가 없다. 넉넉히 준다.
 	case "Name", "ID", "Summary", "DNSName", "ResourceRecords", "AliasTarget",
 		"Description", "HostedZoneName", "ServiceName", "Aliases", "ARN", "Path",
 		"PermissionsBoundary", "FailureMessage", "FailureReason", "CreationDate",
-		"DeletionDate", "RoleLastUsed", "DefaultActions", "SslPolicy":
+		"DeletionDate", "RoleLastUsed", "DefaultActions", "SslPolicy", typeIDColumn:
 		return max(12, titleWidth), max(48, titleWidth), true
 	default:
 		return max(10, titleWidth), max(30, titleWidth), false

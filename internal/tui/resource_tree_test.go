@@ -336,3 +336,67 @@ func TestTreeScalesToManyServices(t *testing.T) {
 		t.Errorf("검색으로 좁혀지지 않았다:\n%s", view)
 	}
 }
+
+// TestTreeHidesExpanderOnSingleTypeService는 펼칠 것이 없는 서비스에 펼침 표시를 두지
+// 않는지 확인한다.
+//
+// 트리에서 잎 노드에 펼침 손잡이를 그리지 않는 것과 같다. 대신 하나뿐인 Type ID를 서비스
+// 줄에 바로 보여주므로 펼치지 않아도 숨는 정보가 없다.
+func TestTreeHidesExpanderOnSingleTypeService(t *testing.T) {
+	t.Parallel()
+
+	deps, _ := treeDeps()
+	m := treeModel(t, deps)
+	glyphs := tui.New(true).Glyphs
+
+	for _, line := range strings.Split(m.View(), "\n") {
+		switch {
+		case strings.Contains(line, "Auto Scaling"), strings.Contains(line, "IAM"):
+			// 타입이 1개인 서비스: 펼침 표시가 없고 Type ID가 그 줄에 있다.
+			if strings.Contains(line, glyphs.Collapsed) {
+				t.Errorf("타입 1개 서비스에 펼침 표시가 있다: %q", line)
+			}
+			if !strings.Contains(line, ":") {
+				t.Errorf("타입 1개 서비스 줄에 Type ID가 없다: %q", line)
+			}
+		case strings.Contains(line, "EC2"), strings.Contains(line, "RDS"):
+			// 타입이 여러 개인 서비스: 펼침 표시가 있고 Type ID는 펼쳐야 나온다.
+			if !strings.Contains(line, glyphs.Collapsed) {
+				t.Errorf("타입 여러 개 서비스에 펼침 표시가 없다: %q", line)
+			}
+		}
+	}
+}
+
+// TestTreeSingleTypeServiceQueriesOnRightArrow는 펼칠 수 없는 줄에서 →가 조회로
+// 넘어가는지 확인한다. 눌러도 아무 일이 없으면 도구가 멈춘 것처럼 보인다.
+func TestTreeSingleTypeServiceQueriesOnRightArrow(t *testing.T) {
+	t.Parallel()
+
+	deps, queried := treeDeps()
+	m := treeModel(t, deps)
+
+	m = send(m, keyMsg("down")) // Auto Scaling (타입 1개)
+	m = step(m, keyMsg("right"))
+
+	if m.Screen() != tui.ScreenList {
+		t.Fatalf("타입 1개 서비스에서 → 후 화면 = %v, want 목록", m.Screen())
+	}
+	if want := []string{"autoscaling:autoScalingGroup"}; !slices.Equal(*queried, want) {
+		t.Errorf("조회 타입 = %v, want %v", *queried, want)
+	}
+}
+
+// TestTreeKeepsTypeIDReadableAtNarrowWidth는 좁은 터미널에서도 Type ID가 잘리지 않는지
+// 확인한다. aws CLI 출력이나 리포트와 대조하는 값이라 잘리면 쓸모가 없다.
+func TestTreeKeepsTypeIDReadableAtNarrowWidth(t *testing.T) {
+	t.Parallel()
+
+	deps, _ := treeDeps()
+	m := treeModel(t, deps)
+
+	// 80칸은 지원하는 가장 좁은 터미널이다.
+	if view := m.View(); !strings.Contains(view, "autoscaling:autoScalingGroup") {
+		t.Errorf("폭 80에서 Type ID가 잘렸다:\n%s", view)
+	}
+}

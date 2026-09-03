@@ -157,7 +157,7 @@ func networkDefinitions(clientFor ec2ClientFor) []Definition {
 			Type:           model.TypeEC2NATGateway,
 			Label:          "NAT gateways",
 			Scope:          Regional,
-			Columns:        []string{"ConnectivityType", "AvailabilityMode", "VpcId", "SubnetId", "PublicIp", "PrivateIpAddress", "ENI", "AllocationId", "FailureCode", "FailureMessage"},
+			Columns:        []string{"ConnectivityType", "AvailabilityMode", "VpcId", "SubnetId", "PublicIp", "PrivateIp", "NetworkInterfaceId", "AllocationId", "FailureCode", "FailureMessage"},
 			SummaryColumns: []string{"ConnectivityType", "VpcId", "SubnetId", "PublicIp"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewNATGateway(clientFor())
@@ -167,7 +167,7 @@ func networkDefinitions(clientFor ec2ClientFor) []Definition {
 			Type:           model.TypeEC2VPCEndpoint,
 			Label:          "Endpoints",
 			Scope:          Regional,
-			Columns:        []string{"VpcEndpointType", "ServiceName", "ServiceRegion", "IpAddressType", "VpcId", "SubnetIds", "RouteTableIds", "SecurityGroups", "PrivateDnsEnabled", "RequesterManaged", "OwnerId", "FailureReason"},
+			Columns:        []string{"VpcEndpointType", "ServiceName", "ServiceRegion", "IpAddressType", "VpcId", "SubnetIds", "RouteTableIds", "Groups", "PrivateDnsEnabled", "RequesterManaged", "OwnerId", "FailureReason"},
 			SummaryColumns: []string{"VpcEndpointType", "ServiceName", "VpcId"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewVPCEndpoint(clientFor())

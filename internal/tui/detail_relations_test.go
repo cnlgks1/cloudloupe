@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/cnlgks1/cloudloupe/internal/graph"
 	"github.com/cnlgks1/cloudloupe/internal/model"
 )
@@ -168,5 +170,49 @@ func TestRelationGroupsByFieldPath(t *testing.T) {
 	}
 	if !strings.Contains(view, "private-a") || !strings.Contains(view, "private-c") {
 		t.Errorf("묶인 대상이 다 보이지 않는다:\n%s", view)
+	}
+}
+
+// TestDetailHelpStaysAtBottomWhenScrolled는 상세 화면을 스크롤해도 도움말이 콘텐츠와
+// 겹치지 않고 화면 맨 아래에 고정되는지 확인한다.
+//
+// 예전에는 viewport가 창을 꽉 채워, 콘텐츠가 스크롤 밖으로 잘리면 도움말이 잘린 줄 바로
+// 아래에 붙어 상세 정보와 겹쳐 보였다. viewport 높이를 도움말 자리만큼 줄여 이를 없앤다.
+func TestDetailHelpStaysAtBottomWhenScrolled(t *testing.T) {
+	t.Parallel()
+
+	// 창보다 긴 관계 목록을 만든다.
+	var refs []model.Ref
+	for i := range 30 {
+		refs = append(refs, model.Ref{
+			Type: model.TypeEC2Subnet, ID: "subnet-" + string(rune('a'+i%26)),
+			Relation: "DBSubnetGroup.Subnets.SubnetIdentifier",
+		})
+	}
+	res := relationResource(model.TypeRDSDBInstance, "big-db", "big-db", refs...)
+	g, err := graph.Build([]model.Resource{res})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	m := Model{theme: New(true), width: 100, height: 12, deps: Deps{ResourceGroups: relationGroups()}}
+	m = m.resize(tea.WindowSizeMsg{Width: 100, Height: 12})
+	m.detail.SetContent(renderDetail(m.theme, relationGroups(), res, g))
+	m.detail.GotoBottom()
+	m.screen = ScreenDetail
+
+	lines := strings.Split(m.View(), "\n")
+
+	// 마지막 줄은 도움말이어야 한다.
+	if last := lines[len(lines)-1]; !strings.Contains(last, "q quit") {
+		t.Errorf("도움말이 마지막 줄이 아니다: %q", last)
+	}
+	// 도움말은 딱 한 번만 나와야 한다. 콘텐츠 중간에 섞이면 안 된다.
+	if got := strings.Count(m.View(), "q quit"); got != 1 {
+		t.Errorf("도움말이 %d번 나온다, want 1", got)
+	}
+	// 전체 높이가 창 높이를 넘지 않아야 한다.
+	if len(lines) > 12 {
+		t.Errorf("상세 화면이 %d줄로 창 높이 12를 넘었다", len(lines))
 	}
 }

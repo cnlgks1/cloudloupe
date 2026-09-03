@@ -351,18 +351,14 @@ func (m Model) View() string {
 			[2]string{"enter/→", "apply"},
 		)
 	case ScreenDetail:
-		return m.detail.View() + m.helpBar(
-			[2]string{"↑↓/jk", "scroll"},
-		)
+		return m.detailView()
 	case ScreenCollectErrors:
 		return m.screenWithHelp("Collect errors", m.errorTable,
 			[2]string{"↑↓/jk", "move"},
 			[2]string{"enter/→", "raw detail"},
 		)
 	case ScreenCollectErrorDetail:
-		return m.detail.View() + m.helpBar(
-			[2]string{"↑↓/jk", "scroll"},
-		)
+		return m.detailView()
 	case ScreenError:
 		return m.errorView()
 	default:
@@ -624,9 +620,25 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	m.resourceList.resize(msg.Width, m.resourceListHeight())
 
 	m.detail.Width = msg.Width
-	m.detail.Height = h
+	m.detail.Height = m.detailHeight()
 
 	return m
+}
+
+// detailHeight는 상세 viewport의 높이를 반환한다.
+//
+// 도움말을 viewport 밖 화면 맨 아래에 고정하려면 그 자리(빈 줄 1 + 안내 1)를 빼야 한다.
+// 이 값을 빼지 않으면 viewport가 창을 꽉 채워, 스크롤 위치에 따라 도움말이 잘린 콘텐츠
+// 바로 아래에 붙어 상세 정보와 겹쳐 보인다.
+func (m Model) detailHeight() int {
+	const helpLines = 2
+
+	h := m.height - helpLines
+	if h < 1 {
+		h = 1
+	}
+
+	return h
 }
 
 func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -709,6 +721,25 @@ func (m Model) pathLabel(text string, focus int) string {
 	}
 
 	return "  " + text
+}
+
+// detailView는 상세·오류 상세 화면을 조립한다.
+//
+// viewport를 detailHeight()만큼 정확히 채우고 도움말을 그 아래 화면 맨 하단에 붙인다.
+// viewport가 창을 꽉 채우면 스크롤 위치에 따라 도움말이 잘린 콘텐츠 바로 아래에 붙어
+// 상세 정보와 겹쳐 보인다. 높이를 도움말 자리만큼 줄여 그 겹침을 없앤다.
+//
+// 콘텐츠가 짧아 viewport를 다 못 채우면 viewport가 남는 줄을 빈 줄로 메우므로, 도움말은
+// 언제나 같은 자리(맨 아래)에 고정된다.
+func (m Model) detailView() string {
+	body := m.detail.View()
+
+	// viewport가 아직 높이를 못 받은 경우(테스트 등) 최소한 도움말이 겹치지 않게 채운다.
+	if lines := strings.Count(body, "\n") + 1; lines < m.detailHeight() {
+		body += strings.Repeat("\n", m.detailHeight()-lines)
+	}
+
+	return body + m.helpBar([2]string{"↑↓/jk", "scroll"})
 }
 
 func (m Model) errorView() string {

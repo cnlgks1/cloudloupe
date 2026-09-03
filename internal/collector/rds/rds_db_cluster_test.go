@@ -268,7 +268,7 @@ func TestDBClusterCollectorDistinguishesMissingValues(t *testing.T) {
 	if got[1].CreatedAt != nil {
 		t.Errorf("생성 시각이 없으면 CreatedAt은 nil이어야 한다: %v", got[1].CreatedAt)
 	}
-	if got[1].Identifiers != nil && len(got[1].Identifiers) != 0 {
+	if len(got[1].Identifiers) != 0 {
 		t.Errorf("엔드포인트가 없으면 DNS 식별자를 만들지 않아야 한다: %+v", got[1].Identifiers)
 	}
 }

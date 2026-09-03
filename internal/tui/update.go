@@ -389,13 +389,14 @@ func (m Model) keyResourceSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filterInput.SetValue(m.previousFilter)
 
 		return m, nil
+
+	default:
+		var cmd tea.Cmd
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		m.resourceTree.setQuery(m.theme, m.filterInput.Value(), m.width, height)
+
+		return m, cmd
 	}
-
-	var cmd tea.Cmd
-	m.filterInput, cmd = m.filterInput.Update(msg)
-	m.resourceTree.setQuery(m.theme, m.filterInput.Value(), m.width, height)
-
-	return m, cmd
 }
 
 // startCollectingSelection은 트리에서 고른 것으로 조회를 시작한다.

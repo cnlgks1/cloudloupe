@@ -150,7 +150,7 @@ func TestTreeQueriesCursorRow(t *testing.T) {
 		deps, queried := treeDeps()
 		m := treeModel(t, deps)
 		m = send(m, keyMsg("right"), keyMsg("down"), keyMsg("down")) // Volumes
-		m = step(m, keyMsg("enter"))
+		step(m, keyMsg("enter"))
 
 		if want := []string{"ec2:volume"}; !slices.Equal(*queried, want) {
 			t.Errorf("조회 타입 = %v, want %v", *queried, want)
@@ -186,7 +186,7 @@ func TestTreeSelectionSurvivesCollapse(t *testing.T) {
 		t.Errorf("서비스 간 선택이 합쳐지지 않았다:\n%s", view)
 	}
 
-	m = step(m, keyMsg("enter"))
+	step(m, keyMsg("enter"))
 	want := []string{"ec2:instance", "rds:dbCluster", "rds:dbInstance"}
 	if !slices.Equal(*queried, want) {
 		t.Errorf("조회 타입 = %v, want %v", *queried, want)

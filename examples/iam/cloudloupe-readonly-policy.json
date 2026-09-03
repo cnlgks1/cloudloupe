@@ -102,6 +102,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "SecretsAndParametersInventory",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:ListSecrets",
+        "ssm:DescribeParameters"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

@@ -13,7 +13,7 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 19개 그룹 35개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
+> **개발 중.** 21개 그룹 37개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
 > 리포트는 아직 없습니다.
 
 ## 빠른 시작
@@ -72,6 +72,8 @@ make build
 | SQS | `sqs:queue` | `sqs.ListQueues`, `GetQueueAttributes` |
 | API Gateway | `apigateway:restApi` | `apigateway.GetRestApis` |
 | API Gateway | `apigatewayv2:api` | `apigatewayv2.GetApis` |
+| Secrets Manager | `secretsmanager:secret` | `secretsmanager.ListSecrets` |
+| SSM Parameter Store | `ssm:parameter` | `ssm.DescribeParameters` |
 | Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
 | WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 | IAM | `iam:role` | `iam.ListRoles` |
@@ -80,6 +82,10 @@ make build
 
 Route 53과 IAM은 글로벌 서비스라 리전 선택과 무관하게 한 번만 조회하고 리전이 `global`로
 표시됩니다. 나머지는 선택한 리전마다 조회합니다.
+
+Secrets Manager 시크릿과 SSM 파라미터는 메타데이터만 조회합니다. 시크릿 값이나 파라미터
+값을 읽는 `GetSecretValue`·`GetParameter`는 호출하지 않습니다. 조회 전용 경계를 지키고
+민감한 값이 화면이나 로그에 노출되지 않게 하려는 것입니다.
 
 화면의 필드 이름과 값은 SDK 응답을 그대로 씁니다. 이름은 구조체 필드 이름
 (`InstanceType`, `PrivateIpAddress`), 값은 API 값(`available`, `gp3`, `true`), 시각은

@@ -62,6 +62,8 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeSQSQueue,
 		model.TypeAPIGatewayRestAPI,
 		model.TypeAPIGatewayV2API,
+		model.TypeSecretsManagerSecret,
+		model.TypeSSMParameter,
 		model.TypeRoute53RecordSet,
 		model.TypeWAFv2WebACL,
 		model.TypeIAMRole,
@@ -95,7 +97,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "eks", "rds", "dynamodb", "sns", "sqs", "apigateway", "route53", "wafv2", "iam", "kms", "s3"}
+	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "eks", "rds", "dynamodb", "sns", "sqs", "apigateway", "secretsmanager", "ssm", "route53", "wafv2", "iam", "kms", "s3"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)
@@ -149,11 +151,11 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 		t.Errorf("네트워크 타입 = %v, want %v", gotNetworkTypes, wantNetworkTypes)
 	}
 
-	if got, want := groups[14].Types[0].Columns,
+	if got, want := groups[16].Types[0].Columns,
 		[]string{"Type", "SetIdentifier", "HostedZoneName", "TTL", "ResourceRecords", "AliasTarget"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
-	if got, want := groups[15].Types[0].Columns, []string{"Rules"}; !slices.Equal(got, want) {
+	if got, want := groups[17].Types[0].Columns, []string{"Rules"}; !slices.Equal(got, want) {
 		t.Errorf("WAF 열 = %v, want %v", got, want)
 	}
 

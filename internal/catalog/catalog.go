@@ -276,6 +276,8 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "sns", Label: "SNS", Types: snsDefinitions(cfg)},
 		Group{ID: "sqs", Label: "SQS", Types: sqsDefinitions(cfg)},
 		Group{ID: "apigateway", Label: "API Gateway", Types: apigatewayDefinitions(cfg)},
+		Group{ID: "secretsmanager", Label: "Secrets Manager", Types: secretsmanagerDefinitions(cfg)},
+		Group{ID: "ssm", Label: "SSM Parameter Store", Types: ssmDefinitions(cfg)},
 		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
 		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
 		Group{ID: "iam", Label: "IAM", Types: iamDefinitions(cfg)},

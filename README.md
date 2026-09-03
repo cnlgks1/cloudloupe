@@ -13,7 +13,7 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 15개 그룹 30개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
+> **개발 중.** 16개 그룹 31개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
 > 리포트는 아직 없습니다.
 
 ## 빠른 시작
@@ -67,6 +67,7 @@ make build
 | EKS | `eks:fargateProfile` | `eks.ListClusters`, `ListFargateProfiles`, `DescribeFargateProfile` |
 | RDS | `rds:dbCluster` | `rds.DescribeDBClusters` |
 | RDS | `rds:dbInstance` | `rds.DescribeDBInstances` |
+| DynamoDB | `dynamodb:table` | `dynamodb.ListTables`, `DescribeTable` |
 | Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
 | WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 | IAM | `iam:role` | `iam.ListRoles` |

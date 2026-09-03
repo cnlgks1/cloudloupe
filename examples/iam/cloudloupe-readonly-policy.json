@@ -74,6 +74,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "NoSqlInventory",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:ListTables",
+        "dynamodb:DescribeTable"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

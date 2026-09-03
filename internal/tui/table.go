@@ -457,13 +457,13 @@ func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
 	switch title {
 	case "Age", "Port", "Targets", "Iops", "TTL", "Rules", "Size", "Associations", "Routes",
 		"InboundRules", "OutboundRules", "SubnetIds", "RouteTableIds", "SecurityGroups",
-		"PropagatingVgws", "AvailableIpAddressCount", "Count", "Items":
+		"PropagatingVgws", "AvailableIpAddressCount", "Count", typeCountColumn:
 		return max(6, titleWidth), max(10, titleWidth), false
 	case "Encrypted", "Main", "IsDefault", "MultiRegion", "Enabled", "Ipv6Native",
 		"DefaultForAz", "PrivateDnsEnabled", "RequesterManaged", "MapPublicIpOnLaunch",
 		"AssignIpv6AddressOnCreation":
 		return max(8, titleWidth), max(12, titleWidth), false
-	case "Status", "Region", "Profile", "Error code", "Resource", "Kind",
+	case "Status", "Region", "Profile", "Error code", "Resource", "Kind", serviceColumn,
 		"Protocol", "Scheme", "TargetType", "VolumeType", "InstanceType", "InterfaceType",
 		"VpcEndpointType", "Type", "AvailabilityZone", "AvailabilityZoneId", "ConnectivityType",
 		"AvailabilityMode", "IpAddressType", "KeyManager", "KeyUsage", "KeySpec", "Origin",
@@ -574,64 +574,19 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 	return newDataTable(theme, columns, rows, height)
 }
 
-// buildTypeTable은 AWS 서비스별 큰 리소스 선택 테이블을 만든다.
+// 화면 어휘는 AWS 용어를 따른다.
 //
-// 포함 항목을 한 줄에 나열하지 않고 개수만 보여준다. 세부 항목은 다음 화면에서 한 행씩
-// 보여주므로, 지원 리소스가 늘어나도 이 화면의 폭이 부족해지지 않는다.
-func buildTypeTable(theme Theme, groups []ResourceGroup, chosen []string, width, height int) table.Model {
-	titles := []string{"", "Resource", "Items"}
-	columns := layoutColumns(titles, width)
-	if len(columns) > 0 {
-		columns[0].Width = 3
-	}
-
-	rows := make([]table.Row, 0, len(groups))
-	for _, group := range groups {
-		mark := " "
-		if resourceGroupSelected(group, chosen) {
-			mark = theme.Glyphs.Healthy
-		}
-
-		rows = append(rows, table.Row{mark, group.Label, strconv.Itoa(len(group.Types))})
-	}
-
-	return newDataTable(theme, columns, rows, height)
-}
-
-// buildResourceItemTable은 한 그룹 안의 세부 리소스 항목 표를 만든다.
+// 그룹은 AWS 서비스이고, 우리가 타입이라 부르는 ec2:instance는 AWS가 resource type이라
+// 부르는 것이다. 한때 이 화면만 "Item", "Items"라는 자체 용어를 썼는데, AWS 문서·콘솔·CLI
+// 어디에도 없는 말이라 사용자가 무엇을 세는 숫자인지 짐작할 근거가 없었다.
 //
-// 그룹 화면에 포함 항목을 한 줄로 나열하면 리소스를 추가할수록 잘려서 무엇을 수집하는지
-// 읽을 수 없다. 항목마다 한 행을 주면 개수가 늘어도 화면이 무너지지 않고, 타입 하나만
-// 골라 조회할 수도 있다.
-func buildResourceItemTable(
-	theme Theme,
-	group ResourceGroup,
-	chosen []string,
-	width, height int,
-) table.Model {
-	titles := []string{"", "Item", "Type ID"}
-	columns := layoutColumns(titles, width)
-	if len(columns) > 0 {
-		columns[0].Width = 3
-	}
-
-	selected := make(map[string]struct{}, len(chosen))
-	for _, typ := range chosen {
-		selected[typ] = struct{}{}
-	}
-
-	rows := make([]table.Row, 0, len(group.Types))
-	for _, resourceType := range group.Types {
-		mark := " "
-		if _, exists := selected[resourceType.ID]; exists {
-			mark = theme.Glyphs.Healthy
-		}
-
-		rows = append(rows, table.Row{mark, resourceType.Label, resourceType.ID})
-	}
-
-	return newDataTable(theme, columns, rows, height)
-}
+// 열 폭 규칙과 표 조립 두 곳에서 같은 문자열을 써야 해서 상수로 둔다.
+const (
+	serviceColumn      = "Service"
+	typeCountColumn    = "Resource types"
+	resourceTypeColumn = "Resource type"
+	typeIDColumn       = "Type ID"
+)
 
 // buildCollectErrorTable은 모든 수집기가 공유하는 부분 오류 목록을 만든다.
 func buildCollectErrorTable(
@@ -689,24 +644,6 @@ func resourceGroupTypeIDs(group ResourceGroup) []string {
 	}
 
 	return types
-}
-
-func resourceGroupSelected(group ResourceGroup, chosen []string) bool {
-	if len(group.Types) == 0 {
-		return false
-	}
-
-	selected := make(map[string]struct{}, len(chosen))
-	for _, typeID := range chosen {
-		selected[typeID] = struct{}{}
-	}
-	for _, resourceType := range group.Types {
-		if _, exists := selected[resourceType.ID]; !exists {
-			return false
-		}
-	}
-
-	return true
 }
 
 // newDataTable은 공통 설정을 적용한 table.Model을 만든다.

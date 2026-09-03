@@ -128,8 +128,8 @@ func renderCollectErrorDetail(
 	collectErr model.CollectError,
 ) string {
 	fields := []model.Field{
-		{Key: "Resource", Value: resourceTypeLabel(groups, collectErr.Type)},
-		{Key: "Type ID", Value: collectErr.Type},
+		{Key: resourceTypeColumn, Value: resourceTypeLabel(groups, collectErr.Type)},
+		{Key: typeIDColumn, Value: collectErr.Type},
 		{Key: "Profile", Value: orDashUI(collectErr.Profile)},
 		{Key: "Region", Value: orDashUI(collectErr.Region)},
 		{Key: "Error code", Value: orDashUI(collectErr.Code)},

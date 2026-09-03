@@ -64,8 +64,7 @@ func TestResourceTableRendersRows(t *testing.T) {
 	var m tea.Model = mkModel(t, res)
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = key(m, "enter") // 리전
-	m = key(m, "enter") // 리소스 그룹
-	m = key(m, "enter") // 세부 항목
+	m = key(m, "enter") // 리소스 선택
 	m = key(m, "enter") // 목록
 
 	v := m.View()

@@ -818,7 +818,7 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 	canceled := collectDoneMsg{requestID: 2, result: collect.Result{Resources: resources, Canceled: true}, data: data, canceled: true}
 	next, _ = m.onCollectDone(canceled)
 	m = next.(Model)
-	if m.screen != ScreenResourceType || len(m.resourceList.resources) != 0 {
+	if m.screen != ScreenResource || len(m.resourceList.resources) != 0 {
 		t.Fatal("취소된 현재 수집에서 타입 선택 화면으로 복귀하지 않음")
 	}
 
@@ -912,9 +912,10 @@ func TestCollectErrorListAndDetailFlow(t *testing.T) {
 	if m.screen != ScreenCollectErrorDetail || !strings.Contains(m.detail.View(), "raw throttle failure") {
 		t.Fatalf("오류 상세 화면=%v 내용:\n%s", m.screen, m.detail.View())
 	}
-	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	// 뒤로 가기는 esc가 담당한다. q는 어느 화면에서든 종료이므로 여기서 쓰지 않는다.
+	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.screen != ScreenCollectErrors {
-		t.Fatalf("q 입력 후 화면 = %v, want 오류 목록", m.screen)
+		t.Fatalf("오류 상세에서 esc 후 화면 = %v, want 오류 목록", m.screen)
 	}
 	m = updateFilterModel(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.screen != ScreenList {

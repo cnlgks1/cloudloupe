@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -33,8 +34,7 @@ const (
 	ScreenProfile
 	ScreenIdentity
 	ScreenRegion
-	ScreenResourceType // 조회할 리소스 그룹 선택
-	ScreenResourceItem // 그룹 안의 세부 리소스 항목 선택
+	ScreenResource // 조회할 서비스와 resource type 선택 (한 화면 트리)
 	ScreenCollecting
 	ScreenList
 	ScreenResourceKind // 수집 결과 안의 세부 종류 필터 선택
@@ -122,8 +122,6 @@ type Model struct {
 	// 가상 viewport를 구체 서브모델 하나에서 함께 관리한다.
 	profileTable table.Model
 	regionTable  table.Model
-	typeTable    table.Model
-	itemTable    table.Model
 	kindTable    table.Model
 	errorTable   table.Model
 	detail       viewport.Model
@@ -147,23 +145,20 @@ type Model struct {
 	confirmedRegions []string
 	chosenTypes      []string
 
-	// itemGroup은 세부 항목 화면이 보여주는 그룹의 인덱스다. 그룹을 되짚어 올라가거나
-	// 창 크기가 바뀔 때 어떤 그룹을 다시 그려야 하는지 알아야 한다.
-	itemGroup int
+	// resourceTree는 서비스와 resource type을 한 화면에서 고르는 트리다. 펼침과 선택
+	// 상태를 소유한다.
+	resourceTree resourceTree
 
-	// replace...OnEnter는 목록 화면에서 리전/타입을 바꾸러 들어왔을 때 기존 선택보다
+	// treeFiltering은 선택 화면에서 검색어를 입력하는 중인지 나타낸다.
+	treeFiltering bool
+
+	// replaceRegionOnEnter는 목록 화면에서 리전을 바꾸러 들어왔을 때 기존 선택보다
 	// 현재 커서 행을 우선하도록 한다. space로 다중 선택을 조작하면 false로 바뀐다.
 	replaceRegionOnEnter bool
-	replaceTypeOnEnter   bool
 
-	// collectFromItem은 조회를 세부 항목 화면에서 시작했는지 나타낸다. 뒤로 가기는 건너뛴
-	// 화면이 아니라 실제로 지나온 화면으로 돌아가야 한다.
-	collectFromItem bool
-
-	// explicit...Selection은 space로 명시적으로 체크한 다중 선택인지 나타낸다.
+	// explicitRegionSelection은 space로 명시적으로 체크한 다중 선택인지 나타낸다.
 	// false면 이전 Enter 선택이 남아 있어도 현재 커서 항목으로 교체한다.
 	explicitRegionSelection bool
-	explicitTypeSelection   bool
 
 	errText string
 	loading string
@@ -336,18 +331,8 @@ func (m Model) View() string {
 			[2]string{"enter/→", "query this region"},
 			[2]string{"space", "multi-select"},
 		)
-	case ScreenResourceType:
-		return m.screenWithHelp("Select resource", m.typeTable,
-			[2]string{"↑↓/jk", "move"},
-			[2]string{"enter/→", "Items"},
-			[2]string{"space", "query whole group"},
-		)
-	case ScreenResourceItem:
-		return m.screenWithHelp(m.resourceItemTitle(), m.itemTable,
-			[2]string{"↑↓/jk", "move"},
-			[2]string{"enter/→", "query this item"},
-			[2]string{"space", "multi-select"},
-		)
+	case ScreenResource:
+		return m.resourceTreeView()
 	case ScreenCollecting:
 		return m.centered(m.spinner.View() + " " + m.loading + "\n\n" + m.theme.Faint.Render("esc: cancel"))
 	case ScreenList:
@@ -377,6 +362,83 @@ func (m Model) View() string {
 	}
 }
 
+// resourceTreeView는 서비스·resource type 선택 화면을 렌더링한다.
+//
+// 상단에 규모를 고정으로 보여준다. 접힌 서비스 안의 선택은 화면에 보이지 않으므로, 지금
+// 몇 종을 고른 상태이고 조회가 몇 번의 요청이 되는지 숫자로 드러내야 한다. 이것이 없으면
+// 리소스가 늘어날수록 의도보다 큰 조회를 실수로 시작하게 된다.
+func (m Model) resourceTreeView() string {
+	services, types, selected, shown := m.resourceTree.counts()
+
+	scale := plural(services, "service") + "   " + plural(types, "resource type")
+	if selected > 0 {
+		scale += "   " + strconv.Itoa(selected) + " selected"
+
+		// 리전이 여러 개면 요청 수가 곱해진다. 조회 규모를 누르기 전에 보여주는 것이
+		// 실수로 시작한 대량 조회를 막는 유일한 장치다.
+		if regions := len(m.chosenRegions); regions > 1 {
+			scale += " × " + plural(regions, "region") +
+				" = " + plural(selected*regions, "query")
+		}
+	}
+
+	filterLine := m.theme.Faint.Render("/ search")
+	help := [][2]string{
+		{"↑↓/jk", "move"},
+		{"→", "expand"},
+		{"←", "collapse"},
+		{"enter", "query"},
+		{"space", "select"},
+		{"z", "collapse all"},
+		{"/", "search"},
+	}
+
+	switch {
+	case m.treeFiltering:
+		filterLine = m.filterInput.View()
+		help = [][2]string{
+			{"type", "live search"},
+			{"enter", "apply"},
+			{"esc", "cancel"},
+		}
+	case m.resourceTree.query != "":
+		filterLine = "/ " + m.resourceTree.query + "  " +
+			m.theme.Faint.Render(strconv.Itoa(shown)+"/"+strconv.Itoa(types)+" shown")
+		help = [][2]string{
+			{"↑↓/jk", "move"},
+			{"enter", "query"},
+			{"space", "select"},
+			{"a", "select all shown"},
+			{"/", "search"},
+		}
+	}
+
+	if selected > 0 {
+		help = append(help, [2]string{"x", "clear selection"})
+	}
+
+	return m.breadcrumb() + "\n" +
+		m.theme.Title.Render("Select resource type") + "   " + m.theme.Faint.Render(scale) + "\n" +
+		filterLine + "\n" +
+		m.resourceTree.View() + m.helpBar(help...)
+}
+
+// plural은 개수와 단위를 붙인다. 영어 복수형은 s를 붙이는 규칙만 쓴다.
+//
+// "1 regions = 1 queries"처럼 보이면 도구가 성의 없어 보인다. query처럼 y로 끝나는 단어는
+// ies가 되므로 그것만 따로 다룬다.
+func plural(count int, unit string) string {
+	if count == 1 {
+		return strconv.Itoa(count) + " " + unit
+	}
+
+	if strings.HasSuffix(unit, "y") {
+		return strconv.Itoa(count) + " " + strings.TrimSuffix(unit, "y") + "ies"
+	}
+
+	return strconv.Itoa(count) + " " + unit + "s"
+}
+
 // resourceListView는 리소스 목록과 독립된 필터 한 줄을 렌더링한다.
 //
 // 필터 줄을 항상 한 줄 예약해 입력 시작·적용·취소 때 테이블 높이가 흔들리지 않게 한다.
@@ -388,6 +450,16 @@ func (m Model) resourceListView() string {
 		{"/", "search"},
 		{"p", "switch profile"},
 		{"r", "switch region"},
+	}
+
+	// 조회 결과가 아예 없으면 이동·상세·검색은 눌러도 아무 일도 일어나지 않는다. 안내에
+	// 남겨두면 도구가 반응하지 않는 것처럼 보인다. 필터 줄은 높이를 유지하려고 비워만 둔다.
+	if m.resourceList.totalCount() == 0 {
+		filterLine = ""
+		help = [][2]string{
+			{"p", "switch profile"},
+			{"r", "switch region"},
+		}
 	}
 
 	if len(m.collectErrors) > 0 {
@@ -424,7 +496,56 @@ func (m Model) resourceListView() string {
 	}
 	lines = append(lines, filterLine)
 
-	return strings.Join(lines, "\n") + "\n" + m.resourceList.View() + m.helpBar(help...)
+	body := m.resourceList.View()
+	if notice := m.emptyResultNotice(); notice != "" {
+		body = notice
+	}
+
+	return strings.Join(lines, "\n") + "\n" + body + m.helpBar(help...)
+}
+
+// emptyResultNotice는 결과가 없을 때 그 이유를 설명하는 문구를 만든다.
+//
+// 빈 표만 보여주면 조회가 실패한 것인지 정말 리소스가 없는 것인지 구분할 수 없다. 그룹
+// 선택 화면의 타입 수를 리소스 개수로 오해한 뒤 이 화면을 보면 더 헷갈린다.
+//
+// 결과가 없는 경우는 두 가지이고 사용자가 할 일이 다르다. 조회가 성공했는데 리소스가 없으면
+// 다른 리전이나 리소스를 고르면 되고, 권한이나 스로틀링으로 실패했으면 오류를 봐야 한다.
+// 그래서 부분 오류가 있으면 그쪽을 먼저 가리킨다.
+//
+// 필터 때문에 행이 없는 경우는 여기서 다루지 않는다. 그때는 이미 "0/62 shown"이 이유를
+// 말해주고, 필터를 지우면 결과가 돌아온다.
+func (m Model) emptyResultNotice() string {
+	if m.resourceList.totalCount() > 0 || m.filterQuery != "" || m.filtering {
+		return ""
+	}
+
+	// 세부 항목을 골랐으면 그 이름이 가장 구체적이다. 그룹 전체를 골랐으면 그룹 이름
+	// 뒤에 resources를 붙여 문장이 되게 한다("No Auto Scaling resources").
+	subject := "No resources"
+	if items := m.breadcrumbItems(); items != "" {
+		subject = "No " + items
+	} else if group := m.breadcrumbGroups(); group != "" && group != "-" {
+		subject = "No " + group + " resources"
+	}
+
+	region := "the selected region"
+	if len(m.chosenRegions) > 0 {
+		region = strings.Join(m.chosenRegions, ", ")
+	}
+
+	lines := []string{m.theme.Title.Render(subject + " in " + region + ".")}
+
+	if len(m.collectErrors) > 0 {
+		lines = append(lines,
+			m.theme.Faint.Render("Some queries failed, so this may be incomplete. Press e to see why."))
+	} else {
+		lines = append(lines,
+			m.theme.Faint.Render("The query succeeded and found nothing."),
+			m.theme.Faint.Render("Press r for another region, or esc to pick another resource."))
+	}
+
+	return "\n  " + strings.Join(lines, "\n  ") + "\n"
 }
 
 func (m Model) hasResourceKindFilter() bool {
@@ -475,16 +596,8 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 		m.regionTable.SetCursor(cursor)
 	}
 
-	if len(m.deps.ResourceGroups) > 0 && len(m.typeTable.Rows()) > 0 {
-		cursor := m.typeTable.Cursor()
-		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, msg.Width, h)
-		m.typeTable.SetCursor(cursor)
-	}
-
-	if len(m.itemTable.Rows()) > 0 {
-		cursor := m.itemTable.Cursor()
-		m.itemTable = buildResourceItemTable(m.theme, m.currentResourceGroup(), m.chosenTypes, msg.Width, h)
-		m.itemTable.SetCursor(cursor)
+	if len(m.deps.ResourceGroups) > 0 {
+		m.resourceTree.resize(m.theme, msg.Width, h)
 	}
 
 	if m.hasResourceKindFilter() && len(m.kindTable.Rows()) > 0 {
@@ -516,10 +629,8 @@ func (m Model) delegateToActiveList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.profileTable, cmd = m.profileTable.Update(msg)
 	case ScreenRegion:
 		m.regionTable, cmd = m.regionTable.Update(msg)
-	case ScreenResourceType:
-		m.typeTable, cmd = m.typeTable.Update(msg)
-	case ScreenResourceItem:
-		m.itemTable, cmd = m.itemTable.Update(msg)
+	case ScreenResource:
+		m.resourceTree.update(msg)
 	case ScreenResourceKind:
 		m.kindTable, cmd = m.kindTable.Update(msg)
 	case ScreenCollectErrors:
@@ -685,13 +796,13 @@ func (m Model) breadcrumb() string {
 		parts = append(parts, label("Region", region))
 	}
 	if depth >= breadcrumbGroup {
-		parts = append(parts, label("Resource", orDashUI(m.breadcrumbGroups())))
+		parts = append(parts, label("Service", orDashUI(m.breadcrumbGroups())))
 	}
 
 	// 세부 항목은 고른 것이 있을 때만 붙인다. 항상 "-"로 자리를 차지하면 좁은 터미널에서
 	// 프로필·리전이 먼저 밀린다.
 	if items := m.breadcrumbItems(); depth >= breadcrumbItem && items != "" {
-		parts = append(parts, label("Items", items))
+		parts = append(parts, label("Resource type", items))
 	}
 
 	return strings.Join(parts, m.theme.Faint.Render("   "))
@@ -715,8 +826,10 @@ func (m Model) breadcrumbDepth() int {
 		return breadcrumbProfile
 	case ScreenRegion:
 		return breadcrumbRegion
-	case ScreenResourceType:
-		return breadcrumbGroup
+	case ScreenResource:
+		// 선택 화면은 자체 헤더에 규모와 선택 수를 보여준다. 경로에 같은 정보를 겹쳐
+		// 쓰면 아직 확정하지 않은 선택이 확정된 것처럼 보인다.
+		return breadcrumbRegion
 	default:
 		// 수집 중과 그 이후 화면은 선택이 모두 확정된 상태다.
 		return breadcrumbItem
@@ -738,10 +851,6 @@ func (m Model) breadcrumbGroups() string {
 				break
 			}
 		}
-	}
-
-	if len(labels) == 0 && m.screen == ScreenResourceItem {
-		return m.currentResourceGroup().Label
 	}
 
 	return strings.Join(labels, ",")
@@ -767,28 +876,6 @@ func (m Model) breadcrumbItems() string {
 	}
 
 	return strings.Join(labels, ",")
-}
-
-// currentResourceGroup은 세부 항목 화면이 보여주는 그룹을 반환한다.
-//
-// 인덱스가 범위를 벗어나면 빈 그룹을 반환한다. 그룹 목록이 비어 있어도 렌더링이 깨지지
-// 않아야 한다.
-func (m Model) currentResourceGroup() ResourceGroup {
-	if m.itemGroup < 0 || m.itemGroup >= len(m.deps.ResourceGroups) {
-		return ResourceGroup{}
-	}
-
-	return m.deps.ResourceGroups[m.itemGroup]
-}
-
-// resourceItemTitle은 세부 항목 화면의 제목을 만든다.
-func (m Model) resourceItemTitle() string {
-	group := m.currentResourceGroup()
-	if group.Label == "" {
-		return "Select item"
-	}
-
-	return group.Label + " items"
 }
 
 // 상세 화면 렌더링은 detail.go에 있다.

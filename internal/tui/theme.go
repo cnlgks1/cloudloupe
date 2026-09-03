@@ -25,6 +25,13 @@ type Glyphs struct {
 	TreeVert    string
 	Ellipsis    string
 	SpinnerDots []string
+
+	// Partial은 하위 항목 중 일부만 선택된 상태다. 서비스를 접어도 그 안에서 무엇을
+	// 골랐는지 알 수 있어야 하므로, 전체 선택과 구분되는 문자가 필요하다.
+	Partial string
+	// Collapsed와 Expanded는 펼칠 수 있는 줄의 상태다.
+	Collapsed string
+	Expanded  string
 }
 
 // Theme는 UI 전체의 스타일과 문자를 담는다. 렌더링 코드는 이것만 받는다.
@@ -54,6 +61,9 @@ func unicodeGlyphs() Glyphs {
 		TreeVert:    "│ ",
 		Ellipsis:    "…",
 		SpinnerDots: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+		Partial:     "◐",
+		Collapsed:   "▸",
+		Expanded:    "▾",
 	}
 }
 
@@ -73,6 +83,9 @@ func asciiGlyphs() Glyphs {
 		TreeVert:    "| ",
 		Ellipsis:    "...",
 		SpinnerDots: []string{"|", "/", "-", "\\"},
+		Partial:     "~",
+		Collapsed:   ">",
+		Expanded:    "v",
 	}
 }
 

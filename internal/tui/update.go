@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
@@ -44,9 +43,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyResourceFilter(msg)
 	}
 
-	// q는 상세 화면에서는 이전 목록으로 돌아가고, 그 외 화면에서는 종료한다.
-	if key.Matches(msg, m.keys.Quit) &&
-		m.screen != ScreenConfigPath && m.screen != ScreenDetail && m.screen != ScreenCollectErrorDetail {
+	// q는 어느 화면에서든 종료한다. 뒤로 가기는 esc와 ←가 담당한다.
+	//
+	// 한때 상세 화면에서만 q를 목록 복귀로 썼다. 그런데 하단 도움말은 모든 화면에서 "q quit"로
+	// 안내하므로, 같은 키가 안내와 다르게 동작했다. 종료하려면 esc로 한 단계 나온 뒤 q를 다시
+	// 눌러야 했다.
+	//
+	// 경로 입력 화면은 예외다. 거기서 q는 파일 경로에 들어갈 글자다.
+	if key.Matches(msg, m.keys.Quit) && m.screen != ScreenConfigPath {
 		return m, tea.Quit
 	}
 
@@ -57,10 +61,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.keyProfile(msg)
 	case ScreenRegion:
 		return m.keyRegion(msg)
-	case ScreenResourceType:
-		return m.keyResourceType(msg)
-	case ScreenResourceItem:
-		return m.keyResourceItem(msg)
+	case ScreenResource:
+		return m.keyResource(msg)
 	case ScreenCollecting:
 		return m.keyCollecting(msg)
 	case ScreenList:
@@ -209,16 +211,11 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 	m.confirmedRegions = nil
 	m.chosenTypes = nil
 	m.replaceRegionOnEnter = false
-	m.replaceTypeOnEnter = false
 	m.explicitRegionSelection = false
-	m.explicitTypeSelection = false
-	m.collectFromItem = false
-	m.itemTable = table.Model{}
-	m.itemGroup = 0
+	m.treeFiltering = false
 	m.regions = awsclient.Regions(m.profileRegion())
 	m.regionTable = buildRegionTable(m.theme, m.regions, nil, m.width, m.listHeight())
-	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
-	m.typeTable.SetCursor(0)
+	m.resourceTree = newResourceTree(m.theme, m.deps.ResourceGroups, m.width, m.listHeight())
 	m.screen = ScreenRegion
 
 	return m, nil
@@ -289,201 +286,152 @@ func (m Model) keyRegion(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // --- 리소스 타입 ---
 
 func (m Model) gotoResourceType() Model {
-	if len(m.typeTable.Rows()) == 0 {
-		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
-	}
-
-	m.screen = ScreenResourceType
+	m.screen = ScreenResource
 
 	return m
 }
 
-func (m Model) keyResourceType(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.screen = ScreenRegion
+// --- 리소스 선택 (서비스 + resource type 트리) ---
+
+// keyResource는 선택 화면의 키를 처리한다.
+//
+// → 와 ← 를 Enter/Back보다 먼저 본다. 두 키는 전역 바인딩에서 다음 단계·뒤로에 묶여 있지만,
+// 이 화면에서는 트리를 펼치고 접는 데 쓰는 편이 자연스럽다. 다른 화면의 동작은 그대로 둔다.
+func (m Model) keyResource(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.treeFiltering {
+		return m.keyResourceSearch(msg)
+	}
+
+	height := m.listHeight()
+
+	switch msg.String() {
+	case "right":
+		// 서비스 줄이면 펼친다. 이미 펼쳐졌거나 타입 줄이면 조회로 넘어간다.
+		if m.resourceTree.toggleExpand(m.theme, true, m.width, height) {
+			return m, nil
+		}
+
+		return m.startCollectingSelection()
+
+	case "left":
+		// 펼쳐진 서비스면 접는다. 그 외에는 리전 선택으로 돌아간다.
+		if m.resourceTree.toggleExpand(m.theme, false, m.width, height) {
+			return m, nil
+		}
+
+		return m.backFromResourceSelection(), nil
+
+	case "/":
+		m.previousFilter = m.resourceTree.query
+		m.filterInput.SetValue(m.resourceTree.query)
+		m.filterInput.CursorEnd()
+		m.treeFiltering = true
+
+		return m, m.filterInput.Focus()
+
+	case "z":
+		m.resourceTree.collapseAll(m.theme, m.width, height)
 
 		return m, nil
 
+	case "a":
+		// 검색으로 좁힌 결과에만 적용한다. 필터 없이 전부 선택하면 리소스 타입 수 × 리전 수
+		// 만큼 작업이 생겨 의도하지 않은 대량 조회가 된다.
+		m.resourceTree.selectVisible(m.theme, m.width, height)
+
+		return m, nil
+
+	case "x":
+		m.resourceTree.clearSelection(m.theme, m.width, height)
+
+		return m, nil
+	}
+
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		return m.backFromResourceSelection(), nil
+
 	case key.Matches(msg, m.keys.Toggle):
-		i := m.typeTable.Cursor()
-		if i >= 0 && i < len(m.deps.ResourceGroups) {
-			m.toggleResourceGroup(m.deps.ResourceGroups[i])
-			m.replaceTypeOnEnter = false
-			m.explicitTypeSelection = len(m.chosenTypes) > 0
-			m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
-			m.typeTable.SetCursor(i)
-		}
+		m.resourceTree.toggleSelect(m.theme, m.width, height)
 
 		return m, nil
 
 	case key.Matches(msg, m.keys.Enter):
-		// space로 그룹을 명시적으로 골랐으면 그 선택대로 바로 조회한다. 그러지 않았다면
-		// 커서 그룹의 세부 항목으로 들어간다. 그룹 화면에 포함 항목을 나열하지 않는 대신
-		// 한 단계 내려가서 무엇을 수집할지 온전히 보여주는 방식이다.
-		if m.explicitTypeSelection && len(m.chosenTypes) > 0 && !m.replaceTypeOnEnter {
-			m.replaceTypeOnEnter = false
-			m.collectFromItem = false
-
-			return m.startCollecting()
-		}
-
-		m.replaceTypeOnEnter = false
-
-		return m.enterResourceGroup(m.typeTable.Cursor())
+		return m.startCollectingSelection()
 	}
 
 	return m.delegateToActiveList(msg)
 }
 
-// --- 세부 리소스 항목 ---
+// keyResourceSearch는 선택 화면의 검색 입력을 처리한다.
+//
+// 입력 중에는 q, z, a 같은 글자도 검색어로 들어간다. 리소스 목록의 검색과 같은 규칙이다.
+func (m Model) keyResourceSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	height := m.listHeight()
 
-// enterResourceGroup은 그룹을 골랐을 때 다음 화면을 정한다.
-//
-// 세부 항목이 하나뿐인 그룹은 그 화면을 건너뛰고 바로 조회한다. 고를 것이 없는 목록을 한 번 더
-// 보여주고 enter를 다시 받는 것은 사용자에게 아무것도 알려주지 않는다. 그룹에 타입이 늘어나면
-// 이 조건이 자연히 풀려 다시 세부 항목 화면으로 들어간다.
-//
-// 건너뛴 화면은 뒤로 가기에도 끼어들지 않는다. collectFromItem을 false로 두므로 목록에서
-// 뒤로 가면 사용자가 실제로 지나온 그룹 화면으로 돌아간다.
-func (m Model) enterResourceGroup(groupIndex int) (tea.Model, tea.Cmd) {
-	if groupIndex < 0 || groupIndex >= len(m.deps.ResourceGroups) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		m.treeFiltering = false
+		m.filterInput.Blur()
+
+		return m, nil
+
+	case tea.KeyEsc:
+		m.treeFiltering = false
+		m.filterInput.Blur()
+		m.resourceTree.setQuery(m.theme, m.previousFilter, m.width, height)
+		m.filterInput.SetValue(m.previousFilter)
+
 		return m, nil
 	}
 
-	group := m.deps.ResourceGroups[groupIndex]
-	if len(group.Types) != 1 {
-		return m.gotoResourceItem(groupIndex), nil
+	var cmd tea.Cmd
+	m.filterInput, cmd = m.filterInput.Update(msg)
+	m.resourceTree.setQuery(m.theme, m.filterInput.Value(), m.width, height)
+
+	return m, cmd
+}
+
+// startCollectingSelection은 트리에서 고른 것으로 조회를 시작한다.
+//
+// 체크한 것이 있으면 그것을, 없으면 커서 줄을 조회한다. 리전 선택과 같은 규칙이다.
+func (m Model) startCollectingSelection() (tea.Model, tea.Cmd) {
+	types := m.resourceTree.queryTypes()
+	if len(types) == 0 {
+		return m, nil
 	}
 
-	m.itemGroup = groupIndex
-	m.itemTable = table.Model{}
-	m.chosenTypes = resourceGroupTypeIDs(group)
-	m.explicitTypeSelection = false
-	m.collectFromItem = false
+	m.chosenTypes = types
 
 	return m.startCollecting()
 }
 
-// gotoResourceItem은 선택한 그룹의 세부 항목 화면으로 들어간다.
-func (m Model) gotoResourceItem(groupIndex int) Model {
-	if groupIndex < 0 || groupIndex >= len(m.deps.ResourceGroups) {
+// backFromResourceSelection은 선택 화면에서 리전 선택으로 돌아간다.
+func (m Model) backFromResourceSelection() Model {
+	if m.treeFiltering || m.resourceTree.query != "" {
+		// 검색이 걸린 상태에서 뒤로 가면 먼저 검색을 푼다. 걸러진 화면을 남긴 채 나가면
+		// 다시 들어왔을 때 목록이 왜 짧은지 알 수 없다.
+		m.treeFiltering = false
+		m.filterInput.Blur()
+		m.filterInput.SetValue("")
+		m.resourceTree.setQuery(m.theme, "", m.width, m.listHeight())
+
 		return m
 	}
 
-	// 다른 그룹으로 들어가면 이전 그룹에서 체크한 항목은 유지하지 않는다. 화면에 보이지
-	// 않는 선택이 조회 범위에 남아 있으면 사용자가 결과를 설명할 수 없다.
-	if m.itemGroup != groupIndex || !m.explicitTypeSelection {
-		m.chosenTypes = nil
-		m.explicitTypeSelection = false
-	}
-
-	m.itemGroup = groupIndex
-	m.itemTable = buildResourceItemTable(
-		m.theme, m.deps.ResourceGroups[groupIndex], m.chosenTypes, m.width, m.listHeight())
-	m.itemTable.SetCursor(0)
-	m.screen = ScreenResourceItem
+	m.screen = ScreenRegion
 
 	return m
 }
 
-func (m Model) keyResourceItem(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	group := m.currentResourceGroup()
-
-	switch {
-	case key.Matches(msg, m.keys.Back):
-		m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, m.chosenTypes, m.width, m.listHeight())
-		m.typeTable.SetCursor(m.itemGroup)
-		m.screen = ScreenResourceType
-
-		return m, nil
-
-	case key.Matches(msg, m.keys.Toggle):
-		i := m.itemTable.Cursor()
-		if i >= 0 && i < len(group.Types) {
-			m.toggleResourceItem(group.Types[i].ID)
-			m.explicitTypeSelection = len(m.chosenTypes) > 0
-			m.itemTable = buildResourceItemTable(m.theme, group, m.chosenTypes, m.width, m.listHeight())
-			m.itemTable.SetCursor(i)
-		}
-
-		return m, nil
-
-	case key.Matches(msg, m.keys.Enter):
-		// space로 체크한 항목이 없으면 커서가 가리키는 항목 하나만 조회한다. 리전 선택과
-		// 같은 규칙이다. 그룹 전체가 필요하면 그룹 화면에서 space로 고른다.
-		if !m.explicitTypeSelection || len(m.chosenTypes) == 0 {
-			i := m.itemTable.Cursor()
-			if i < 0 || i >= len(group.Types) {
-				return m, nil
-			}
-			m.chosenTypes = []string{group.Types[i].ID}
-			m.explicitTypeSelection = false
-		}
-		m.replaceTypeOnEnter = false
-		m.collectFromItem = true
-
-		return m.startCollecting()
-	}
-
-	return m.delegateToActiveList(msg)
-}
-
-// backToResourceSelection은 조회를 시작한 선택 화면으로 한 단계만 되돌아간다.
+// backToResourceSelection은 조회 결과에서 선택 화면으로 돌아간다.
 //
-// 세부 항목에서 조회했으면 그 화면으로 돌아가야 한다. 그룹 화면까지 두 단계 올라가면
-// 방금 고른 항목을 다시 찾아 들어가야 한다.
+// 선택 화면이 하나뿐이라 되돌아갈 곳을 기억할 필요가 없다. 이전에는 세부 항목 화면을
+// 건너뛴 경우와 지나온 경우를 구분하려고 별도 플래그를 들고 있었다.
 func (m Model) backToResourceSelection() Model {
-	if m.collectFromItem && len(m.itemTable.Rows()) > 0 {
-		m.screen = ScreenResourceItem
-
-		return m
-	}
-
-	m.replaceTypeOnEnter = true
-	m.screen = ScreenResourceType
+	m.screen = ScreenResource
 
 	return m
-}
-
-func (m *Model) toggleResourceItem(typeID string) {
-	if i := slices.Index(m.chosenTypes, typeID); i >= 0 {
-		m.chosenTypes = slices.Delete(m.chosenTypes, i, i+1)
-
-		return
-	}
-
-	m.chosenTypes = append(m.chosenTypes, typeID)
-}
-
-func (m *Model) toggleResourceGroup(group ResourceGroup) {
-	if resourceGroupSelected(group, m.chosenTypes) {
-		remove := make(map[string]struct{}, len(group.Types))
-		for _, resourceType := range group.Types {
-			remove[resourceType.ID] = struct{}{}
-		}
-
-		kept := m.chosenTypes[:0]
-		for _, typ := range m.chosenTypes {
-			if _, exists := remove[typ]; !exists {
-				kept = append(kept, typ)
-			}
-		}
-		m.chosenTypes = kept
-
-		return
-	}
-
-	selected := make(map[string]struct{}, len(m.chosenTypes))
-	for _, typ := range m.chosenTypes {
-		selected[typ] = struct{}{}
-	}
-	for _, resourceType := range group.Types {
-		if _, exists := selected[resourceType.ID]; exists {
-			continue
-		}
-		m.chosenTypes = append(m.chosenTypes, resourceType.ID)
-	}
 }
 
 func sameRegionSelection(left, right []string) bool {
@@ -499,15 +447,15 @@ func sameRegionSelection(left, right []string) bool {
 	return slices.Equal(leftSorted, rightSorted)
 }
 
+// resetResourceSelection은 리전 선택이 바뀌었을 때 리소스 선택을 비운다.
+//
+// 리전이 달라지면 이전 리전에서 고른 것을 그대로 조회하는 게 맞는지 알 수 없다. 화면에
+// 보이지 않는 선택이 조회 범위에 남아 있으면 사용자가 결과를 설명할 수 없다.
 func (m *Model) resetResourceSelection() {
 	m.chosenTypes = nil
-	m.explicitTypeSelection = false
-	m.replaceTypeOnEnter = false
-	m.collectFromItem = false
-	m.itemTable = table.Model{}
-	m.itemGroup = 0
-	m.typeTable = buildTypeTable(m.theme, m.deps.ResourceGroups, nil, m.width, m.listHeight())
-	m.typeTable.SetCursor(0)
+	m.treeFiltering = false
+	m.resourceTree.setQuery(m.theme, "", m.width, m.listHeight())
+	m.resourceTree.setSelection(m.theme, nil, m.width, m.listHeight())
 }
 
 func (m *Model) toggleRegion(code string) {
@@ -789,7 +737,9 @@ func collectResourceKinds(groups []ResourceGroup, resources []model.Resource) []
 // --- 상세 ---
 
 func (m Model) keyDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
+	// 종료는 handleKey가 먼저 처리한다. 여기서 Quit을 뒤로 가기로 다시 잡으면 도움말의
+	// "q quit"과 어긋난다.
+	if key.Matches(msg, m.keys.Back) {
 		m.screen = ScreenList
 
 		return m, nil
@@ -824,7 +774,7 @@ func (m Model) keyCollectErrors(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) keyCollectErrorDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
+	if key.Matches(msg, m.keys.Back) {
 		m.screen = ScreenCollectErrors
 
 		return m, nil

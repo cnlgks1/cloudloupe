@@ -67,7 +67,9 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #   profilesForCluster     - eks 파게이트 프로파일 수집기의 내부 메서드. ListFargateProfiles와
 #                            DescribeFargateProfile(둘 다 조회)을 클러스터 단위로 감싼다
 #   tableNames             - dynamodb 수집기의 내부 메서드. ListTables(조회)를 페이지째 감싼다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs|clusterNames|nodegroupsForCluster|profilesForCluster|tableNames'
+#   topicARNs              - sns 수집기의 내부 메서드. ListTopics(조회)를 페이지째 감싼다
+#   queueURLs              - sqs 수집기의 내부 메서드. ListQueues(조회)를 페이지째 감싼다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs|clusterNames|nodegroupsForCluster|profilesForCluster|tableNames|topicARNs|queueURLs'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

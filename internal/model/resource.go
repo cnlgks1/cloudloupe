@@ -50,6 +50,8 @@ const (
 	TypeEKSNodegroup        = "eks:nodegroup"
 	TypeEKSFargateProfile   = "eks:fargateProfile"
 	TypeDynamoDBTable       = "dynamodb:table"
+	TypeSNSTopic            = "sns:topic"
+	TypeSQSQueue            = "sqs:queue"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -271,28 +273,32 @@ func typeRank(resourceType string) int {
 		return 18
 	case TypeDynamoDBTable:
 		return 19
-	case TypeEC2VPC:
+	case TypeSNSTopic:
 		return 20
-	case TypeEC2Subnet:
+	case TypeSQSQueue:
 		return 21
-	case TypeEC2RouteTable:
+	case TypeEC2VPC:
 		return 22
-	case TypeEC2InternetGateway:
+	case TypeEC2Subnet:
 		return 23
-	case TypeEC2NATGateway:
+	case TypeEC2RouteTable:
 		return 24
-	case TypeEC2VPCEndpoint:
+	case TypeEC2InternetGateway:
 		return 25
-	case TypeEC2SecurityGroup:
+	case TypeEC2NATGateway:
 		return 26
-	case TypeWAFv2WebACL:
+	case TypeEC2VPCEndpoint:
 		return 27
-	case TypeIAMRole:
+	case TypeEC2SecurityGroup:
 		return 28
-	case TypeKMSKey:
+	case TypeWAFv2WebACL:
 		return 29
-	case TypeS3Bucket:
+	case TypeIAMRole:
 		return 30
+	case TypeKMSKey:
+		return 31
+	case TypeS3Bucket:
+		return 32
 	default:
 		return 1000
 	}

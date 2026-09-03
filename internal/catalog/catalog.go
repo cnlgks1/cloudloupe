@@ -273,6 +273,8 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "eks", Label: "EKS", Types: eksDefinitions(cfg)},
 		Group{ID: "rds", Label: "RDS", Types: rdsDefinitions(cfg)},
 		Group{ID: "dynamodb", Label: "DynamoDB", Types: dynamodbDefinitions(cfg)},
+		Group{ID: "sns", Label: "SNS", Types: snsDefinitions(cfg)},
+		Group{ID: "sqs", Label: "SQS", Types: sqsDefinitions(cfg)},
 		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
 		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},
 		Group{ID: "iam", Label: "IAM", Types: iamDefinitions(cfg)},

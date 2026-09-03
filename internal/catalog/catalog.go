@@ -270,6 +270,7 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "lambda", Label: "Lambda", Types: lambdaDefinitions(cfg)},
 		Group{ID: "ecs", Label: "ECS", Types: ecsDefinitions(cfg)},
 		Group{ID: "ecr", Label: "ECR", Types: ecrDefinitions(cfg)},
+		Group{ID: "eks", Label: "EKS", Types: eksDefinitions(cfg)},
 		Group{ID: "rds", Label: "RDS", Types: rdsDefinitions(cfg)},
 		Group{ID: "route53", Label: "Route 53", Types: route53Definitions(cfg)},
 		Group{ID: "wafv2", Label: "WAF", Types: wafv2Definitions(cfg)},

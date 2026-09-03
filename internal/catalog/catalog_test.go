@@ -52,6 +52,9 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeECSService,
 		model.TypeECSTaskDefinition,
 		model.TypeECRRepository,
+		model.TypeEKSCluster,
+		model.TypeEKSNodegroup,
+		model.TypeEKSFargateProfile,
 		model.TypeRDSDBCluster,
 		model.TypeRDSDBInstance,
 		model.TypeRoute53RecordSet,
@@ -87,7 +90,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "rds", "route53", "wafv2", "iam", "kms", "s3"}
+	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "eks", "rds", "route53", "wafv2", "iam", "kms", "s3"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)
@@ -141,11 +144,11 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 		t.Errorf("네트워크 타입 = %v, want %v", gotNetworkTypes, wantNetworkTypes)
 	}
 
-	if got, want := groups[9].Types[0].Columns,
+	if got, want := groups[10].Types[0].Columns,
 		[]string{"Type", "SetIdentifier", "HostedZoneName", "TTL", "ResourceRecords", "AliasTarget"}; !slices.Equal(got, want) {
 		t.Errorf("Route 53 열 = %v, want %v", got, want)
 	}
-	if got, want := groups[10].Types[0].Columns, []string{"Rules"}; !slices.Equal(got, want) {
+	if got, want := groups[11].Types[0].Columns, []string{"Rules"}; !slices.Equal(got, want) {
 		t.Errorf("WAF 열 = %v, want %v", got, want)
 	}
 

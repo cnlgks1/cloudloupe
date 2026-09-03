@@ -52,6 +52,19 @@
       "Resource": "*"
     },
     {
+      "Sid": "KubernetesInventory",
+      "Effect": "Allow",
+      "Action": [
+        "eks:ListClusters",
+        "eks:DescribeCluster",
+        "eks:ListNodegroups",
+        "eks:DescribeNodegroup",
+        "eks:ListFargateProfiles",
+        "eks:DescribeFargateProfile"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "DatabaseInventory",
       "Effect": "Allow",
       "Action": [

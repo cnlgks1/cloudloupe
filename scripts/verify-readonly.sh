@@ -60,7 +60,13 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #                            DescribeServices(둘 다 조회)를 클러스터 단위로 감싼다
 #   taskDefinitionARNs     - ecs 태스크 정의 수집기의 내부 메서드. ListTaskDefinitions
 #                            (조회)를 페이지째 감싼다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs'
+#   clusterNames           - eks 수집기들의 내부 메서드. ListClusters(조회)를 페이지째 감싸
+#                            클러스터 이름 목록을 만든다
+#   nodegroupsForCluster   - eks 노드그룹 수집기의 내부 메서드. ListNodegroups와
+#                            DescribeNodegroup(둘 다 조회)을 클러스터 단위로 감싼다
+#   profilesForCluster     - eks 파게이트 프로파일 수집기의 내부 메서드. ListFargateProfiles와
+#                            DescribeFargateProfile(둘 다 조회)을 클러스터 단위로 감싼다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs|clusterNames|nodegroupsForCluster|profilesForCluster'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

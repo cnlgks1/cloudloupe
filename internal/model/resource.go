@@ -46,6 +46,9 @@ const (
 	TypeECSService          = "ecs:service"
 	TypeECSTaskDefinition   = "ecs:taskDefinition"
 	TypeECRRepository       = "ecr:repository"
+	TypeEKSCluster          = "eks:cluster"
+	TypeEKSNodegroup        = "eks:nodegroup"
+	TypeEKSFargateProfile   = "eks:fargateProfile"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -255,32 +258,38 @@ func typeRank(resourceType string) int {
 		return 12
 	case TypeECRRepository:
 		return 13
-	case TypeRDSDBCluster:
+	case TypeEKSCluster:
 		return 14
-	case TypeRDSDBInstance:
+	case TypeEKSNodegroup:
 		return 15
-	case TypeEC2VPC:
+	case TypeEKSFargateProfile:
 		return 16
-	case TypeEC2Subnet:
+	case TypeRDSDBCluster:
 		return 17
-	case TypeEC2RouteTable:
+	case TypeRDSDBInstance:
 		return 18
-	case TypeEC2InternetGateway:
+	case TypeEC2VPC:
 		return 19
-	case TypeEC2NATGateway:
+	case TypeEC2Subnet:
 		return 20
-	case TypeEC2VPCEndpoint:
+	case TypeEC2RouteTable:
 		return 21
-	case TypeEC2SecurityGroup:
+	case TypeEC2InternetGateway:
 		return 22
-	case TypeWAFv2WebACL:
+	case TypeEC2NATGateway:
 		return 23
-	case TypeIAMRole:
+	case TypeEC2VPCEndpoint:
 		return 24
-	case TypeKMSKey:
+	case TypeEC2SecurityGroup:
 		return 25
-	case TypeS3Bucket:
+	case TypeWAFv2WebACL:
 		return 26
+	case TypeIAMRole:
+		return 27
+	case TypeKMSKey:
+		return 28
+	case TypeS3Bucket:
+		return 29
 	default:
 		return 1000
 	}

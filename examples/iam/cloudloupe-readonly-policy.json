@@ -111,6 +111,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "CertificateInventory",
+      "Effect": "Allow",
+      "Action": [
+        "acm:ListCertificates",
+        "acm:DescribeCertificate"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

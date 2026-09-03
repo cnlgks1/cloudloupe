@@ -56,6 +56,7 @@ const (
 	TypeAPIGatewayV2API      = "apigatewayv2:api"
 	TypeSecretsManagerSecret = "secretsmanager:secret"
 	TypeSSMParameter         = "ssm:parameter"
+	TypeACMCertificate       = "acm:certificate"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -303,14 +304,16 @@ func typeRank(resourceType string) int {
 		return 31
 	case TypeSSMParameter:
 		return 32
-	case TypeWAFv2WebACL:
+	case TypeACMCertificate:
 		return 33
-	case TypeIAMRole:
+	case TypeWAFv2WebACL:
 		return 34
-	case TypeKMSKey:
+	case TypeIAMRole:
 		return 35
-	case TypeS3Bucket:
+	case TypeKMSKey:
 		return 36
+	case TypeS3Bucket:
+		return 37
 	default:
 		return 1000
 	}

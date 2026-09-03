@@ -20,6 +20,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.1
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.325.1
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.63.0
+	github.com/aws/aws-sdk-go-v2/service/ecs v1.94.0
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.60.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.47.0

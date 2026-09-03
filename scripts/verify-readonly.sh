@@ -54,7 +54,13 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #   keyEntries             - kms 수집기의 내부 메서드. ListKeys(조회)를 페이지째 감싼다
 #   aliasesByKeyID         - kms 수집기의 내부 메서드. ListAliases(조회)를 감싸 키 ID로
 #                            색인한다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID'
+#   clusterARNs            - ecs 수집기의 내부 메서드. ListClusters(조회)를 페이지째 감싸
+#                            클러스터 ARN 목록을 만든다
+#   servicesForCluster     - ecs 서비스 수집기의 내부 메서드. ListServices와
+#                            DescribeServices(둘 다 조회)를 클러스터 단위로 감싼다
+#   taskDefinitionARNs     - ecs 태스크 정의 수집기의 내부 메서드. ListTaskDefinitions
+#                            (조회)를 페이지째 감싼다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

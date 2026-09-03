@@ -42,6 +42,10 @@ const (
 	TypeRDSDBInstance       = "rds:dbInstance"
 	TypeLambdaFunction      = "lambda:function"
 	TypeAutoScalingGroup    = "autoscaling:autoScalingGroup"
+	TypeECSCluster          = "ecs:cluster"
+	TypeECSService          = "ecs:service"
+	TypeECSTaskDefinition   = "ecs:taskDefinition"
+	TypeECRRepository       = "ecr:repository"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -243,32 +247,40 @@ func typeRank(resourceType string) int {
 		return 8
 	case TypeLambdaFunction:
 		return 9
-	case TypeRDSDBCluster:
+	case TypeECSCluster:
 		return 10
-	case TypeRDSDBInstance:
+	case TypeECSService:
 		return 11
-	case TypeEC2VPC:
+	case TypeECSTaskDefinition:
 		return 12
-	case TypeEC2Subnet:
+	case TypeECRRepository:
 		return 13
-	case TypeEC2RouteTable:
+	case TypeRDSDBCluster:
 		return 14
-	case TypeEC2InternetGateway:
+	case TypeRDSDBInstance:
 		return 15
-	case TypeEC2NATGateway:
+	case TypeEC2VPC:
 		return 16
-	case TypeEC2VPCEndpoint:
+	case TypeEC2Subnet:
 		return 17
-	case TypeEC2SecurityGroup:
+	case TypeEC2RouteTable:
 		return 18
-	case TypeWAFv2WebACL:
+	case TypeEC2InternetGateway:
 		return 19
-	case TypeIAMRole:
+	case TypeEC2NATGateway:
 		return 20
-	case TypeKMSKey:
+	case TypeEC2VPCEndpoint:
 		return 21
-	case TypeS3Bucket:
+	case TypeEC2SecurityGroup:
 		return 22
+	case TypeWAFv2WebACL:
+		return 23
+	case TypeIAMRole:
+		return 24
+	case TypeKMSKey:
+		return 25
+	case TypeS3Bucket:
+		return 26
 	default:
 		return 1000
 	}

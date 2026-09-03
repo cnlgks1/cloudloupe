@@ -13,7 +13,7 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 12개 그룹 23개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
+> **개발 중.** 14개 그룹 27개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
 > 리포트는 아직 없습니다.
 
 ## 빠른 시작
@@ -58,6 +58,10 @@ make build
 | ELB | `elbv2:targetGroup` | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth` |
 | Auto Scaling | `autoscaling:autoScalingGroup` | `autoscaling.DescribeAutoScalingGroups` |
 | Lambda | `lambda:function` | `lambda.ListFunctions` |
+| ECS | `ecs:cluster` | `ecs.ListClusters`, `DescribeClusters` |
+| ECS | `ecs:service` | `ecs.ListClusters`, `ListServices`, `DescribeServices` |
+| ECS | `ecs:taskDefinition` | `ecs.ListTaskDefinitions`, `DescribeTaskDefinition` |
+| ECR | `ecr:repository` | `ecr.DescribeRepositories` |
 | RDS | `rds:dbCluster` | `rds.DescribeDBClusters` |
 | RDS | `rds:dbInstance` | `rds.DescribeDBInstances` |
 | Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |

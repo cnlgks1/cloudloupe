@@ -35,6 +35,23 @@
       "Resource": "*"
     },
     {
+      "Sid": "ContainerOrchestrationInventory",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:List*",
+        "ecs:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ContainerRegistryInventory",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRepositories"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "DatabaseInventory",
       "Effect": "Allow",
       "Action": [

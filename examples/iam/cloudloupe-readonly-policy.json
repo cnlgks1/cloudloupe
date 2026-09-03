@@ -94,6 +94,14 @@
       "Resource": "*"
     },
     {
+      "Sid": "ApiGatewayInventory",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

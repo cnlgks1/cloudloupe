@@ -22,6 +22,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/apigateway v1.45.0
 	github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.40.0
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.76.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.71.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.66.0
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.325.1
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.63.0

@@ -138,6 +138,14 @@
       "Resource": "*"
     },
     {
+      "Sid": "ContentDeliveryInventory",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:ListDistributions"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "LoadBalancers",
       "Effect": "Allow",
       "Action": [

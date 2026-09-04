@@ -61,6 +61,7 @@ const (
 	TypeEventBridgeRule             = "events:rule"
 	TypeElastiCacheReplicationGroup = "elasticache:replicationGroup"
 	TypeElastiCacheCacheCluster     = "elasticache:cacheCluster"
+	TypeCloudFrontDistribution      = "cloudfront:distribution"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -326,6 +327,8 @@ func typeRank(resourceType string) int {
 		return 40
 	case TypeS3Bucket:
 		return 41
+	case TypeCloudFrontDistribution:
+		return 42
 	default:
 		return 1000
 	}

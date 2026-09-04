@@ -74,6 +74,7 @@ func TestDefinitionsAreValidAndOrdered(t *testing.T) {
 		model.TypeIAMRole,
 		model.TypeKMSKey,
 		model.TypeS3Bucket,
+		model.TypeCloudFrontDistribution,
 	}
 
 	got := make([]string, 0, len(definitions))
@@ -102,7 +103,7 @@ func TestGroupsAreOrderedAndDefensivelyCopied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Groups() 실패: %v", err)
 	}
-	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "eks", "rds", "dynamodb", "elasticache", "sns", "sqs", "eventbridge", "apigateway", "secretsmanager", "ssm", "acm", "route53", "wafv2", "iam", "kms", "s3"}
+	wantIDs := []string{"ec2", "vpc", "network", "autoscaling", "elbv2", "lambda", "ecs", "ecr", "eks", "rds", "dynamodb", "elasticache", "sns", "sqs", "eventbridge", "apigateway", "secretsmanager", "ssm", "acm", "route53", "wafv2", "iam", "kms", "s3", "cloudfront"}
 	gotIDs := make([]string, 0, len(groups))
 	for _, group := range groups {
 		gotIDs = append(gotIDs, group.ID)

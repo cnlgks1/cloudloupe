@@ -141,7 +141,7 @@ RFC 3339입니다. `aws` CLI 출력과 그대로 대조할 수 있게 하려는 
 cloudloupe                                    # 대화형 TUI
 cloudloupe --version                          # 버전·커밋 출력
 cloudloupe --ascii                            # 유니코드 미지원 터미널용 ASCII 테마
-cloudloupe --demo                             # AWS 없이 가짜 데이터로 체험 (스크린샷용)
+cloudloupe --demo                             # AWS 없이 가짜 데이터로 체험
 cloudloupe --check                            # 설정 위치·권한 진단 (문제 시 exit != 0)
 cloudloupe --list-profiles [--output json]    # TUI 없이 프로필 목록
 cloudloupe --config PATH --credentials PATH
@@ -243,7 +243,7 @@ internal/app              프로필·리전별 AWS 설정과 수집 실행 조�
 internal/catalog          타입 ID·표시명·범위·목록 열·수집기 생성의 단일 출처
 internal/collect          AWS SDK를 모르는 Collector/Registry/Runner 코어
 internal/collector/<svc>  서비스별 조회와 SDK → model 변환
-internal/demo             --demo용 가짜 데이터 (AWS 없이 체험·스크린샷)
+internal/demo             --demo용 가짜 데이터 (AWS 없이 체험)
 internal/graph            ID·ARN·DNS 관계 해석과 정방향·역방향 인덱스
 internal/model            외부 의존성이 없는 도메인 모델
 internal/tui              Bubble Tea 상태 전이와 렌더링

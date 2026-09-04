@@ -13,8 +13,8 @@ import (
 )
 
 // TestFieldsCoverCatalogColumns는 데모 리소스의 Fields 키가 카탈로그 열을 모두 채우는지
-// 확인한다. 열은 있는데 셀이 비는 어긋남을 잡는다. 데모의 목적이 스크린샷이라, 화면이 -로
-// 비면 데모 가치가 떨어진다. 카탈로그 열이 바뀌면 여기서 드러난다.
+// 확인한다. 열은 있는데 셀이 비는 어긋남을 잡는다. 데모는 체험용이라 화면이 -로 비면 값이
+// 떨어진다. 카탈로그 열이 바뀌면 여기서 드러난다.
 func TestFieldsCoverCatalogColumns(t *testing.T) {
 	t.Parallel()
 

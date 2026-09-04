@@ -94,6 +94,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "EventBridgeInventory",
+      "Effect": "Allow",
+      "Action": [
+        "events:ListEventBuses",
+        "events:ListRules"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "ApiGatewayInventory",
       "Effect": "Allow",
       "Action": [

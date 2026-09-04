@@ -57,6 +57,8 @@ const (
 	TypeSecretsManagerSecret = "secretsmanager:secret"
 	TypeSSMParameter         = "ssm:parameter"
 	TypeACMCertificate       = "acm:certificate"
+	TypeEventBridgeEventBus  = "events:eventBus"
+	TypeEventBridgeRule      = "events:rule"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -282,38 +284,42 @@ func typeRank(resourceType string) int {
 		return 20
 	case TypeSQSQueue:
 		return 21
-	case TypeAPIGatewayRestAPI:
+	case TypeEventBridgeEventBus:
 		return 22
-	case TypeAPIGatewayV2API:
+	case TypeEventBridgeRule:
 		return 23
-	case TypeEC2VPC:
+	case TypeAPIGatewayRestAPI:
 		return 24
-	case TypeEC2Subnet:
+	case TypeAPIGatewayV2API:
 		return 25
-	case TypeEC2RouteTable:
+	case TypeEC2VPC:
 		return 26
-	case TypeEC2InternetGateway:
+	case TypeEC2Subnet:
 		return 27
-	case TypeEC2NATGateway:
+	case TypeEC2RouteTable:
 		return 28
-	case TypeEC2VPCEndpoint:
+	case TypeEC2InternetGateway:
 		return 29
-	case TypeEC2SecurityGroup:
+	case TypeEC2NATGateway:
 		return 30
-	case TypeSecretsManagerSecret:
+	case TypeEC2VPCEndpoint:
 		return 31
-	case TypeSSMParameter:
+	case TypeEC2SecurityGroup:
 		return 32
-	case TypeACMCertificate:
+	case TypeSecretsManagerSecret:
 		return 33
-	case TypeWAFv2WebACL:
+	case TypeSSMParameter:
 		return 34
-	case TypeIAMRole:
+	case TypeACMCertificate:
 		return 35
-	case TypeKMSKey:
+	case TypeWAFv2WebACL:
 		return 36
-	case TypeS3Bucket:
+	case TypeIAMRole:
 		return 37
+	case TypeKMSKey:
+		return 38
+	case TypeS3Bucket:
+		return 39
 	default:
 		return 1000
 	}

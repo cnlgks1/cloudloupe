@@ -28,6 +28,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.94.0
 	github.com/aws/aws-sdk-go-v2/service/eks v1.96.0
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.60.1
+	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.52.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.47.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.47.0
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.106.0

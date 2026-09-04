@@ -275,6 +275,7 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "dynamodb", Label: "DynamoDB", Types: dynamodbDefinitions(cfg)},
 		Group{ID: "sns", Label: "SNS", Types: snsDefinitions(cfg)},
 		Group{ID: "sqs", Label: "SQS", Types: sqsDefinitions(cfg)},
+		Group{ID: "eventbridge", Label: "EventBridge", Types: eventbridgeDefinitions(cfg)},
 		Group{ID: "apigateway", Label: "API Gateway", Types: apigatewayDefinitions(cfg)},
 		Group{ID: "secretsmanager", Label: "Secrets Manager", Types: secretsmanagerDefinitions(cfg)},
 		Group{ID: "ssm", Label: "SSM Parameter Store", Types: ssmDefinitions(cfg)},

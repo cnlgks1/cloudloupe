@@ -24,6 +24,7 @@ import (
 	"github.com/cnlgks1/cloudloupe/internal/app"
 	"github.com/cnlgks1/cloudloupe/internal/awsclient"
 	"github.com/cnlgks1/cloudloupe/internal/catalog"
+	"github.com/cnlgks1/cloudloupe/internal/demo"
 	"github.com/cnlgks1/cloudloupe/internal/tui"
 )
 
@@ -52,6 +53,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		listOnly    = fs.Bool("list-profiles", false, "TUI 없이 프로필 목록만 출력한다")
 		output      = fs.String("output", "", "프로필 목록 출력 형식: text 또는 json (지정하면 TUI 대신 목록만 출력)")
 		ascii       = fs.Bool("ascii", false, "유니코드 대신 ASCII 문자로 렌더링한다 (구형 Windows 콘솔용)")
+		demoMode    = fs.Bool("demo", false, "AWS 없이 가짜 데이터로 TUI를 띄운다 (체험·스크린샷용)")
 		configPath  = fs.String("config", "", "AWS config 파일 경로 (기본: ~/.aws/config 또는 AWS_CONFIG_FILE)")
 		credsPath   = fs.String("credentials", "", "AWS credentials 파일 경로 (기본: ~/.aws/credentials)")
 	)
@@ -88,6 +90,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 
 		return listProfiles(stdout, format, override)
+	}
+
+	// demo는 실제 AWS 설정을 절대 읽지 않는다. 비대화형 폴백(listProfiles)보다 먼저 처리해,
+	// 파이프로 실행해도 실제 프로필·계정이 출력되지 않게 한다. 스크린샷 안전이 이 모드의
+	// 존재 이유이므로, 어떤 경로로도 실제 설정에 닿으면 안 된다.
+	if *demoMode {
+		if !isInteractive() {
+			return errors.New("--demo는 대화형 터미널에서만 동작합니다 (스크린샷용 TUI)")
+		}
+
+		return runDemoTUI(ascii)
 	}
 
 	if !isInteractive() {
@@ -148,6 +161,38 @@ func runTUI(ascii *bool, override awsclient.Override) error {
 
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("TUI 실행: %w", err)
+	}
+
+	return nil
+}
+
+// runDemoTUI는 AWS 없이 가짜 데이터로 TUI를 띄운다.
+//
+// 실제 조회 경로(runTUI)와 화면 코드는 완전히 같고, tui.Deps만 데모 구현으로 바꿔 넣는다.
+// 프로필·신원·수집이 모두 internal/demo의 fixture를 반환하므로 AWS·파일·네트워크에 접근하지
+// 않는다. 조사 도구라 스크린샷에 실제 인프라가 노출되는 것을 막으려는 용도다.
+func runDemoTUI(ascii *bool) error {
+	groups, err := resourceGroups()
+	if err != nil {
+		return err
+	}
+
+	demoDeps := demo.NewDeps()
+	deps := tui.Deps{
+		LoadProfiles:   demoDeps.LoadProfiles,
+		ResourceGroups: groups,
+		Identify:       demoDeps.Identify,
+		Collect:        demoDeps.Collect,
+		Explain:        awsclient.Explain,
+	}
+
+	theme := tui.New(tui.DetectASCII(*ascii))
+	model := tui.NewModel(theme, deps, awsclient.Override{})
+
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	if _, err := program.Run(); err != nil {
+		return fmt.Errorf("데모 TUI 실행: %w", err)
 	}
 
 	return nil

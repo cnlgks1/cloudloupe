@@ -660,3 +660,25 @@ func TestCheckStillDiagnosesWhenConfigMissing(t *testing.T) {
 		t.Errorf("설정이 없으면 조치 방법을 알려줘야 한다:\n%s", stdout)
 	}
 }
+
+// TestDemoNeverReadsRealConfig는 --demo가 실제 AWS 설정을 절대 읽지 않는지 확인한다.
+//
+// 테스트 환경은 터미널이 아니므로 비대화형이다. --demo는 이때 목록으로 폴백하지 않고 에러를
+// 내야 한다. 폴백하면 실제 프로필과 계정 ID가 출력에 노출되는데, 데모 모드는 바로 그것을 막기
+// 위한 것이다. 회사 계정이 스크린샷·파이프 출력에 새는 것을 구조적으로 차단한다.
+func TestDemoNeverReadsRealConfig(t *testing.T) {
+	useFixtures(t)
+
+	stdout, stderr, err := runCLI(t, "--demo")
+	if err == nil {
+		t.Fatal("비대화형 --demo가 성공했다. 대화형 전용이라 에러여야 한다")
+	}
+
+	// fixtures 프로필 이름이 어떤 출력에도 나오면 안 된다.
+	for _, name := range []string{"prod", "dev", "default"} {
+		if strings.Contains(stdout, name) {
+			t.Errorf("--demo 출력에 실제 프로필 %q가 노출됐다:\n%s", name, stdout)
+		}
+	}
+	_ = stderr
+}

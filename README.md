@@ -122,6 +122,7 @@ RFC 3339입니다. `aws` CLI 출력과 그대로 대조할 수 있게 하려는 
 cloudloupe                                    # 대화형 TUI
 cloudloupe --version                          # 버전·커밋 출력
 cloudloupe --ascii                            # 유니코드 미지원 터미널용 ASCII 테마
+cloudloupe --demo                             # AWS 없이 가짜 데이터로 체험 (스크린샷용)
 cloudloupe --check                            # 설정 위치·권한 진단 (문제 시 exit != 0)
 cloudloupe --list-profiles [--output json]    # TUI 없이 프로필 목록
 cloudloupe --config PATH --credentials PATH

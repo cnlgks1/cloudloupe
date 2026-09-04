@@ -1,20 +1,23 @@
 <h1 align="center">cloudloupe</h1>
 
 <p align="center">
-  <em>A read-only AWS infrastructure investigation TUI — inspect resources, relationships, and evidence across profiles.</em>
+  <em>A read-only AWS infrastructure investigation TUI — inspect resources and their relationships across profiles.</em>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg">
-  <img alt="상태" src="https://img.shields.io/badge/status-개발%20중-orange.svg">
+  <img alt="상태" src="https://img.shields.io/badge/status-beta-blue.svg">
 </p>
 
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 25개 그룹 46개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
-> 리포트는 아직 없습니다.
+> **동작하는 기능.** 25개 그룹 46개 타입을 여러 프로필·리전에서 조회하고, 상세 화면에서
+> 리소스 간 관계를 보여줍니다.
+>
+> **로드맵.** 미사용 리소스 탐지는 아직 없습니다. 안정화 전이라 필드·관계·타입 구성이 버전에
+> 따라 바뀔 수 있어 `0.x`로 배포합니다.
 
 ## 빠른 시작
 

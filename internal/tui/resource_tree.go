@@ -395,7 +395,7 @@ func (t resourceTree) buildFilteredRows() []treeRow {
 const (
 	treeMarkWidth  = 4
 	treeCountWidth = 16 // "Resource types" 머리글이 들어가는 최소 폭
-	treeLabelWidth = 26 // 들여쓴 resource type 이름까지 담는 폭
+	treeLabelWidth = 30 // 가지 글리프로 들여쓴 resource type 이름까지 담는 폭
 	treeIDMinWidth = 24
 )
 
@@ -470,7 +470,15 @@ func (t resourceTree) renderRow(theme Theme, row treeRow) table.Row {
 		return table.Row{mark, group.Label, resourceType.Label, resourceType.ID}
 	}
 
-	return table.Row{mark, "  " + resourceType.Label, "", resourceType.ID}
+	// 트리 모드에서는 서비스 아래에 가지 글리프로 들여써서 계층을 드러낸다. 그룹의 마지막
+	// 타입은 └─, 나머지는 ├─를 붙인다. 앞에 공백을 하나 더 두어 서비스 줄의 펼침 마커보다
+	// 확실히 안쪽에서 시작하게 한다.
+	branch := theme.Glyphs.TreeBranch
+	if row.typeIdx == len(group.Types)-1 {
+		branch = theme.Glyphs.TreeLast
+	}
+
+	return table.Row{mark, " " + branch + " " + resourceType.Label, "", resourceType.ID}
 }
 
 func (t resourceTree) selectionMark(theme Theme, state selectionState) string {

@@ -390,19 +390,17 @@ func fieldColumnKeys(resources []model.Resource, groups []ResourceGroup, selecte
 //
 // 이름·ID·DNS·값은 남는 폭을 우선 사용하고, 포트·개수·IOPS·TTL 같은 짧은 값은 좁게
 // 유지한다. 터미널이 좁으면 각 열의 최소 너비까지 긴 열부터 줄인다.
-// growThreshold는 이 폭보다 넓은 열을 "늘어날 수 있는 열"로 본다.
 //
-// 값 길이가 자연히 이보다 긴 열(Name, ARN, Summary, ID 등)만 남는 폭을 나눠 갖고, 짧은
-// 열(Port, Status, Encrypted 등)은 콘텐츠 폭에 고정된다. 열 이름을 일일이 나열한 표 대신
-// 콘텐츠 길이로 판단하므로, 새 리소스나 새 필드를 추가해도 이 함수를 고칠 필요가 없다.
-const growThreshold = 24
-
 // layoutResourceColumns는 콘텐츠 길이와 터미널 폭으로 열 너비를 배분한다.
 //
 // 각 열은 실제 값(모든 행의 최댓값)과 제목 길이로 선호 폭을 정한다. 합이 화면보다 넓으면
-// 여유(선호 폭 − 최소 폭)가 큰 열부터 줄이고, 좁으면 긴 열들이 남는 폭을 균등하게 나눠
-// 갖는다. 한 열이 남는 폭을 독식해 다른 열을 밀어내지 않게 균등 분배한다. 폭을 넘는 셀은
-// 테이블 위젯이 …로 자른다.
+// 여유(선호 폭 − 최소 폭)가 큰 열부터 줄이고, 좁으면 남는 폭을 모든 열이 한 칸씩 돌아가며
+// 나눠 갖는다.
+//
+// 남는 폭을 특정 열만 차지하게 두지 않는 이유: 한 열이 폭을 독식하면 그 열과 다음 열 사이가
+// 텅 비고, 오른쪽으로 밀린 마지막 열이 화면 경계에서 잘린다. 열이 두세 개뿐인 선택 화면에서
+// 특히 두드러진다. 모든 열에 고르게 나눠 주면 표가 화면을 꽉 채우면서 어느 열도 경계에
+// 몰리지 않는다. 폭을 넘는 셀은 테이블 위젯이 …로 자른다.
 func layoutResourceColumns(titles []string, preferredWidths []int, width int) []table.Column {
 	if len(titles) == 0 {
 		return nil
@@ -410,7 +408,6 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 
 	widths := make([]int, len(titles))
 	minimums := make([]int, len(titles))
-	growable := make([]bool, len(titles))
 
 	for i, title := range titles {
 		titleWidth := lipgloss.Width(title) + 2
@@ -422,8 +419,6 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 		}
 
 		widths[i] = max(preferred, minimums[i])
-		// 콘텐츠가 임계치보다 길면 남는 폭을 나눠 가질 수 있다.
-		growable[i] = widths[i] > growThreshold
 	}
 
 	usable := max(1, width-2)
@@ -447,20 +442,15 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 		total--
 	}
 
-	// 남는 폭은 늘어날 수 있는 열들이 한 칸씩 돌아가며 나눠 갖는다. 균등 분배라 한 열이
-	// 독식하지 않는다. 늘어날 열이 하나도 없으면(다 짧은 열) 남는 폭은 그대로 둔다.
+	// 남는 폭은 모든 열이 한 칸씩 돌아가며 나눠 갖는다. 균등 분배라 한 열이 독식하지 않고,
+	// 표가 화면을 꽉 채운다.
 	for total < usable {
-		grew := false
 		for i := range widths {
-			if !growable[i] || total >= usable {
-				continue
+			if total >= usable {
+				break
 			}
 			widths[i]++
 			total++
-			grew = true
-		}
-		if !grew {
-			break
 		}
 	}
 

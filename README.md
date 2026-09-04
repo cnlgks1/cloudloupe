@@ -58,150 +58,37 @@ AWS 계정이 없어도 `cloudloupe --demo`로 이 화면들을 그대로 체험
 
 ## 지원 리소스
 
-| 서비스 | 리소스 타입 | SDK API |
-| --- | --- | --- |
-| EC2 | `ec2:instance` | `ec2.DescribeInstances` |
-| EC2 | `ec2:volume` | `ec2.DescribeVolumes` |
-| EC2 | `ec2:networkInterface` | `ec2.DescribeNetworkInterfaces` |
-| EC2 | `ec2:address` | `ec2.DescribeAddresses` |
-| VPC | `ec2:vpc` | `ec2.DescribeVpcs` |
-| VPC | `ec2:subnet` | `ec2.DescribeSubnets` |
-| VPC | `ec2:securityGroup` | `ec2.DescribeSecurityGroups` |
-| Network | `ec2:routeTable` | `ec2.DescribeRouteTables` |
-| Network | `ec2:internetGateway` | `ec2.DescribeInternetGateways` |
-| Network | `ec2:natGateway` | `ec2.DescribeNatGateways` |
-| Network | `ec2:vpcEndpoint` | `ec2.DescribeVpcEndpoints` |
-| ELB | `elbv2:loadBalancer` | `elbv2.DescribeLoadBalancers` |
-| ELB | `elbv2:listener` | `elbv2.DescribeLoadBalancers`, `DescribeListeners`, `DescribeRules` |
-| ELB | `elbv2:targetGroup` | `elbv2.DescribeTargetGroups`, `DescribeTargetHealth` |
-| Auto Scaling | `autoscaling:autoScalingGroup` | `autoscaling.DescribeAutoScalingGroups` |
-| Lambda | `lambda:function` | `lambda.ListFunctions` |
-| ECS | `ecs:cluster` | `ecs.ListClusters`, `DescribeClusters` |
-| ECS | `ecs:service` | `ecs.ListClusters`, `ListServices`, `DescribeServices` |
-| ECS | `ecs:taskDefinition` | `ecs.ListTaskDefinitions`, `DescribeTaskDefinition` |
-| ECR | `ecr:repository` | `ecr.DescribeRepositories` |
-| EKS | `eks:cluster` | `eks.ListClusters`, `DescribeCluster` |
-| EKS | `eks:nodegroup` | `eks.ListClusters`, `ListNodegroups`, `DescribeNodegroup` |
-| EKS | `eks:fargateProfile` | `eks.ListClusters`, `ListFargateProfiles`, `DescribeFargateProfile` |
-| RDS | `rds:dbCluster` | `rds.DescribeDBClusters` |
-| RDS | `rds:dbInstance` | `rds.DescribeDBInstances` |
-| DynamoDB | `dynamodb:table` | `dynamodb.ListTables`, `DescribeTable` |
-| ElastiCache | `elasticache:replicationGroup` | `elasticache.DescribeReplicationGroups` |
-| ElastiCache | `elasticache:cacheCluster` | `elasticache.DescribeCacheClusters` |
-| SNS | `sns:topic` | `sns.ListTopics`, `GetTopicAttributes` |
-| SQS | `sqs:queue` | `sqs.ListQueues`, `GetQueueAttributes` |
-| EventBridge | `events:eventBus` | `eventbridge.ListEventBuses` |
-| EventBridge | `events:rule` | `eventbridge.ListEventBuses`, `ListRules` |
-| API Gateway | `apigateway:restApi` | `apigateway.GetRestApis` |
-| API Gateway | `apigatewayv2:api` | `apigatewayv2.GetApis` |
-| Secrets Manager | `secretsmanager:secret` | `secretsmanager.ListSecrets` |
-| SSM Parameter Store | `ssm:parameter` | `ssm.DescribeParameters` |
-| ACM | `acm:certificate` | `acm.ListCertificates`, `DescribeCertificate` |
-| Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
-| WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
-| IAM | `iam:role` | `iam.ListRoles` |
-| IAM | `iam:user` | `iam.ListUsers` |
-| IAM | `iam:group` | `iam.ListGroups` |
-| IAM | `iam:policy` | `iam.ListPolicies` (Local 스코프) |
-| KMS | `kms:key` | `kms.ListKeys`, `DescribeKey`, `ListAliases` |
-| S3 | `s3:bucket` | `s3.ListBuckets` |
-| CloudFront | `cloudfront:distribution` | `cloudfront.ListDistributions` |
+EC2, VPC, ELB, Lambda, ECS, EKS, RDS, IAM, S3 등 20여 개 서비스의 리소스를 조회합니다.
+서비스·타입 ID·SDK API 전체 목록과 필드 표기 규칙은 [docs/resources.md](docs/resources.md)에
+있습니다. 지원 범위는 릴리스마다 늘어납니다.
 
-Route 53과 IAM, CloudFront는 글로벌 서비스라 리전 선택과 무관하게 한 번만 조회하고 리전이
-`global`로 표시됩니다. 나머지는 선택한 리전마다 조회합니다.
-
-Secrets Manager 시크릿과 SSM 파라미터는 메타데이터만 조회합니다. 시크릿 값이나 파라미터
-값을 읽는 `GetSecretValue`·`GetParameter`는 호출하지 않습니다. 조회 전용 경계를 지키고
-민감한 값이 화면이나 로그에 노출되지 않게 하려는 것입니다.
-
-화면의 필드 이름과 값은 SDK 응답을 그대로 씁니다. 이름은 구조체 필드 이름
-(`InstanceType`, `PrivateIpAddress`), 값은 API 값(`available`, `gp3`, `true`), 시각은
-RFC 3339입니다. `aws` CLI 출력과 그대로 대조할 수 있게 하려는 것입니다.
-
-시각 표시는 두 갈래입니다. 목록에는 `kubectl`처럼 경과 시간을 `Age` 열로 보여주고
-(`5h`, `30d`, `1y35d`), 상세에는 실행한 사람의 지역 시간을 오프셋과 함께 보여줍니다
-(`2025-11-14T12:22:05+09:00`). UTC로 보려면 `TZ=UTC cloudloupe`로 실행하세요.
-
-항목마다 추가 호출이 필요한 값은 아직 가져오지 않습니다. 그래서 열은 있어도 값이 `-`로 비는
-것이 있습니다. IAM 역할의 `RoleLastUsed`·`PermissionsBoundary`·태그, KMS 키 태그, S3 버킷의
-암호화·퍼블릭 액세스 차단·버전 관리·태그, Lambda 함수 태그입니다. API 스로틀링을 피하려는
-것입니다.
-
-상세 화면(목록에서 `enter`)은 관계를 함께 보여줍니다. 관계 이름은 그 연결을 만든 SDK 응답
-필드 경로(`DBClusterIdentifier`, `VpcConfig.SubnetIds`, `Routes.NatGatewayId`)라 `aws` CLI
-출력과 대조할 수 있습니다. 대상은 타입과 이름으로 표시합니다. 대상 타입을 같이 조회하지
-않았으면 이름을 알 수 없으므로 ID만 보여주며, 그 타입도 함께 조회하면 이름이 채워집니다.
-`Referenced by`는 그 리소스를 가리키는 다른 리소스입니다. AWS에는 역방향을 알려주는 API가
-없어 추가 호출 없이 조회 결과에서 계산합니다.
+Secrets Manager 시크릿과 SSM 파라미터는 메타데이터만 조회하고, `GetSecretValue`·`GetParameter`
+같은 값 읽기 API는 호출하지 않습니다.
 
 ## 사용법
 
 ```sh
 cloudloupe                                    # 대화형 TUI
-cloudloupe --version                          # 버전·커밋 출력
-cloudloupe --ascii                            # 유니코드 미지원 터미널용 ASCII 테마
 cloudloupe --demo                             # AWS 없이 가짜 데이터로 체험
 cloudloupe --check                            # 설정 위치·권한 진단 (문제 시 exit != 0)
 cloudloupe --list-profiles [--output json]    # TUI 없이 프로필 목록
+cloudloupe --ascii                            # 유니코드 미지원 터미널용 ASCII 테마
 cloudloupe --config PATH --credentials PATH
 ```
-
-터미널이 아니거나 파이프로 넘기면 목록 출력으로 자동 폴백합니다.
 
 | 키 | 동작 |
 | --- | --- |
 | `↑↓` `j` `k` | 이동 |
-| `enter` `→` | 다음 단계 · 커서 항목 조회 · 상세 열기 |
+| `enter` `→` | 다음 단계 · 조회 · 상세 |
 | `space` | 여러 개 선택 |
 | `esc` `←` | 뒤로 (수집 중에는 취소) |
-| `t` `/` `e` | 종류 필터 · 텍스트 검색 · 부분 오류 보기 |
-| `p` `r` | 프로필 전환 · 리전 전환 |
-| `q` | 종료 |
-| `ctrl+c` | 어디서든 즉시 종료 |
+| `/` `t` `e` | 검색 · 종류 필터 · 부분 오류 보기 |
+| `p` `r` | 프로필 · 리전 전환 |
+| `q` `ctrl+c` | 종료 |
 
-리소스 선택은 한 화면에서 끝납니다. 서비스가 접힌 목록으로 나오고 `→`로 그 자리에서 펼칩니다.
-`enter`는 커서가 서비스 줄이면 그 서비스 전체를, 리소스 타입 줄이면 그 타입만 조회합니다.
-`space`로 여러 개를 체크하면 서비스를 넘어 함께 조회하며, 접어도 선택은 유지됩니다.
-
-리소스 타입이 하나뿐인 서비스는 펼칠 것이 없으므로 펼침 표시가 없고, 그 타입 ID를 서비스
-줄에 바로 보여줍니다. 그 줄에서 `→`는 펼치는 대신 조회로 넘어갑니다.
-
-| 선택 화면 키 | 동작 |
-| --- | --- |
-| `→` `←` | 서비스 펼치기 · 접기 (펼칠 것이 없으면 `→`는 조회) |
-| `z` | 전부 접기 |
-| `/` | 검색 (서비스·타입 이름·타입 ID) |
-| `a` | 검색으로 걸러진 것 전체 선택 |
-| `x` | 선택 비우기 |
-
-검색 중에는 트리 대신 `Service` 열이 붙은 평면 목록이 됩니다. 서비스가 늘어나도 펼치지 않고
-바로 좁힐 수 있습니다. `a`는 검색 중에만 동작합니다. 필터 없이 전부 선택하면 리소스 타입 수 ×
-리전 수만큼 요청이 생기기 때문입니다.
-
-`Resource types` 열은 그 서비스에서 cloudloupe가 조회할 수 있는 리소스 타입 수입니다. 리전에
-있는 리소스 개수가 아닙니다. 실제 개수는 조회 결과의 `N resources`입니다.
-
-`t`는 결과에 종류가 둘 이상일 때, `e`는 부분 오류가 있을 때만 동작합니다. `/` 검색 입력 중에는
-`q`, `p`, `r`도 검색어로 들어갑니다.
-
-`--config`, `--credentials`와 TUI에서 입력한 경로는 프로필 탐색, STS 신원 확인, 실제
-리소스 조회에 동일하게 적용됩니다.
-
-## 설정 해석
-
-경로는 실행할 때마다 해석합니다. 우선순위는 AWS CLI와 같습니다.
-
-| 대상 | 우선순위 |
-| --- | --- |
-| config | `AWS_CONFIG_FILE` → `~/.aws/config` |
-| credentials | `AWS_SHARED_CREDENTIALS_FILE` → `~/.aws/credentials` |
-| 기본 프로필 | `AWS_PROFILE` → `AWS_DEFAULT_PROFILE` |
-| 기본 리전 | `AWS_REGION` → `AWS_DEFAULT_REGION` |
-
-Windows에서는 `%USERPROFILE%`, 비어 있으면 `%HOMEDRIVE%%HOMEPATH%`를 씁니다.
-
-`--check`는 해석된 경로와 근거, 읽기 가능 여부, 끊어진 심볼릭 링크, 존재하지 않는
-`AWS_PROFILE`, 열려 있는 자격증명 파일 권한을 보고합니다.
+경로는 실행할 때마다 해석하며 우선순위는 AWS CLI와 같습니다(`AWS_CONFIG_FILE` →
+`~/.aws/config`). `--config`, `--credentials`와 TUI 입력 경로는 프로필 탐색, STS 확인, 실제
+조회에 동일하게 적용됩니다. 터미널이 아니거나 파이프로 넘기면 목록 출력으로 자동 폴백합니다.
 
 ## IAM 권한
 
@@ -262,9 +149,15 @@ make help       # 전체 타깃
 로컬이 훨씬 싸므로(빌드 캐시가 있으면 몇 초) CI는 태그와 수동 실행에서만 돌립니다. 릴리스는
 GoReleaser가 6종을 다시 빌드하고 하나라도 실패하면 게시하지 않습니다.
 
-기여 절차는 [CONTRIBUTING.md](CONTRIBUTING.md), 릴리스 운영은 [RELEASING.md](RELEASING.md),
-설계 규칙은 [docs/go-conventions.md](docs/go-conventions.md), 취약점 신고는
-[SECURITY.md](SECURITY.md)에 있습니다.
+## 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [docs/resources.md](docs/resources.md) | 지원 서비스·타입·SDK API 전체 목록과 필드·관계 규칙 |
+| [docs/go-conventions.md](docs/go-conventions.md) | 설계 규칙 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 절차 |
+| [RELEASING.md](RELEASING.md) | 릴리스 운영 |
+| [SECURITY.md](SECURITY.md) | 취약점 신고 |
 
 ## 라이선스
 

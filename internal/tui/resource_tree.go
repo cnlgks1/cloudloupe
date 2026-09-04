@@ -406,7 +406,12 @@ func (t resourceTree) buildTable(theme Theme, width, height int) table.Model {
 		titles = []string{"", serviceColumn, typeCountColumn, typeIDColumn}
 	}
 
-	columns := layoutColumns(titles, width)
+	// 트리는 아래에서 열 폭을 모두 직접 지정하므로 제목으로 골격만 만든다.
+	// 공용 배분(layoutTable)은 콘텐츠 기반이라 트리의 들여쓰기·고정 폭 규칙과 맞지 않는다.
+	columns := make([]table.Column, len(titles))
+	for i, title := range titles {
+		columns[i] = table.Column{Title: title}
+	}
 	if len(columns) == 4 {
 		usable := max(width-2, treeMarkWidth+treeLabelWidth+treeCountWidth+treeIDMinWidth)
 

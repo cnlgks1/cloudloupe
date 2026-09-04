@@ -495,48 +495,49 @@ func sameTableColumns(left, right []table.Column) bool {
 	return true
 }
 
-// layoutColumns는 일반 선택 테이블의 열 너비를 균등하게 배분한다.
+// preferredColumnWidths는 제목과 모든 행 셀의 최댓값으로 각 열의 선호 폭을 구한다.
 //
-// 터미널 너비를 열 개수로 고르게 나눈다. 최소 너비를 두어 좁은 터미널에서도 제목이
-// 뭉개지지 않게 한다. 정교한 내용 기반 배분 대신 단순 균등 배분을 쓴다("영리함보다
-// 명확함"). 필요해지면 그때 개선한다.
-func layoutColumns(titles []string, width int) []table.Column {
-	const minWidth = 10
+// layoutResourceColumns가 콘텐츠 폭을 받아 동적으로 배분하므로, 선택 화면들도 같은 배분을
+// 쓰도록 여기서 폭을 계산해 넘긴다. 첫 행 하나가 아니라 전체 행의 최댓값을 본다.
+func preferredColumnWidths(titles []string, rows []table.Row) []int {
+	preferred := make([]int, len(titles))
+	for i, title := range titles {
+		preferred[i] = lipgloss.Width(title) + 2
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			if i < len(preferred) {
+				preferred[i] = max(preferred[i], lipgloss.Width(cell)+2)
+			}
+		}
+	}
 
+	return preferred
+}
+
+// layoutTable은 제목과 행으로 콘텐츠 기반 동적 열 배분을 만든다.
+//
+// 리소스 목록과 선택 화면(프로필·리전·종류)이 같은 배분 규칙을 공유하게 하는 얇은 래퍼다.
+// 예전에는 선택 화면이 균등 분배를 따로 썼는데, 배분 로직이 둘로 갈라져 화면마다 폭이 달리
+// 계산됐다. 하나로 합쳐 새 리소스나 화면이 늘어도 같은 규칙을 따르게 한다.
+func layoutTable(titles []string, rows []table.Row, width int) []table.Column {
 	if len(titles) == 0 {
 		return nil
 	}
 
-	// 테두리·여백으로 몇 칸 빠지므로 살짝 줄여 잡는다.
-	usable := width - 2
-	if usable < minWidth*len(titles) {
-		usable = minWidth * len(titles)
-	}
-
-	per := usable / len(titles)
-	if per < minWidth {
-		per = minWidth
-	}
-
-	columns := make([]table.Column, 0, len(titles))
-	for _, title := range titles {
-		columns = append(columns, table.Column{Title: title, Width: per})
-	}
-
-	return columns
+	return layoutResourceColumns(titles, preferredColumnWidths(titles, rows), width)
 }
 
 // buildProfileTable은 프로필 선택 테이블을 만든다. 열: 프로필 / 종류 / 리전.
 func buildProfileTable(theme Theme, profiles []awsclient.Profile, width, height int) table.Model {
 	titles := []string{"Profile", "Kind", "Region"}
-	columns := layoutColumns(titles, width)
 
 	rows := make([]table.Row, 0, len(profiles))
 	for _, p := range profiles {
 		rows = append(rows, table.Row{p.Name, string(p.Kind), orDashUI(p.Region)})
 	}
 
-	return newDataTable(theme, columns, rows, height)
+	return newDataTable(theme, layoutTable(titles, rows, width), rows, height)
 }
 
 // buildRegionTable은 리전 선택 테이블을 만든다. 다중 선택이므로 첫 열에 선택 표시(●)를
@@ -548,11 +549,6 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 	}
 
 	titles := []string{"", "Region", "Name"}
-	columns := layoutColumns(titles, width)
-	// 첫 열(선택 표시)은 좁게 고정한다.
-	if len(columns) > 0 {
-		columns[0].Width = 3
-	}
 
 	rows := make([]table.Row, 0, len(regions))
 	for _, r := range regions {
@@ -562,6 +558,12 @@ func buildRegionTable(theme Theme, regions []awsclient.Region, chosen []string, 
 		}
 
 		rows = append(rows, table.Row{mark, r.Code, r.Name})
+	}
+
+	columns := layoutTable(titles, rows, width)
+	// 첫 열(선택 표시)은 좁게 고정한다.
+	if len(columns) > 0 {
+		columns[0].Width = 3
 	}
 
 	return newDataTable(theme, columns, rows, height)
@@ -615,7 +617,6 @@ func buildCollectErrorTable(
 // buildResourceKindTable은 수집 결과 안의 세부 종류를 단일 선택 표로 만든다.
 func buildResourceKindTable(theme Theme, kinds []resourceKind, width, height int) table.Model {
 	titles := []string{"Kind", "Count"}
-	columns := layoutColumns(titles, width)
 
 	total := 0
 	for _, kind := range kinds {
@@ -627,7 +628,7 @@ func buildResourceKindTable(theme Theme, kinds []resourceKind, width, height int
 		rows = append(rows, table.Row{kind.Label, strconv.Itoa(kind.Count)})
 	}
 
-	return newDataTable(theme, columns, rows, height)
+	return newDataTable(theme, layoutTable(titles, rows, width), rows, height)
 }
 
 func resourceGroupTypeIDs(group ResourceGroup) []string {

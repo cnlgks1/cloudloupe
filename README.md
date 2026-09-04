@@ -265,7 +265,8 @@ make help       # 전체 타깃
 GoReleaser가 6종을 다시 빌드하고 하나라도 실패하면 게시하지 않습니다.
 
 기여 절차는 [CONTRIBUTING.md](CONTRIBUTING.md), 릴리스 운영은 [RELEASING.md](RELEASING.md),
-설계 규칙은 [docs/go-conventions.md](docs/go-conventions.md)에 있습니다.
+설계 규칙은 [docs/go-conventions.md](docs/go-conventions.md), 취약점 신고는
+[SECURITY.md](SECURITY.md)에 있습니다.
 
 ## 라이선스
 

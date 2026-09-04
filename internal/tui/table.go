@@ -678,12 +678,19 @@ func orDashUI(s string) string {
 func tableStyles(theme Theme) table.Styles {
 	s := table.DefaultStyles()
 	s.Header = s.Header.Bold(true).BorderBottom(true)
-	s.Selected = s.Selected.Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6"))
 
 	if theme.ASCII {
-		// ASCII 테마에서는 색 대신 강조만.
+		// ASCII 테마에서는 색 대신 반전 강조만. 구형 콘솔은 색이 부실한 경우가 많다.
 		s.Selected = lipgloss.NewStyle().Bold(true).Reverse(true)
+
+		return s
 	}
+
+	// 선택된 행은 강조색 배경으로 반전한다. 배경색은 테마 강조색과 같은 청록 계열로 두어
+	// 제목·커서와 색을 통일한다. 전경은 배경 위에서 읽히도록 검정으로 고정한다.
+	s.Selected = s.Selected.Bold(true).
+		Foreground(lipgloss.Color("0")).
+		Background(accentColor())
 
 	return s
 }

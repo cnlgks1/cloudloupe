@@ -118,6 +118,45 @@ func TestUnicodeThemeUsesBoxDrawing(t *testing.T) {
 	}
 }
 
+// TestThemeColorsOnlyInUnicodeMode는 색을 유니코드 테마에만 입히고 ASCII 폴백에는 넣지
+// 않는지 확인한다. 색은 최소로 쓰되(강조·경고·오류), 색이 부실한 구형 콘솔에서는 굵기만으로
+// 대비를 주는 것이 이 설계의 약속이다.
+func TestThemeColorsOnlyInUnicodeMode(t *testing.T) {
+	t.Parallel()
+
+	unicode := tui.New(false)
+	ascii := tui.New(true)
+
+	// 유니코드 테마: 강조·경고·오류에 전경색이 있어야 한다.
+	for name, style := range map[string]lipgloss.Style{
+		"Title":    unicode.Title,
+		"Selected": unicode.Selected,
+		"Warn":     unicode.Warn,
+		"Error":    unicode.Error,
+	} {
+		if style.GetForeground() == lipgloss.NoColor(struct{}{}) {
+			t.Errorf("유니코드 테마의 %s에 전경색이 없다", name)
+		}
+	}
+
+	// 본문(Normal)은 색 없이 터미널 기본색을 쓴다. 색을 아끼는 것이 핵심이다.
+	if unicode.Normal.GetForeground() != lipgloss.NoColor(struct{}{}) {
+		t.Error("Normal에 색이 들어갔다. 본문은 터미널 기본색이어야 한다")
+	}
+
+	// ASCII 테마: 어떤 스타일에도 색이 없어야 한다.
+	for name, style := range map[string]lipgloss.Style{
+		"Title":    ascii.Title,
+		"Selected": ascii.Selected,
+		"Warn":     ascii.Warn,
+		"Error":    ascii.Error,
+	} {
+		if style.GetForeground() != lipgloss.NoColor(struct{}{}) {
+			t.Errorf("ASCII 테마의 %s에 색이 들어갔다", name)
+		}
+	}
+}
+
 func TestThemeRendersWithoutPanic(t *testing.T) {
 	t.Parallel()
 

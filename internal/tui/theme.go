@@ -89,22 +89,64 @@ func asciiGlyphs() Glyphs {
 	}
 }
 
+// 색은 최소로 쓴다. 잘 만든 인프라 TUI(k9s, lazygit)의 관례를 따라 강조 1색과 경고·오류
+// 2색만 두고, 본문은 터미널 기본색으로 남긴다. 색이 많으면 세로로 훑는 조회 화면에서 오히려
+// 눈이 피로하다. 부차 정보는 색이 아니라 흐림(Faint)으로 눌러 대비를 만든다.
+//
+// AdaptiveColor를 쓰는 이유는 밝은 배경과 어두운 배경 터미널을 둘 다 자연스럽게 그리기
+// 위함이다. lipgloss가 배경을 감지해 Light/Dark 중 하나를 고른다. 색을 못 쓰는 환경이나
+// NO_COLOR에서는 lipgloss가 알아서 색을 떨어뜨리므로 여기서 따로 처리하지 않는다.
+//
+// 색은 변경 가능한 전역 변수가 아니라 함수로 둔다. 실행 중에 바뀌지 않고, 세 곳(테마 스타일과
+// 테이블 선택 행)에서 같은 값을 참조하도록 한곳에 모은다.
+
+// accentColor는 제목과 선택 강조에 쓰는 유일한 강조색이다. 청록 계열.
+func accentColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "6", Dark: "14"}
+}
+
+// warnColor는 주의가 필요한 값에 쓰는 노랑 계열이다.
+func warnColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "3", Dark: "11"}
+}
+
+// errorColor는 실패·오류에 쓰는 빨강 계열이다.
+func errorColor() lipgloss.AdaptiveColor {
+	return lipgloss.AdaptiveColor{Light: "1", Dark: "9"}
+}
+
 // New는 테마를 만든다. ascii가 true면 ASCII 폴백을 쓴다.
+//
+// ASCII 테마는 유니코드를 못 그리는 구형 콘솔용이다. 그런 환경은 색도 부실한 경우가 많아,
+// 색 대신 굵기만으로 대비를 준다. 색 판단을 여기 한곳에 모아 렌더링 코드는 테마만 쓴다.
 func New(ascii bool) Theme {
 	glyphs := unicodeGlyphs()
 	if ascii {
 		glyphs = asciiGlyphs()
 	}
 
+	if ascii {
+		return Theme{
+			Glyphs:   glyphs,
+			ASCII:    ascii,
+			Title:    lipgloss.NewStyle().Bold(true),
+			Selected: lipgloss.NewStyle().Bold(true),
+			Normal:   lipgloss.NewStyle(),
+			Faint:    lipgloss.NewStyle().Faint(true),
+			Warn:     lipgloss.NewStyle().Bold(true),
+			Error:    lipgloss.NewStyle().Bold(true),
+		}
+	}
+
 	return Theme{
 		Glyphs:   glyphs,
 		ASCII:    ascii,
-		Title:    lipgloss.NewStyle().Bold(true),
-		Selected: lipgloss.NewStyle().Bold(true),
+		Title:    lipgloss.NewStyle().Bold(true).Foreground(accentColor()),
+		Selected: lipgloss.NewStyle().Bold(true).Foreground(accentColor()),
 		Normal:   lipgloss.NewStyle(),
 		Faint:    lipgloss.NewStyle().Faint(true),
-		Warn:     lipgloss.NewStyle().Bold(true),
-		Error:    lipgloss.NewStyle().Bold(true),
+		Warn:     lipgloss.NewStyle().Bold(true).Foreground(warnColor()),
+		Error:    lipgloss.NewStyle().Bold(true).Foreground(errorColor()),
 	}
 }
 

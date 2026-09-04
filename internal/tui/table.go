@@ -390,6 +390,19 @@ func fieldColumnKeys(resources []model.Resource, groups []ResourceGroup, selecte
 //
 // 이름·ID·DNS·값은 남는 폭을 우선 사용하고, 포트·개수·IOPS·TTL 같은 짧은 값은 좁게
 // 유지한다. 터미널이 좁으면 각 열의 최소 너비까지 긴 열부터 줄인다.
+// growThreshold는 이 폭보다 넓은 열을 "늘어날 수 있는 열"로 본다.
+//
+// 값 길이가 자연히 이보다 긴 열(Name, ARN, Summary, ID 등)만 남는 폭을 나눠 갖고, 짧은
+// 열(Port, Status, Encrypted 등)은 콘텐츠 폭에 고정된다. 열 이름을 일일이 나열한 표 대신
+// 콘텐츠 길이로 판단하므로, 새 리소스나 새 필드를 추가해도 이 함수를 고칠 필요가 없다.
+const growThreshold = 24
+
+// layoutResourceColumns는 콘텐츠 길이와 터미널 폭으로 열 너비를 배분한다.
+//
+// 각 열은 실제 값(모든 행의 최댓값)과 제목 길이로 선호 폭을 정한다. 합이 화면보다 넓으면
+// 여유(선호 폭 − 최소 폭)가 큰 열부터 줄이고, 좁으면 긴 열들이 남는 폭을 균등하게 나눠
+// 갖는다. 한 열이 남는 폭을 독식해 다른 열을 밀어내지 않게 균등 분배한다. 폭을 넘는 셀은
+// 테이블 위젯이 …로 자른다.
 func layoutResourceColumns(titles []string, preferredWidths []int, width int) []table.Column {
 	if len(titles) == 0 {
 		return nil
@@ -397,20 +410,26 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 
 	widths := make([]int, len(titles))
 	minimums := make([]int, len(titles))
-	maximums := make([]int, len(titles))
 	growable := make([]bool, len(titles))
 
 	for i, title := range titles {
-		minimums[i], maximums[i], growable[i] = resourceColumnBounds(title)
-		preferred := lipgloss.Width(title) + 2
+		titleWidth := lipgloss.Width(title) + 2
+		minimums[i] = max(6, titleWidth)
+
+		preferred := titleWidth
 		if i < len(preferredWidths) {
 			preferred = max(preferred, preferredWidths[i])
 		}
-		widths[i] = min(max(preferred, minimums[i]), maximums[i])
+
+		widths[i] = max(preferred, minimums[i])
+		// 콘텐츠가 임계치보다 길면 남는 폭을 나눠 가질 수 있다.
+		growable[i] = widths[i] > growThreshold
 	}
 
 	usable := max(1, width-2)
 	total := sumWidths(widths)
+
+	// 화면보다 넓으면 여유가 큰 열부터 최소 폭까지 줄인다.
 	for total > usable {
 		candidate := -1
 		largestSlack := 0
@@ -428,10 +447,12 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 		total--
 	}
 
+	// 남는 폭은 늘어날 수 있는 열들이 한 칸씩 돌아가며 나눠 갖는다. 균등 분배라 한 열이
+	// 독식하지 않는다. 늘어날 열이 하나도 없으면(다 짧은 열) 남는 폭은 그대로 둔다.
 	for total < usable {
 		grew := false
 		for i := range widths {
-			if !growable[i] || widths[i] >= maximums[i] || total >= usable {
+			if !growable[i] || total >= usable {
 				continue
 			}
 			widths[i]++
@@ -449,35 +470,6 @@ func layoutResourceColumns(titles []string, preferredWidths []int, width int) []
 	}
 
 	return columns
-}
-
-func resourceColumnBounds(title string) (minimum, maximum int, growable bool) {
-	titleWidth := lipgloss.Width(title) + 2
-
-	switch title {
-	case "Age", "Port", "Targets", "Iops", "TTL", "Rules", "Size", "Associations", "Routes",
-		"InboundRules", "OutboundRules", "SubnetIds", "RouteTableIds", "SecurityGroups",
-		"PropagatingVgws", "AvailableIpAddressCount", "Count", typeCountColumn:
-		return max(6, titleWidth), max(10, titleWidth), false
-	case "Encrypted", "Main", "IsDefault", "MultiRegion", "Enabled", "Ipv6Native",
-		"DefaultForAz", "PrivateDnsEnabled", "RequesterManaged", "MapPublicIpOnLaunch",
-		"AssignIpv6AddressOnCreation":
-		return max(8, titleWidth), max(12, titleWidth), false
-	case "Status", "Region", "Profile", "Error code", "Resource", "Kind", serviceColumn,
-		"Protocol", "Scheme", "TargetType", "VolumeType", "InstanceType", "InterfaceType",
-		"VpcEndpointType", "Type", "AvailabilityZone", "AvailabilityZoneId", "ConnectivityType",
-		"AvailabilityMode", "IpAddressType", "KeyManager", "KeyUsage", "KeySpec", "Origin",
-		"AttachmentState", "InstanceTenancy", "Domain":
-		return max(10, titleWidth), max(22, titleWidth), false
-	// Type ID는 aws CLI와 리포트에서 그대로 쓰는 값이라 잘리면 쓸모가 없다. 넉넉히 준다.
-	case "Name", "ID", "Summary", "DNSName", "ResourceRecords", "AliasTarget",
-		"Description", "HostedZoneName", "ServiceName", "Aliases", "ARN", "Path",
-		"PermissionsBoundary", "FailureMessage", "FailureReason", "CreationDate",
-		"DeletionDate", "RoleLastUsed", "DefaultActions", "SslPolicy", typeIDColumn:
-		return max(12, titleWidth), max(48, titleWidth), true
-	default:
-		return max(10, titleWidth), max(30, titleWidth), false
-	}
 }
 
 func sumWidths(widths []int) int {

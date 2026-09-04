@@ -13,8 +13,8 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **beta.** 조회와 관계 표시가 동작합니다. 미사용 탐지는 아직 없고, 안정화 전이라 필드·관계·
-> 타입 구성이 버전에 따라 바뀔 수 있어 `0.x`로 배포합니다.
+> **beta.** 조회와 관계 표시는 안정적으로 동작합니다. 지원하는 리소스 타입과 필드가 계속
+> 늘고 있어, 출력 형식이 굳을 때까지는 `0.x`로 배포합니다.
 
 <p align="center">
   <img src="docs/screenshots/tree.png" alt="리소스 선택 화면" width="900">
@@ -51,8 +51,8 @@ AWS 계정이 없어도 `cloudloupe --demo`로 이 화면들을 그대로 체험
 - SDK 호출은 allow-list로 제한합니다. `Describe`, `List`, `Get`, `Lookup`, `Search`,
   `BatchGet` 접두사만 허용하고, 그 외 호출이 있으면 `make verify-readonly`가 실패합니다.
 - 수집기 인터페이스에는 `Type`과 `Collect`만 있습니다. 쓰기 경로가 없습니다.
-- 설정 파일은 파싱만 합니다. 수정하거나 전송하지 않습니다.
-- 현재 실행 경로는 로컬 파일을 쓰지 않습니다.
+- 설정 파일은 읽기만 합니다. 수정하거나 외부로 전송하지 않습니다.
+- 조회 결과를 로컬 파일로 저장하지 않습니다. 화면에만 보여줍니다.
 
 권한이 부족해도 전체가 죽지 않습니다. 읽을 수 없는 리전이나 타입은 오류로 보고되고 나머지는
 정상 수집됩니다.
@@ -243,6 +243,7 @@ internal/app              프로필·리전별 AWS 설정과 수집 실행 조�
 internal/catalog          타입 ID·표시명·범위·목록 열·수집기 생성의 단일 출처
 internal/collect          AWS SDK를 모르는 Collector/Registry/Runner 코어
 internal/collector/<svc>  서비스별 조회와 SDK → model 변환
+internal/demo             --demo용 가짜 데이터 (AWS 없이 체험·스크린샷)
 internal/graph            ID·ARN·DNS 관계 해석과 정방향·역방향 인덱스
 internal/model            외부 의존성이 없는 도메인 모델
 internal/tui              Bubble Tea 상태 전이와 렌더링

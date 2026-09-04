@@ -39,6 +39,25 @@ archives:
       - LICENSE
       - README.md
 
+brews:
+  # Homebrew tap 저장소(cnlgks1/homebrew-tap)에 Formula를 자동으로 생성·게시한다.
+  # 릴리스마다 버전·URL·SHA-256이 갱신되므로 수동 관리가 필요 없다.
+  - name: cloudloupe
+    ids:
+      - cloudloupe
+    repository:
+      owner: cnlgks1
+      name: homebrew-tap
+      # tap은 별도 저장소라 기본 GITHUB_TOKEN으로는 push할 수 없다. 쓰기 권한이 있는
+      # 개인 액세스 토큰을 릴리스 워크플로에서 이 이름으로 넘긴다.
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/cnlgks1/cloudloupe"
+    description: "조회 전용 멀티 계정 AWS 리소스 조사 TUI"
+    license: MIT
+    # 설치 후 동작을 가볍게 확인한다. 조회 전용이라 자격증명 없이도 버전 출력은 된다.
+    test: |
+      system "#{bin}/cloudloupe", "--version"
+
 checksum:
   name_template: checksums.txt
   algorithm: sha256

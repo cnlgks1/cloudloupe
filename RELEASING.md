@@ -1,7 +1,7 @@
 # 릴리스 운영
 
-관리자용 문서입니다. 릴리스 원본은 GitHub Releases입니다. 설치 스크립트는 Release 바이너리를
-사용하고, Homebrew Formula는 같은 태그의 소스를 빌드합니다.
+관리자용 문서입니다. 릴리스 원본은 GitHub Releases입니다. 설치 스크립트와 Homebrew Formula는
+모두 같은 태그의 Release 바이너리를 사용합니다.
 
 ## 자동화 범위
 
@@ -10,7 +10,9 @@ GoReleaser `v2.18.0`으로 게시합니다. 산출물은 6개 아카이브(Unix 
 `checksums.txt`(SHA-256)이며, 각 아카이브에 `README.md`와 `LICENSE`가 들어가고 바이너리에는
 버전·커밋·커밋 날짜가 주입됩니다. `GITHUB_TOKEN`은 GitHub가 자동 제공합니다.
 
-Homebrew Formula 게시는 자동화되지 않았습니다. 아래 절차로 수동 관리합니다.
+Homebrew Formula도 같은 릴리스에서 자동 게시됩니다. GoReleaser가 `cnlgks1/homebrew-tap`에
+`Formula/cloudloupe.rb`를 생성·push하며, 버전·URL·SHA-256을 매 릴리스마다 갱신합니다. 자세한
+설정은 아래 [Homebrew Formula 자동 게시](#homebrew-formula-자동-게시)를 참고합니다.
 
 버전은 [Semantic Versioning](https://semver.org/) 형식(`v0.1.0`)을 쓰고, 이미 공개한 태그는
 이동하거나 재사용하지 않습니다.
@@ -76,61 +78,35 @@ CLOUDLOUPE_VERSION=v0.1.0 sh install.sh
 자산이 일부만 올라갔으면 workflow 로그와 Release 상태를 먼저 확인합니다. 태그나 Release
 삭제는 사용자에게 영향을 주므로 자동으로 하지 않고 명시적으로 결정합니다.
 
-## Homebrew Formula 게시
+## Homebrew Formula 자동 게시
 
-공개 태그의 소스를 사용자 환경에서 빌드하는 Formula로 제공합니다. 별도 저장소
-`cnlgks1/homebrew-tap`의 `Formula/cloudloupe.rb`를 수동으로 관리합니다
-([Tap 관리 문서](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap)).
+`.goreleaser.yaml`의 `brews:` 설정으로, 릴리스 때 GoReleaser가 Release 바이너리를 가리키는
+Formula를 만들어 `cnlgks1/homebrew-tap`의 `Formula/cloudloupe.rb`로 push합니다. 버전·URL·
+SHA-256은 매 릴리스마다 자동 갱신되므로 손으로 만질 것이 없습니다.
 
-태그를 게시한 뒤 소스 아카이브의 SHA-256을 구해 Formula의 `url`, `sha256`, 버전에 반영합니다.
-Go 빌드 인자는 [Formula Cookbook](https://docs.brew.sh/Formula-Cookbook)의 `std_go_args`를 씁니다.
+tap은 별도 저장소라 기본 `GITHUB_TOKEN`으로는 push할 수 없다. 한 번만 준비하면 된다.
 
-```sh
-curl -L https://github.com/cnlgks1/cloudloupe/archive/refs/tags/v0.1.0.tar.gz \
-  | shasum -a 256
-```
+1. `cnlgks1/homebrew-tap` 저장소를 공개로 만든다(비어 있어도 된다).
+2. tap 저장소에 쓰기 권한이 있는 개인 액세스 토큰(PAT)을 발급한다.
+   - Fine-grained PAT면 `cnlgks1/homebrew-tap`의 Contents 권한을 Read and write로 준다.
+3. 메인 저장소 `Settings → Secrets and variables → Actions`에 그 토큰을
+   `HOMEBREW_TAP_GITHUB_TOKEN` 이름으로 등록한다.
 
-```ruby
-class Cloudloupe < Formula
-  desc "Read-only AWS infrastructure investigation TUI"
-  homepage "https://github.com/cnlgks1/cloudloupe"
-  url "https://github.com/cnlgks1/cloudloupe/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "소스_아카이브의_SHA256"
-  license "MIT"
+`release.yml`이 이 시크릿을 GoReleaser에 넘긴다. 설정 이후 `v*` 태그를 push하면 Formula가
+자동으로 갱신된다.
 
-  depends_on "go" => :build
+> 참고: GoReleaser v2에서 `brews:`(Formula)는 deprecated이며 후속 major에서 `homebrew_casks:`
+> (Cask)로 옮겨야 한다. Cask는 macOS 서명·공증이 필요해 서명 없이는 "damaged" 경고가 뜨므로,
+> 서명 준비 전까지는 Formula 방식을 유지한다. GoReleaser 버전을 `v2.18.0`으로 고정해 두어
+> deprecated 경고만 남고 게시는 정상 동작한다.
 
-  def install
-    ENV["CGO_ENABLED"] = "0"
-
-    ldflags = "-s -w -X main.version=v#{version}"
-    system "go", "build",
-           *std_go_args(output: bin/"cloudloupe", ldflags:),
-           "./cmd/cloudloupe"
-  end
-
-  test do
-    assert_match "v#{version}", shell_output("#{bin}/cloudloupe --version")
-  end
-end
-```
-
-push에는 평소 쓰는 로컬 GitHub 인증만 필요합니다. 릴리스마다 URL과 SHA-256을 갱신합니다.
-push한 뒤 깨끗한 환경에서 확인합니다.
+릴리스 후 깨끗한 환경에서 확인한다.
 
 ```sh
 brew tap cnlgks1/tap
-brew audit --strict --online cnlgks1/tap/cloudloupe
-brew install --build-from-source cnlgks1/tap/cloudloupe
-brew test cnlgks1/tap/cloudloupe
+brew install cnlgks1/tap/cloudloupe
 cloudloupe --version
 brew uninstall cloudloupe
-```
-
-검증이 끝나면 README의 공개 설치 방법으로 다음 명령을 안내합니다.
-
-```sh
-brew install cnlgks1/tap/cloudloupe
 ```
 
 ## 보안 원칙

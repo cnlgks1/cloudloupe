@@ -213,6 +213,9 @@ Windows에서는 `%USERPROFILE%`, 비어 있으면 `%HOMEDRIVE%%HOMEPATH%`를 �
 ## 설치
 
 ```sh
+# Homebrew (macOS, Linux)
+brew install cnlgks1/tap/cloudloupe
+
 # macOS, Linux, WSL: OS·CPU 자동 감지, SHA-256 검증, ~/.local/bin에 설치
 curl -fsSL https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh | sh
 
@@ -225,9 +228,6 @@ git clone https://github.com/cnlgks1/cloudloupe.git && cd cloudloupe && make bui
 
 Windows는 [Releases](https://github.com/cnlgks1/cloudloupe/releases)에서 zip과
 `checksums.txt`를 받아 `Get-FileHash -Algorithm SHA256`으로 검증한 뒤 PATH에 둡니다.
-
-Homebrew Formula는 첫 Release 이후 제공할 예정입니다. 절차는
-[RELEASING.md](RELEASING.md#homebrew-formula-게시)에 있습니다.
 
 macOS, Linux, Windows × amd64, arm64 6종을 `CGO_ENABLED=0` 정적 바이너리로 빌드합니다.
 유니코드 박스 문자를 못 그리는 터미널은 자동 감지해 ASCII로 폴백하며 `--ascii` 또는

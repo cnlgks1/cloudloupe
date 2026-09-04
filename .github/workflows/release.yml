@@ -45,3 +45,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Homebrew tap(cnlgks1/homebrew-tap)은 별도 저장소라 기본 GITHUB_TOKEN으로는
+          # push할 수 없다. tap에 쓰기 권한이 있는 개인 액세스 토큰을 저장소 시크릿으로 넘긴다.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

@@ -83,20 +83,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 비공개 저장소에서는 실행 분이 청구되고 배수가 붙는다. Windows는 2배,
-        # macOS는 10배다. 그래서 CI에서 돌리는 기준을 "로컬에서 못 돌리는 것"으로 잡았다.
-        #
-        # Windows는 항상 돈다. 개발 기계가 macOS라 손으로 확인할 방법이 없고, 경로 처리와
-        # 터미널 렌더링 차이가 실제로 나는 지원 대상이다.
-        #
-        # macOS는 태그 푸시와 수동 실행에서만 돈다. 개발 기계가 macOS이므로 일상 검증은
-        # 로컬에서 이미 이루어지고, 릴리스 직전에 CI가 한 번 더 확인한다.
-        #
-        # 저장소를 공개로 바꾸면 표준 러너는 무료이므로 이 조건을 지우고 세 OS를 항상 돌려라.
-        os: >-
-          ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
-          && fromJSON('["ubuntu-latest","windows-latest","macos-latest"]')
-          || fromJSON('["ubuntu-latest","windows-latest"]') }}
+        # 세 OS를 모두 돌린다. 경로 처리와 터미널 렌더링이 OS마다 다르므로 지원 대상 전부에서
+        # 테스트가 통과해야 한다.
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -105,11 +94,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Windows는 곁다리가 아니라 지원 대상이다. 경로 처리와 터미널 렌더링이 실제로
-      # 다르므로 테스트가 거기서도 통과해야 한다.
-      #
-      # 커버리지는 리눅스에서만 측정한다. 예전에는 별도 잡이 같은 테스트를 한 번 더 돌렸다.
-      # 커버리지는 OS별로 달라지는 값이 아니므로 한 번만 재면 된다.
+      # 커버리지는 리눅스에서만 측정한다. OS별로 달라지는 값이 아니므로 한 번만 재면 된다.
       - name: 테스트
         if: matrix.os != 'ubuntu-latest'
         run: go test -count=1 ./...

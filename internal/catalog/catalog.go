@@ -273,6 +273,7 @@ func allGroups(cfg aws.Config) []Group {
 		Group{ID: "eks", Label: "EKS", Types: eksDefinitions(cfg)},
 		Group{ID: "rds", Label: "RDS", Types: rdsDefinitions(cfg)},
 		Group{ID: "dynamodb", Label: "DynamoDB", Types: dynamodbDefinitions(cfg)},
+		Group{ID: "elasticache", Label: "ElastiCache", Types: elasticacheDefinitions(cfg)},
 		Group{ID: "sns", Label: "SNS", Types: snsDefinitions(cfg)},
 		Group{ID: "sqs", Label: "SQS", Types: sqsDefinitions(cfg)},
 		Group{ID: "eventbridge", Label: "EventBridge", Types: eventbridgeDefinitions(cfg)},

@@ -83,6 +83,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "CacheInventory",
+      "Effect": "Allow",
+      "Action": [
+        "elasticache:DescribeReplicationGroups",
+        "elasticache:DescribeCacheClusters"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "MessagingInventory",
       "Effect": "Allow",
       "Action": [

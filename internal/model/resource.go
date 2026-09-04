@@ -19,46 +19,48 @@ import (
 // 이름으로 쓴다. 안정적으로 유지해야 한다. JSON 출력과 스냅샷 행에 그대로 실리므로
 // 이름을 바꾸면 출력 계약이 바뀐다. 그래서 한국어로 번역하지 않는다.
 const (
-	TypeEC2Instance          = "ec2:instance"
-	TypeEC2Volume            = "ec2:volume"
-	TypeEC2NetworkInterface  = "ec2:networkInterface"
-	TypeEC2Address           = "ec2:address"
-	TypeEC2VPC               = "ec2:vpc"
-	TypeEC2Subnet            = "ec2:subnet"
-	TypeEC2RouteTable        = "ec2:routeTable"
-	TypeEC2InternetGateway   = "ec2:internetGateway"
-	TypeEC2NATGateway        = "ec2:natGateway"
-	TypeEC2VPCEndpoint       = "ec2:vpcEndpoint"
-	TypeEC2SecurityGroup     = "ec2:securityGroup"
-	TypeELBv2LoadBalancer    = "elbv2:loadBalancer"
-	TypeELBv2Listener        = "elbv2:listener"
-	TypeELBv2TargetGroup     = "elbv2:targetGroup"
-	TypeRoute53RecordSet     = "route53:recordSet"
-	TypeWAFv2WebACL          = "wafv2:webAcl"
-	TypeIAMRole              = "iam:role"
-	TypeKMSKey               = "kms:key"
-	TypeS3Bucket             = "s3:bucket"
-	TypeRDSDBCluster         = "rds:dbCluster"
-	TypeRDSDBInstance        = "rds:dbInstance"
-	TypeLambdaFunction       = "lambda:function"
-	TypeAutoScalingGroup     = "autoscaling:autoScalingGroup"
-	TypeECSCluster           = "ecs:cluster"
-	TypeECSService           = "ecs:service"
-	TypeECSTaskDefinition    = "ecs:taskDefinition"
-	TypeECRRepository        = "ecr:repository"
-	TypeEKSCluster           = "eks:cluster"
-	TypeEKSNodegroup         = "eks:nodegroup"
-	TypeEKSFargateProfile    = "eks:fargateProfile"
-	TypeDynamoDBTable        = "dynamodb:table"
-	TypeSNSTopic             = "sns:topic"
-	TypeSQSQueue             = "sqs:queue"
-	TypeAPIGatewayRestAPI    = "apigateway:restApi"
-	TypeAPIGatewayV2API      = "apigatewayv2:api"
-	TypeSecretsManagerSecret = "secretsmanager:secret"
-	TypeSSMParameter         = "ssm:parameter"
-	TypeACMCertificate       = "acm:certificate"
-	TypeEventBridgeEventBus  = "events:eventBus"
-	TypeEventBridgeRule      = "events:rule"
+	TypeEC2Instance                 = "ec2:instance"
+	TypeEC2Volume                   = "ec2:volume"
+	TypeEC2NetworkInterface         = "ec2:networkInterface"
+	TypeEC2Address                  = "ec2:address"
+	TypeEC2VPC                      = "ec2:vpc"
+	TypeEC2Subnet                   = "ec2:subnet"
+	TypeEC2RouteTable               = "ec2:routeTable"
+	TypeEC2InternetGateway          = "ec2:internetGateway"
+	TypeEC2NATGateway               = "ec2:natGateway"
+	TypeEC2VPCEndpoint              = "ec2:vpcEndpoint"
+	TypeEC2SecurityGroup            = "ec2:securityGroup"
+	TypeELBv2LoadBalancer           = "elbv2:loadBalancer"
+	TypeELBv2Listener               = "elbv2:listener"
+	TypeELBv2TargetGroup            = "elbv2:targetGroup"
+	TypeRoute53RecordSet            = "route53:recordSet"
+	TypeWAFv2WebACL                 = "wafv2:webAcl"
+	TypeIAMRole                     = "iam:role"
+	TypeKMSKey                      = "kms:key"
+	TypeS3Bucket                    = "s3:bucket"
+	TypeRDSDBCluster                = "rds:dbCluster"
+	TypeRDSDBInstance               = "rds:dbInstance"
+	TypeLambdaFunction              = "lambda:function"
+	TypeAutoScalingGroup            = "autoscaling:autoScalingGroup"
+	TypeECSCluster                  = "ecs:cluster"
+	TypeECSService                  = "ecs:service"
+	TypeECSTaskDefinition           = "ecs:taskDefinition"
+	TypeECRRepository               = "ecr:repository"
+	TypeEKSCluster                  = "eks:cluster"
+	TypeEKSNodegroup                = "eks:nodegroup"
+	TypeEKSFargateProfile           = "eks:fargateProfile"
+	TypeDynamoDBTable               = "dynamodb:table"
+	TypeSNSTopic                    = "sns:topic"
+	TypeSQSQueue                    = "sqs:queue"
+	TypeAPIGatewayRestAPI           = "apigateway:restApi"
+	TypeAPIGatewayV2API             = "apigatewayv2:api"
+	TypeSecretsManagerSecret        = "secretsmanager:secret"
+	TypeSSMParameter                = "ssm:parameter"
+	TypeACMCertificate              = "acm:certificate"
+	TypeEventBridgeEventBus         = "events:eventBus"
+	TypeEventBridgeRule             = "events:rule"
+	TypeElastiCacheReplicationGroup = "elasticache:replicationGroup"
+	TypeElastiCacheCacheCluster     = "elasticache:cacheCluster"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -280,46 +282,50 @@ func typeRank(resourceType string) int {
 		return 18
 	case TypeDynamoDBTable:
 		return 19
-	case TypeSNSTopic:
+	case TypeElastiCacheReplicationGroup:
 		return 20
-	case TypeSQSQueue:
+	case TypeElastiCacheCacheCluster:
 		return 21
-	case TypeEventBridgeEventBus:
+	case TypeSNSTopic:
 		return 22
-	case TypeEventBridgeRule:
+	case TypeSQSQueue:
 		return 23
-	case TypeAPIGatewayRestAPI:
+	case TypeEventBridgeEventBus:
 		return 24
-	case TypeAPIGatewayV2API:
+	case TypeEventBridgeRule:
 		return 25
-	case TypeEC2VPC:
+	case TypeAPIGatewayRestAPI:
 		return 26
-	case TypeEC2Subnet:
+	case TypeAPIGatewayV2API:
 		return 27
-	case TypeEC2RouteTable:
+	case TypeEC2VPC:
 		return 28
-	case TypeEC2InternetGateway:
+	case TypeEC2Subnet:
 		return 29
-	case TypeEC2NATGateway:
+	case TypeEC2RouteTable:
 		return 30
-	case TypeEC2VPCEndpoint:
+	case TypeEC2InternetGateway:
 		return 31
-	case TypeEC2SecurityGroup:
+	case TypeEC2NATGateway:
 		return 32
-	case TypeSecretsManagerSecret:
+	case TypeEC2VPCEndpoint:
 		return 33
-	case TypeSSMParameter:
+	case TypeEC2SecurityGroup:
 		return 34
-	case TypeACMCertificate:
+	case TypeSecretsManagerSecret:
 		return 35
-	case TypeWAFv2WebACL:
+	case TypeSSMParameter:
 		return 36
-	case TypeIAMRole:
+	case TypeACMCertificate:
 		return 37
-	case TypeKMSKey:
+	case TypeWAFv2WebACL:
 		return 38
-	case TypeS3Bucket:
+	case TypeIAMRole:
 		return 39
+	case TypeKMSKey:
+		return 40
+	case TypeS3Bucket:
+		return 41
 	default:
 		return 1000
 	}

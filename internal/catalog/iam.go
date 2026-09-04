@@ -39,5 +39,35 @@ func iamDefinitions(cfg aws.Config) []Definition {
 				return iamcollector.NewRole(clientFor())
 			},
 		},
+		{
+			Type:           model.TypeIAMUser,
+			Label:          "Users",
+			Scope:          Global,
+			Columns:        []string{"Path", "PasswordLastUsed", "PermissionsBoundary", "UserId"},
+			SummaryColumns: []string{"Path", "PasswordLastUsed"},
+			newCollector: func() collect.Collector {
+				return iamcollector.NewUser(clientFor())
+			},
+		},
+		{
+			Type:           model.TypeIAMGroup,
+			Label:          "Groups",
+			Scope:          Global,
+			Columns:        []string{"Path", "GroupId"},
+			SummaryColumns: []string{"Path", "GroupId"},
+			newCollector: func() collect.Collector {
+				return iamcollector.NewGroup(clientFor())
+			},
+		},
+		{
+			Type:           model.TypeIAMPolicy,
+			Label:          "Policies",
+			Scope:          Global,
+			Columns:        []string{"Path", "Description", "AttachmentCount", "IsAttachable", "DefaultVersionId", "PolicyId"},
+			SummaryColumns: []string{"AttachmentCount", "IsAttachable"},
+			newCollector: func() collect.Collector {
+				return iamcollector.NewPolicy(clientFor())
+			},
+		},
 	}
 }

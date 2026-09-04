@@ -62,6 +62,9 @@ const (
 	TypeElastiCacheReplicationGroup = "elasticache:replicationGroup"
 	TypeElastiCacheCacheCluster     = "elasticache:cacheCluster"
 	TypeCloudFrontDistribution      = "cloudfront:distribution"
+	TypeIAMUser                     = "iam:user"
+	TypeIAMGroup                    = "iam:group"
+	TypeIAMPolicy                   = "iam:policy"
 )
 
 // RegionGlobal은 리전 개념이 없는 글로벌 리소스의 Region 값이다.
@@ -323,12 +326,18 @@ func typeRank(resourceType string) int {
 		return 38
 	case TypeIAMRole:
 		return 39
-	case TypeKMSKey:
+	case TypeIAMUser:
 		return 40
-	case TypeS3Bucket:
+	case TypeIAMGroup:
 		return 41
-	case TypeCloudFrontDistribution:
+	case TypeIAMPolicy:
 		return 42
+	case TypeKMSKey:
+		return 43
+	case TypeS3Bucket:
+		return 44
+	case TypeCloudFrontDistribution:
+		return 45
 	default:
 		return 1000
 	}

@@ -13,7 +13,7 @@
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **개발 중.** 25개 그룹 43개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
+> **개발 중.** 25개 그룹 46개 타입 조회와 상세 화면의 관계 표시가 동작합니다. 미사용 탐지와
 > 리포트는 아직 없습니다.
 
 ## 빠른 시작
@@ -82,6 +82,9 @@ make build
 | Route 53 | `route53:recordSet` | `route53.ListHostedZones`, `ListResourceRecordSets` |
 | WAF | `wafv2:webAcl` | `wafv2.ListWebACLs`, `GetWebACL` (REGIONAL 스코프) |
 | IAM | `iam:role` | `iam.ListRoles` |
+| IAM | `iam:user` | `iam.ListUsers` |
+| IAM | `iam:group` | `iam.ListGroups` |
+| IAM | `iam:policy` | `iam.ListPolicies` (Local 스코프) |
 | KMS | `kms:key` | `kms.ListKeys`, `DescribeKey`, `ListAliases` |
 | S3 | `s3:bucket` | `s3.ListBuckets` |
 | CloudFront | `cloudfront:distribution` | `cloudfront.ListDistributions` |

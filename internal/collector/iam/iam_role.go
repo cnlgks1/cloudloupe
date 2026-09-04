@@ -119,15 +119,6 @@ func sessionSeconds(seconds *int32) string {
 	return strconv.Itoa(int(value))
 }
 
-// permissionsBoundary는 권한 경계 정책 ARN을 표시 값으로 바꾼다.
-func permissionsBoundary(boundary *iamtypes.AttachedPermissionsBoundary) string {
-	if boundary == nil {
-		return "-"
-	}
-
-	return orDash(aws.ToString(boundary.PermissionsBoundaryArn))
-}
-
 // lastUsed는 마지막 사용 시각과 그때의 리전을 한 값으로 만든다.
 //
 // 나중에 미사용 후보를 판정할 때 이 값이 근거가 된다. 다만 IAM은 최근 400일만 추적하므로
@@ -143,26 +134,4 @@ func lastUsed(used *iamtypes.RoleLastUsed) string {
 	}
 
 	return value
-}
-
-// iamTags는 SDK 태그를 키 순으로 정렬된 표시 필드로 바꾼다.
-func iamTags(tags []iamtypes.Tag) []model.Field {
-	m := make(map[string]string, len(tags))
-	for _, t := range tags {
-		m[aws.ToString(t.Key)] = aws.ToString(t.Value)
-	}
-
-	return model.TagFields(m)
-}
-
-// orDash는 빈 문자열을 "-"로 바꾼다. 상세 뷰에서 빈칸 대신 없음을 명확히 보이게 한다.
-//
-// 다른 수집기 패키지에도 같은 함수가 있다. 패키지 하나를 더 만들어 의존을 늘리기보다 세 줄을
-// 복사하는 편이 낫다("약간의 복사가 약간의 의존보다 낫다").
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-
-	return s
 }

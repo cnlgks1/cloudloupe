@@ -5,16 +5,15 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/cnlgks1/cloudloupe/releases"><img alt="Release" src="https://img.shields.io/github/v/release/cnlgks1/cloudloupe?sort=semver"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg">
-  <img alt="상태" src="https://img.shields.io/badge/status-beta-blue.svg">
 </p>
 
 `~/.aws/config`의 프로필을 읽어 여러 프로필·리전의 AWS 리소스를 조회하는 터미널 UI입니다.
 리소스를 만들거나 바꾸지 않습니다.
 
-> **beta.** 조회와 관계 표시는 안정적으로 동작합니다. 지원하는 리소스와 필드를 계속 늘려가는
-> 중이라 `0.x`로 배포합니다.
+지원하는 리소스와 필드는 릴리스마다 계속 늘어납니다.
 
 <p align="center">
   <img src="docs/screenshots/tree.png" alt="리소스 선택 화면" width="900">
@@ -213,16 +212,15 @@ Windows에서는 `%USERPROFILE%`, 비어 있으면 `%HOMEDRIVE%%HOMEPATH%`를 �
 
 ## 설치
 
-지금 재현 가능한 방법은 위의 소스 빌드입니다. `v*` 태그를 push하면 CI 통과 후 GitHub
-Release와 `checksums.txt`를 게시하도록 구성되어 있고, 아래 방법은 대응하는 Release가 있어야
-동작합니다.
-
 ```sh
 # macOS, Linux, WSL: OS·CPU 자동 감지, SHA-256 검증, ~/.local/bin에 설치
 curl -fsSL https://raw.githubusercontent.com/cnlgks1/cloudloupe/main/install.sh | sh
 
 # Go 도구 체인
 go install github.com/cnlgks1/cloudloupe/cmd/cloudloupe@latest
+
+# 소스에서 직접 빌드
+git clone https://github.com/cnlgks1/cloudloupe.git && cd cloudloupe && make build
 ```
 
 Windows는 [Releases](https://github.com/cnlgks1/cloudloupe/releases)에서 zip과

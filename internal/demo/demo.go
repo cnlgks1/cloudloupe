@@ -292,7 +292,7 @@ func Resources() []model.Resource {
 type Deps struct {
 	LoadProfiles func(awsclient.Override) ([]awsclient.Profile, awsclient.Locations, error)
 	Identify     func(ctx context.Context, profile, region string, locations awsclient.Locations) (awsclient.Identity, error)
-	Collect      func(ctx context.Context, profile string, regions, types []string, locations awsclient.Locations) collect.Result
+	Collect      func(ctx context.Context, profiles, regions, types []string, locations awsclient.Locations) collect.Result
 }
 
 // NewDeps는 데모 주입 함수들을 만든다.
@@ -304,7 +304,7 @@ func NewDeps() Deps {
 		Identify: func(context.Context, string, string, awsclient.Locations) (awsclient.Identity, error) {
 			return Identity(), nil
 		},
-		Collect: func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
+		Collect: func(_ context.Context, _, _, types []string, _ awsclient.Locations) collect.Result {
 			return collect.Result{Resources: filterByTypes(Resources(), types)}
 		},
 	}

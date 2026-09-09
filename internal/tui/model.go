@@ -65,11 +65,10 @@ type Deps struct {
 		locations awsclient.Locations,
 	) (awsclient.Identity, error)
 
-	// Collect는 같은 설정 경로로 선택 프로필의 지정 타입을 조회한다. types가 비면 전부.
+	// Collect는 같은 설정 경로로 선택 프로필들의 지정 타입을 조회한다. types가 비면 전부.
 	Collect func(
 		ctx context.Context,
-		profile string,
-		regions, types []string,
+		profiles, regions, types []string,
 		locations awsclient.Locations,
 	) collect.Result
 
@@ -145,9 +144,12 @@ type Model struct {
 	resourceKindFilter string
 	collectErrors      []model.CollectError
 	showRegion         bool
+	showProfile        bool
 
-	chosenProfile    string
-	identity         awsclient.Identity
+	chosenProfiles []string
+	// identities는 확정한 프로필별 STS 신원(계정 ID)이다. 프로필마다 계정이 다르므로
+	// 단일 필드가 아니라 프로필→신원 맵으로 둔다.
+	identities       map[string]awsclient.Identity
 	regions          []awsclient.Region
 	chosenRegions    []string
 	confirmedRegions []string
@@ -167,6 +169,11 @@ type Model struct {
 	// explicitRegionSelection은 space로 명시적으로 체크한 다중 선택인지 나타낸다.
 	// false면 이전 Enter 선택이 남아 있어도 현재 커서 항목으로 교체한다.
 	explicitRegionSelection bool
+
+	// explicitProfileSelection은 프로필 화면에서 space로 명시적으로 체크한 다중 선택인지
+	// 나타낸다. 리전의 explicitRegionSelection과 같은 역할이다. false면 커서 항목 하나로
+	// 교체한다.
+	explicitProfileSelection bool
 
 	errText string
 	loading string
@@ -264,7 +271,7 @@ func (m Model) loadProfiles(override awsclient.Override) Model {
 	m.override = override
 	m.locations = loc
 	m.profiles = profiles
-	m.profileTable = buildProfileTable(m.theme, profiles, m.width, m.listHeight())
+	m.profileTable = buildProfileTable(m.theme, profiles, m.chosenProfiles, m.width, m.listHeight())
 	m.screen = ScreenProfile
 
 	return m
@@ -329,6 +336,7 @@ func (m Model) View() string {
 		return m.screenWithHelp("Select profile", m.profileTable,
 			[2]string{"↑↓/jk", "move"},
 			[2]string{"enter/→", "select"},
+			[2]string{"space", "multi-select"},
 			[2]string{"c", "Set AWS config paths"},
 		)
 	case ScreenIdentity:
@@ -378,11 +386,22 @@ func (m Model) resourceTreeView() string {
 	if selected > 0 {
 		scale += "   " + strconv.Itoa(selected) + " selected"
 
-		// 리전이 여러 개면 요청 수가 곱해진다. 조회 규모를 누르기 전에 보여주는 것이
-		// 실수로 시작한 대량 조회를 막는 유일한 장치다.
-		if regions := len(m.chosenRegions); regions > 1 {
-			scale += " × " + plural(regions, "region") +
-				" = " + plural(selected*regions, "query")
+		// 프로필·리전이 여러 개면 요청 수가 곱해진다(타입 × 리전 × 프로필). 조회 규모를
+		// 누르기 전에 보여주는 것이 실수로 시작한 대량 조회를 막는 유일한 장치다.
+		profiles := len(m.chosenProfiles)
+		regions := len(m.chosenRegions)
+		if profiles > 1 || regions > 1 {
+			factors := selected
+			parts := strconv.Itoa(selected) + " types"
+			if regions > 1 {
+				factors *= regions
+				parts += " × " + plural(regions, "region")
+			}
+			if profiles > 1 {
+				factors *= profiles
+				parts += " × " + plural(profiles, "profile")
+			}
+			scale += "   " + parts + " = " + plural(factors, "query")
 		}
 	}
 
@@ -402,6 +421,7 @@ func (m Model) resourceTreeView() string {
 		filterLine = m.filterInput.View()
 		help = [][2]string{
 			{"type", "live search"},
+			{"↑↓", "move"},
 			{"enter", "apply"},
 			{"esc", "cancel"},
 		}
@@ -490,6 +510,7 @@ func (m Model) resourceListView() string {
 		filterLine = m.filterInput.View()
 		help = [][2]string{
 			{"type", "live search"},
+			{"↑↓", "move"},
 			{"enter", "apply"},
 			{"esc", "cancel"},
 		}
@@ -591,7 +612,7 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	// 살아 있는 테이블만 현재 창 크기로 다시 만든다. 아직 안 만들어진 테이블은 제로값이라
 	// Rows()가 비어 있다.
 	if len(m.profiles) > 0 {
-		m.profileTable = buildProfileTable(m.theme, m.profiles, msg.Width, h)
+		m.profileTable = buildProfileTable(m.theme, m.profiles, m.chosenProfiles, msg.Width, h)
 	}
 
 	if len(m.regions) > 0 {
@@ -780,6 +801,11 @@ func (m Model) shouldShowRegion() bool {
 	return len(m.chosenRegions) > 1
 }
 
+// shouldShowProfile은 여러 프로필을 함께 조회할 때만 행별 프로필 열을 표시한다.
+func (m Model) shouldShowProfile() bool {
+	return len(m.chosenProfiles) > 1
+}
+
 // helpBar는 화면 하단에 그릴 한국어 키 안내를 만든다.
 //
 // 각 항목을 "키 = 뜻"으로 또렷하게 보여준다. 화면마다 다른 것은 앞쪽 동작 키뿐이고,
@@ -814,10 +840,7 @@ func (m Model) screenWithHelp(caption string, t table.Model, pairs ...[2]string)
 //
 // 아직 안 고른 항목은 "-"로 둔다. 계정 ID가 확인됐으면 프로필 옆에 함께 보여준다.
 func (m Model) breadcrumb() string {
-	profile := orDashUI(m.chosenProfile)
-	if m.identity.AccountID != "" {
-		profile += " (" + m.identity.AccountID + ")"
-	}
+	profile := m.breadcrumbProfiles()
 
 	region := "-"
 	if len(m.chosenRegions) > 0 {
@@ -845,6 +868,27 @@ func (m Model) breadcrumb() string {
 	}
 
 	return strings.Join(parts, m.theme.Faint.Render("   "))
+}
+
+// breadcrumbProfiles는 헤더에 보여줄 프로필 표기를 만든다.
+//
+// 아직 안 골랐으면 "-". 하나면 계정 ID를 함께 보여준다(확인됐을 때). 여러 개면 계정이
+// 프로필마다 다르므로 계정 ID는 생략하고 이름만 쉼표로 잇는다.
+func (m Model) breadcrumbProfiles() string {
+	if len(m.chosenProfiles) == 0 {
+		return orDashUI("")
+	}
+
+	if len(m.chosenProfiles) == 1 {
+		name := m.chosenProfiles[0]
+		if id := m.identities[name].AccountID; id != "" {
+			return name + " (" + id + ")"
+		}
+
+		return name
+	}
+
+	return strings.Join(m.chosenProfiles, ",")
 }
 
 // 경로 헤더에 보여줄 단계. 뒤 단계는 앞 단계를 모두 포함한다.

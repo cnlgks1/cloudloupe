@@ -99,12 +99,12 @@ func TestCollectFiltersByType(t *testing.T) {
 
 	deps := demo.NewDeps()
 
-	all := deps.Collect(context.Background(), demo.Profile, []string{demo.Region}, nil, awsclient.Locations{})
+	all := deps.Collect(context.Background(), []string{demo.Profile}, []string{demo.Region}, nil, awsclient.Locations{})
 	if len(all.Resources) == 0 {
 		t.Fatal("타입 미지정 조회가 비었다")
 	}
 
-	only := deps.Collect(context.Background(), demo.Profile, []string{demo.Region},
+	only := deps.Collect(context.Background(), []string{demo.Profile}, []string{demo.Region},
 		[]string{model.TypeEC2Instance}, awsclient.Locations{})
 	for _, r := range only.Resources {
 		if r.Type != model.TypeEC2Instance {

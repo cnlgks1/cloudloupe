@@ -43,6 +43,7 @@ func buildResourceData(
 	resources []model.Resource,
 	groups []ResourceGroup,
 	selectedTypes []string,
+	showProfile bool,
 	showRegion bool,
 ) (resourceTableData, bool) {
 	select {
@@ -51,7 +52,7 @@ func buildResourceData(
 	default:
 	}
 
-	columns := resourceColumns(resources, groups, selectedTypes, showRegion)
+	columns := resourceColumns(resources, groups, selectedTypes, showProfile, showRegion)
 	data := resourceTableData{
 		titles:          make([]string, len(columns)),
 		rows:            make([]table.Row, len(resources)),
@@ -139,6 +140,7 @@ func resourceColumns(
 	resources []model.Resource,
 	groups []ResourceGroup,
 	selectedTypes []string,
+	showProfile bool,
 	showRegion bool,
 ) []resourceColumn {
 	var columns []resourceColumn
@@ -157,6 +159,12 @@ func resourceColumns(
 	if hasDistinctResourceID(resources) {
 		columns = append(columns, resourceColumn{title: "ID", value: func(resource model.Resource) string {
 			return resource.ID
+		}})
+	}
+
+	if showProfile {
+		columns = append(columns, resourceColumn{title: "Profile", value: func(resource model.Resource) string {
+			return resource.Profile
 		}})
 	}
 
@@ -518,16 +526,38 @@ func layoutTable(titles []string, rows []table.Row, width int) []table.Column {
 	return layoutResourceColumns(titles, preferredColumnWidths(titles, rows), width)
 }
 
-// buildProfileTable은 프로필 선택 테이블을 만든다. 열: 프로필 / 종류 / 리전.
-func buildProfileTable(theme Theme, profiles []awsclient.Profile, width, height int) table.Model {
-	titles := []string{"Profile", "Kind", "Region"}
+// buildProfileTable은 프로필 선택 테이블을 만든다. 다중 선택이므로 리전 선택과 같이 첫 열에
+// 선택 표시(●)를 둔다. 열: 선택 / 프로필 / 종류 / 리전.
+func buildProfileTable(
+	theme Theme,
+	profiles []awsclient.Profile,
+	chosen []string,
+	width, height int,
+) table.Model {
+	set := make(map[string]bool, len(chosen))
+	for _, c := range chosen {
+		set[c] = true
+	}
+
+	titles := []string{"", "Profile", "Kind", "Region"}
 
 	rows := make([]table.Row, 0, len(profiles))
 	for _, p := range profiles {
-		rows = append(rows, table.Row{p.Name, string(p.Kind), orDashUI(p.Region)})
+		mark := " "
+		if set[p.Name] {
+			mark = theme.Glyphs.Healthy
+		}
+
+		rows = append(rows, table.Row{mark, p.Name, string(p.Kind), orDashUI(p.Region)})
 	}
 
-	return newDataTable(theme, layoutTable(titles, rows, width), rows, height)
+	columns := layoutTable(titles, rows, width)
+	// 첫 열(선택 표시)은 좁게 고정한다.
+	if len(columns) > 0 {
+		columns[0].Width = 3
+	}
+
+	return newDataTable(theme, columns, rows, height)
 }
 
 // buildRegionTable은 리전 선택 테이블을 만든다. 다중 선택이므로 첫 열에 선택 표시(●)를

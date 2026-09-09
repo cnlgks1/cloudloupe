@@ -56,6 +56,23 @@ AWS 계정이 없어도 `cloudloupe --demo`로 이 화면들을 그대로 체험
 권한이 부족해도 전체가 죽지 않습니다. 읽을 수 없는 리전이나 타입은 오류로 보고되고 나머지는
 정상 수집됩니다.
 
+## 인증 방식
+
+`~/.aws/config`·`~/.aws/credentials`에 정의된 프로필을 그대로 지원합니다.
+
+| 방식 | 지원 |
+| --- | --- |
+| 정적 액세스 키 (`aws_access_key_id`) | ✅ |
+| SSO / IAM Identity Center (`sso-session` 최신 방식 및 프로필 직접 기입 방식) | ✅ |
+| assume-role (`role_arn` + `source_profile`) | ✅ |
+| credential process (`credential_process`) | ✅ |
+
+- 자격증명 해석은 전적으로 AWS SDK에 위임합니다. cloudloupe는 어떤 프로필이 존재하고
+  어떤 형태(정적/SSO/assume-role/process)인지 **메타데이터만** 파싱하며, 액세스 키·시크릿·세션
+  토큰·SSO 토큰 같은 **비밀 값은 읽지 않습니다**.
+- SSO나 assume-role만 쓰면 `~/.aws/credentials` 파일이 없어도 정상 동작합니다.
+- SSO 세션이 만료되면 `aws sso login --profile <이름>`으로 다시 로그인하라고 안내합니다.
+
 ## 지원 리소스
 
 EC2, VPC, ELB, Lambda, ECS, EKS, RDS, IAM, S3 등 20여 개 서비스의 리소스를 조회합니다.

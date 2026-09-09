@@ -56,8 +56,8 @@ func ec2Definitions(clientFor ec2ClientFor) []Definition {
 			Type:           model.TypeEC2Instance,
 			Label:          "Instances",
 			Scope:          Regional,
-			Columns:        []string{"InstanceType", "AvailabilityZone", "PrivateIpAddress", "PublicIp"},
-			SummaryColumns: []string{"InstanceType", "PrivateIpAddress", "PublicIp"},
+			Columns:        []string{"InstanceType", "AvailabilityZone", "PrivateIpAddress", "PublicIpAddress"},
+			SummaryColumns: []string{"InstanceType", "PrivateIpAddress", "PublicIpAddress"},
 			newCollector: func() collect.Collector {
 				return ec2collector.NewInstance(clientFor())
 			},

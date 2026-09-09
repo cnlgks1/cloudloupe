@@ -134,7 +134,7 @@ func Resources() []model.Resource {
 			Region: Region, Profile: Profile, AccountID: AccountID, Status: "running", CreatedAt: at(created),
 			Fields: []model.Field{
 				field("InstanceType", "t3.medium"), field("AvailabilityZone", Region+"a"),
-				field("PrivateIpAddress", "10.0.1.23"), field("PublicIp", "-"),
+				field("PrivateIpAddress", "10.0.1.23"), field("PublicIpAddress", "3.35.10.20"),
 			},
 			Related: []model.Ref{
 				ref(model.TypeEC2Subnet, subnetA, "SubnetId"),
@@ -147,7 +147,7 @@ func Resources() []model.Resource {
 			Region: Region, Profile: Profile, AccountID: AccountID, Status: "running", CreatedAt: at(created),
 			Fields: []model.Field{
 				field("InstanceType", "t3.medium"), field("AvailabilityZone", Region+"c"),
-				field("PrivateIpAddress", "10.0.2.31"), field("PublicIp", "-"),
+				field("PrivateIpAddress", "10.0.2.31"), field("PublicIpAddress", "-"),
 			},
 			Related: []model.Ref{
 				ref(model.TypeEC2Subnet, subnetB, "SubnetId"),

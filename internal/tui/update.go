@@ -17,10 +17,17 @@ import (
 )
 
 // identityMsg는 신원 확인 결과를 Update로 전달한다.
+// profileError는 한 프로필의 신원 확인 실패를 그 프로필 이름과 함께 담는다.
+type profileError struct {
+	profile string
+	err     error
+}
+
 type identityMsg struct {
 	requestID uint64
-	id        awsclient.Identity
-	err       error
+	ids       map[string]awsclient.Identity
+	failures  []profileError
+	canceled  bool
 }
 
 // collectDoneMsg는 수집과 표시 데이터 준비가 끝났을 때 Update로 전달되는 메시지다.
@@ -29,12 +36,13 @@ type identityMsg struct {
 // 화면은 수집기가 남긴 원본 Ref로 폴백한다. 그래프 빌드를 이 Cmd 안에서 하는 이유는
 // 정렬·표 준비와 마찬가지로 UI 고루틴을 막지 않기 위해서다.
 type collectDoneMsg struct {
-	requestID  uint64
-	result     collect.Result
-	data       resourceTableData
-	relations  *graph.Graph
-	showRegion bool
-	canceled   bool
+	requestID   uint64
+	result      collect.Result
+	data        resourceTableData
+	relations   *graph.Graph
+	showProfile bool
+	showRegion  bool
+	canceled    bool
 }
 
 // handleKey는 키 입력을 화면별로 처리한다.
@@ -147,20 +155,39 @@ func (m Model) togglePathFocus() Model {
 // --- 프로필 ---
 
 func (m Model) keyProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Enter) {
+	switch {
+	case key.Matches(msg, m.keys.Toggle):
+		// 리전 화면과 같은 다중 선택 토글이다. 커서 위치 프로필을 켜고 끈다.
 		i := m.profileTable.Cursor()
 		if i >= 0 && i < len(m.profiles) {
-			p := m.profiles[i]
-			m.chosenProfile = p.Name
-			m.loading = p.Name + " checking credentials..."
-			m.screen = ScreenIdentity
-
-			cmd := m.identifyCmd(p)
-
-			return m, cmd
+			m.toggleProfile(m.profiles[i].Name)
+			m.explicitProfileSelection = len(m.chosenProfiles) > 0
+			m.profileTable = buildProfileTable(m.theme, m.profiles, m.chosenProfiles, m.width, m.listHeight())
+			m.profileTable.SetCursor(i)
 		}
 
 		return m, nil
+
+	case key.Matches(msg, m.keys.Enter):
+		// space로 만든 명시적 다중 선택이 없으면 현재 커서의 프로필 하나로 교체한다.
+		i := m.profileTable.Cursor()
+		if !m.explicitProfileSelection || len(m.chosenProfiles) == 0 {
+			if i >= 0 && i < len(m.profiles) {
+				m.chosenProfiles = []string{m.profiles[i].Name}
+				m.explicitProfileSelection = false
+			}
+		}
+
+		if len(m.chosenProfiles) == 0 {
+			return m, nil
+		}
+
+		m.loading = strings.Join(m.chosenProfiles, ", ") + " checking credentials..."
+		m.screen = ScreenIdentity
+
+		cmd := m.identifyCmd()
+
+		return m, cmd
 	}
 
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'c' {
@@ -170,20 +197,67 @@ func (m Model) keyProfile(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.delegateToActiveList(msg)
 }
 
-func (m *Model) identifyCmd(p awsclient.Profile) tea.Cmd {
+func (m *Model) toggleProfile(name string) {
+	for i, c := range m.chosenProfiles {
+		if c == name {
+			m.chosenProfiles = append(m.chosenProfiles[:i], m.chosenProfiles[i+1:]...)
+
+			return
+		}
+	}
+
+	m.chosenProfiles = append(m.chosenProfiles, name)
+}
+
+// profileRegionOf는 프로필 이름으로 그 프로필의 기본 리전을 찾는다. STS 확인 때 어느
+// 리전으로 붙을지 정한다.
+func (m Model) profileRegionOf(name string) string {
+	for _, p := range m.profiles {
+		if p.Name == name {
+			return p.Region
+		}
+	}
+
+	return ""
+}
+
+// identifyCmd는 선택한 모든 프로필의 STS 신원을 확인하는 Cmd를 만든다.
+//
+// 프로필마다 계정이 다르므로 각각 확인한다. 하나가 실패해도 나머지는 확인하고, 실패는
+// 그 프로필의 오류로 담아 온다("부분 실패 허용"). 성공한 신원과 실패를 함께 돌려준다.
+func (m *Model) identifyCmd() tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	m.identitySequence++
 	requestID := m.identitySequence
 
-	profile := p.Name
-	region := p.Region
+	profiles := append([]string(nil), m.chosenProfiles...)
+	regionOf := make(map[string]string, len(profiles))
+	for _, name := range profiles {
+		regionOf[name] = m.profileRegionOf(name)
+	}
 	locations := m.locations
+	identify := m.deps.Identify
 
 	return func() tea.Msg {
-		id, err := m.deps.Identify(ctx, profile, region, locations)
+		ids := make(map[string]awsclient.Identity, len(profiles))
+		var failures []profileError
 
-		return identityMsg{requestID: requestID, id: id, err: err}
+		for _, name := range profiles {
+			id, err := identify(ctx, name, regionOf[name], locations)
+			if errors.Is(err, context.Canceled) {
+				return identityMsg{requestID: requestID, canceled: true}
+			}
+			if err != nil {
+				failures = append(failures, profileError{profile: name, err: err})
+
+				continue
+			}
+
+			ids[name] = id
+		}
+
+		return identityMsg{requestID: requestID, ids: ids, failures: failures}
 	}
 }
 
@@ -199,20 +273,32 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 		m.cancel = nil
 	}
 
-	if errors.Is(msg.err, context.Canceled) {
+	if msg.canceled {
 		m.screen = ScreenProfile
 
 		return m, nil
 	}
 
-	if msg.err != nil {
-		m.errText = m.deps.Explain(msg.err)
+	// 신원을 확인한 프로필만 남긴다. 부분 실패 허용: 일부 프로필이 실패해도 성공한
+	// 프로필로 진행한다. 전부 실패하면 첫 실패 사유를 에러 화면에 보여준다.
+	confirmed := make([]string, 0, len(m.chosenProfiles))
+	for _, name := range m.chosenProfiles {
+		if _, ok := msg.ids[name]; ok {
+			confirmed = append(confirmed, name)
+		}
+	}
+
+	if len(confirmed) == 0 {
+		if len(msg.failures) > 0 {
+			m.errText = m.deps.Explain(msg.failures[0].err)
+		}
 		m.screen = ScreenError
 
 		return m, nil
 	}
 
-	m.identity = msg.id
+	m.chosenProfiles = confirmed
+	m.identities = msg.ids
 	m.chosenRegions = nil
 	m.confirmedRegions = nil
 	m.chosenTypes = nil
@@ -227,9 +313,17 @@ func (m Model) onIdentity(msg identityMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// profileRegion은 리전 목록의 초기 커서를 잡을 대표 리전을 반환한다.
+//
+// 리전 목록 자체는 파티션 전체라 프로필과 무관하지만, 커서를 어느 리전에 둘지 힌트로
+// 첫 선택 프로필의 기본 리전을 쓴다. 프로필이 여러 개여도 목록은 하나를 공유한다.
 func (m Model) profileRegion() string {
+	if len(m.chosenProfiles) == 0 {
+		return ""
+	}
+	first := m.chosenProfiles[0]
 	for _, p := range m.profiles {
-		if p.Name == m.chosenProfile {
+		if p.Name == first {
 			return p.Region
 		}
 	}
@@ -495,33 +589,35 @@ func (m Model) startCollecting() (tea.Model, tea.Cmd) {
 	m.screen = ScreenCollecting
 	m.loading = strings.Join(m.chosenRegions, ", ") + " querying..."
 
-	profile := m.chosenProfile
+	profiles := append([]string(nil), m.chosenProfiles...)
 	regions := append([]string(nil), m.chosenRegions...)
 	types := append([]string(nil), m.chosenTypes...)
 	groups := append([]ResourceGroup(nil), m.deps.ResourceGroups...)
 	locations := m.locations
 	showRegion := len(regions) > 1
+	showProfile := len(profiles) > 1
 	collectFn := m.deps.Collect
 
 	cmd := func() tea.Msg {
-		result := collectFn(ctx, profile, regions, types, locations)
+		result := collectFn(ctx, profiles, regions, types, locations)
 		if result.Canceled || errors.Is(ctx.Err(), context.Canceled) {
 			return collectDoneMsg{requestID: requestID, result: result, canceled: true}
 		}
 
-		data, prepared := buildResourceData(ctx, result.Resources, groups, types, showRegion)
+		data, prepared := buildResourceData(ctx, result.Resources, groups, types, showProfile, showRegion)
 
 		// 관계 그래프도 이 백그라운드 Cmd 안에서 만든다. 빌드 실패(중복 키 같은 입력 문제)는
 		// 조회 결과 표시를 막지 않으므로 nil로 두고 계속 진행한다.
 		relations, _ := graph.Build(result.Resources)
 
 		return collectDoneMsg{
-			requestID:  requestID,
-			result:     result,
-			data:       data,
-			relations:  relations,
-			showRegion: showRegion,
-			canceled:   !prepared,
+			requestID:   requestID,
+			result:      result,
+			data:        data,
+			relations:   relations,
+			showProfile: showProfile,
+			showRegion:  showRegion,
+			canceled:    !prepared,
 		}
 	}
 
@@ -561,6 +657,7 @@ func (m Model) onCollectDone(msg collectDoneMsg) (tea.Model, tea.Cmd) {
 	m.collectErrors = append([]model.CollectError(nil), msg.result.Errors...)
 	m.errorTable = buildCollectErrorTable(
 		m.theme, m.collectErrors, m.deps.ResourceGroups, m.width, m.listHeight())
+	m.showProfile = msg.showProfile
 	m.showRegion = msg.showRegion
 	m.filtering = false
 	m.filterQuery = ""

@@ -14,7 +14,7 @@ import (
 // collectResult는 지정한 결과를 그대로 돌려주는 가짜 수집기를 붙인 Deps를 만든다.
 func depsReturning(result collect.Result) tui.Deps {
 	deps := okDeps(nil)
-	deps.Collect = func(context.Context, string, []string, []string, awsclient.Locations) collect.Result {
+	deps.Collect = func(context.Context, []string, []string, []string, awsclient.Locations) collect.Result {
 		return result
 	}
 

@@ -38,7 +38,7 @@ func treeDeps() (tui.Deps, *[]string) {
 			{ID: "iam:role", Label: "Roles"},
 		}},
 	}
-	deps.Collect = func(_ context.Context, _ string, _, types []string, _ awsclient.Locations) collect.Result {
+	deps.Collect = func(_ context.Context, _, _, types []string, _ awsclient.Locations) collect.Result {
 		*queried = append([]string(nil), types...)
 
 		return collect.Result{Resources: []model.Resource{

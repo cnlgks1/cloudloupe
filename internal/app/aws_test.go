@@ -50,7 +50,7 @@ func TestCollectWithPlansGlobalAfterFirstConfigFailure(t *testing.T) {
 		},
 	}
 
-	result := collectWith(context.Background(), "prod",
+	result := collectWith(context.Background(), []string{"prod"},
 		[]string{"failed-region", "ap-northeast-2", "us-east-1"}, nil, deps)
 
 	if want := []bool{true, false}; !slices.Equal(includeGlobalCalls, want) {
@@ -91,7 +91,7 @@ func TestCollectWithPlansGlobalAfterFirstCatalogFailure(t *testing.T) {
 		},
 	}
 
-	result := collectWith(context.Background(), "prod",
+	result := collectWith(context.Background(), []string{"prod"},
 		[]string{"ap-northeast-2", "us-east-1", "eu-west-1"}, nil, deps)
 
 	if want := []bool{true, true, false}; !slices.Equal(includeGlobalCalls, want) {
@@ -151,7 +151,7 @@ func TestCollectWithSeparatesCancellation(t *testing.T) {
 			},
 		}
 
-		result := collectWith(context.Background(), "prod", []string{"ap-northeast-2"}, nil, deps)
+		result := collectWith(context.Background(), []string{"prod"}, []string{"ap-northeast-2"}, nil, deps)
 		if !result.Canceled || len(result.Errors) != 0 {
 			t.Errorf("Result = %+v, want 취소 상태와 오류 0건", result)
 		}
@@ -172,7 +172,7 @@ func TestCollectWithSeparatesCancellation(t *testing.T) {
 			},
 		}
 
-		result := collectWith(context.Background(), "prod", []string{"ap-northeast-2"}, nil, deps)
+		result := collectWith(context.Background(), []string{"prod"}, []string{"ap-northeast-2"}, nil, deps)
 		if !result.Canceled || len(result.Errors) != 0 {
 			t.Errorf("Result = %+v, want 취소 상태와 오류 0건", result)
 		}

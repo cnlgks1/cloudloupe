@@ -20,7 +20,7 @@ func TestResourceListModelMaintainsDerivedState(t *testing.T) {
 		{Type: model.TypeEC2Instance, ID: "i-api", Name: "api"},
 		{Type: model.TypeEC2Volume, ID: "vol-logs", Name: "logs"},
 	}
-	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false)
+	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false, false)
 	if !prepared {
 		t.Fatal("리소스 목록 테스트 데이터를 준비하지 못함")
 	}

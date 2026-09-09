@@ -65,13 +65,13 @@ type collectDeps struct {
 	run      func(context.Context, []collect.Job) collect.Result
 }
 
-// Collect는 선택 프로필의 여러 리전에서 지정한 리소스 타입을 조회한다.
+// Collect는 선택한 프로필들의 여러 리전에서 지정한 리소스 타입을 조회한다.
 //
-// 리전 하나의 설정이나 권한이 실패해도 다른 리전은 계속 실행한다. Route 53 같은 글로벌
-// 타입은 설정과 카탈로그 조립에 처음 성공한 리전에서 한 번만 실행한다. 모든 실패는 성공한
-// 리소스와 함께 Result.Errors에 보존한다.
-func Collect(ctx context.Context, profile string, regions, types []string) collect.Result {
-	return collectWith(ctx, profile, regions, types, collectDeps{
+// 프로필과 리전은 곱집합으로 순회한다. 프로필 하나 또는 리전 하나의 설정·권한이 실패해도
+// 다른 조합은 계속 실행한다. Route 53 같은 글로벌 타입은 계정 단위이므로 프로필마다 처음
+// 성공한 리전에서 한 번씩 실행한다. 모든 실패는 성공한 리소스와 함께 Result.Errors에 보존한다.
+func Collect(ctx context.Context, profiles, regions, types []string) collect.Result {
+	return collectWith(ctx, profiles, regions, types, collectDeps{
 		identify: Identify,
 		config:   awsclient.Config,
 		registry: catalog.Registry,
@@ -82,15 +82,14 @@ func Collect(ctx context.Context, profile string, regions, types []string) colle
 // CollectWithLocations는 프로필 탐색에 사용한 경로로 리소스를 조회한다.
 func CollectWithLocations(
 	ctx context.Context,
-	profile string,
-	regions, types []string,
+	profiles, regions, types []string,
 	locations awsclient.Locations,
 ) collect.Result {
 	loadConfig := func(ctx context.Context, profile, region string) (aws.Config, error) {
 		return awsclient.ConfigWithLocations(ctx, profile, region, locations)
 	}
 
-	return collectWith(ctx, profile, regions, types, collectDeps{
+	return collectWith(ctx, profiles, regions, types, collectDeps{
 		identify: func(ctx context.Context, profile, region string) (awsclient.Identity, error) {
 			return identifyWithConfig(ctx, profile, region, loadConfig)
 		},
@@ -102,64 +101,69 @@ func CollectWithLocations(
 
 func collectWith(
 	ctx context.Context,
-	profile string,
-	regions, types []string,
+	profiles, regions, types []string,
 	deps collectDeps,
 ) collect.Result {
 	var result collect.Result
 
-	accountID, canceled := identifyAccount(ctx, profile, regions, &result, deps.identify)
-	if canceled {
-		result.Canceled = true
-
-		return result
-	}
-
-	jobs := make([]collect.Job, 0, len(regions)*len(catalog.Definitions()))
+	jobs := make([]collect.Job, 0, len(profiles)*len(regions)*len(catalog.Definitions()))
+	// reportedUnknown은 프로필·리전 전체에 걸쳐 같은 미지원 타입을 한 번만 보고하게 한다.
 	reportedUnknown := make(map[string]struct{})
-	includeGlobal := true
 	loadConfig := deps.config
 	registerCollectors := deps.registry
 	runJobs := deps.run
 
-	for _, region := range regions {
-		cfg, err := loadConfig(ctx, profile, region)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				result.Canceled = true
+	for _, profile := range profiles {
+		accountID, canceled := identifyAccount(ctx, profile, regions, &result, deps.identify)
+		if canceled {
+			result.Canceled = true
 
-				break
-			}
-
-			result.Errors = append(result.Errors, collectError(configErrorType, profile, region,
-				fmt.Errorf("AWS 설정 로드: %w", err)))
-
-			continue
+			return result
 		}
 
-		registry, unknown, err := registerCollectors(cfg, includeGlobal, types)
-		for _, typ := range unknown {
-			if _, exists := reportedUnknown[typ]; exists {
+		// 글로벌 타입(IAM, Route 53 등)은 계정 단위라 프로필마다 한 번씩 실행해야 한다.
+		// 프로필이 바뀔 때마다 다시 계획하도록 여기서 리셋한다. 리셋을 빠뜨리면 두 번째
+		// 프로필부터 글로벌 리소스가 통째로 누락된다.
+		includeGlobal := true
+
+		for _, region := range regions {
+			cfg, err := loadConfig(ctx, profile, region)
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					result.Canceled = true
+
+					return result
+				}
+
+				result.Errors = append(result.Errors, collectError(configErrorType, profile, region,
+					fmt.Errorf("AWS 설정 로드: %w", err)))
+
 				continue
 			}
 
-			reportedUnknown[typ] = struct{}{}
-			result.Errors = append(result.Errors, collectError(typ, profile, region,
-				fmt.Errorf("지원하지 않는 리소스 타입: %s", typ)))
+			registry, unknown, err := registerCollectors(cfg, includeGlobal, types)
+			for _, typ := range unknown {
+				if _, exists := reportedUnknown[typ]; exists {
+					continue
+				}
+
+				reportedUnknown[typ] = struct{}{}
+				result.Errors = append(result.Errors, collectError(typ, profile, region,
+					fmt.Errorf("지원하지 않는 리소스 타입: %s", typ)))
+			}
+
+			if err != nil {
+				result.Errors = append(result.Errors, collectError(catalogErrorType, profile, region, err))
+
+				continue
+			}
+
+			// 이 프로필의 글로벌 타입은 한 번 계획했다. 같은 프로필의 다음 리전부터 제외한다.
+			includeGlobal = false
+
+			scope := collect.Scope{Profile: profile, Region: region, AccountID: accountID}
+			jobs = append(jobs, collect.Plan(registry, []collect.Scope{scope})...)
 		}
-
-		if err != nil {
-			result.Errors = append(result.Errors, collectError(catalogErrorType, profile, region, err))
-
-			continue
-		}
-
-		// 첫 리전 설정이나 카탈로그 조립이 실패하면 다음 성공 리전에서 글로벌 타입을
-		// 계획한다. 성공적으로 한 번 조립된 뒤에만 이후 리전에서 제외한다.
-		includeGlobal = false
-
-		scope := collect.Scope{Profile: profile, Region: region, AccountID: accountID}
-		jobs = append(jobs, collect.Plan(registry, []collect.Scope{scope})...)
 	}
 
 	runResult := runJobs(ctx, jobs)

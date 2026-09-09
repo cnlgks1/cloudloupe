@@ -30,7 +30,7 @@ func buildTestTable(
 	showRegion bool,
 	width, height int,
 ) table.Model {
-	data, prepared := buildResourceData(context.Background(), schemaResources, groups, selectedTypes, showRegion)
+	data, prepared := buildResourceData(context.Background(), schemaResources, groups, selectedTypes, false, showRegion)
 	if !prepared {
 		panic("테스트 리소스 데이터를 준비하지 못함")
 	}
@@ -135,7 +135,7 @@ func TestResourceListViewUsesDedicatedFilterLine(t *testing.T) {
 		theme:       New(true),
 		listCaption: "리소스 2개",
 	}
-	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false)
+	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false, false)
 	if !prepared {
 		t.Fatal("목록 데이터를 준비하지 못함")
 	}
@@ -294,7 +294,7 @@ func newFilterFlowModel(resources []model.Resource) Model {
 	}
 	resources = append([]model.Resource(nil), resources...)
 	data, prepared := buildResourceData(
-		context.Background(), resources, nil, m.chosenTypes, m.shouldShowRegion())
+		context.Background(), resources, nil, m.chosenTypes, m.shouldShowProfile(), m.shouldShowRegion())
 	if !prepared {
 		panic("테스트 리소스 데이터를 준비하지 못함")
 	}
@@ -420,7 +420,7 @@ func newResourceKindFilterModel(groups []ResourceGroup, resources []model.Resour
 	m.chosenTypes = resourceGroupTypeIDs(groups[0])
 	m.resourceKinds = collectResourceKinds(groups, resources)
 	data, prepared := buildResourceData(
-		context.Background(), resources, groups, m.chosenTypes, m.shouldShowRegion())
+		context.Background(), resources, groups, m.chosenTypes, m.shouldShowProfile(), m.shouldShowRegion())
 	if !prepared {
 		panic("종류 필터 테스트 데이터를 준비하지 못함")
 	}
@@ -799,7 +799,7 @@ func resourceSet100K() []model.Resource {
 
 func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 	resources := []model.Resource{{Type: model.TypeEC2Instance, ID: "i-current", Name: "current"}}
-	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false)
+	data, prepared := buildResourceData(context.Background(), resources, nil, nil, false, false)
 	if !prepared {
 		t.Fatal("현재 수집 데이터를 준비하지 못함")
 	}
@@ -832,7 +832,7 @@ func TestCollectDoneRejectsCanceledAndStalePreparation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, ok := buildResourceData(ctx, resources, nil, nil, false); ok {
+	if _, ok := buildResourceData(ctx, resources, nil, nil, false, false); ok {
 		t.Fatal("취소된 context에서 리소스 데이터를 준비함")
 	}
 }
@@ -864,7 +864,7 @@ func TestCollectErrorListAndDetailFlow(t *testing.T) {
 			Message:     "raw throttle failure",
 		},
 	}
-	data, prepared := buildResourceData(context.Background(), resources, groups, nil, true)
+	data, prepared := buildResourceData(context.Background(), resources, groups, nil, false, true)
 	if !prepared {
 		t.Fatal("오류 흐름 테스트 데이터를 준비하지 못함")
 	}
@@ -932,14 +932,14 @@ func TestIdentityRejectsStaleResponseAndSeparatesCancellation(t *testing.T) {
 
 	next, _ := m.Update(identityMsg{
 		requestID: 1,
-		id:        awsclient.Identity{AccountID: "old-account"},
+		ids:       map[string]awsclient.Identity{"old": {AccountID: "old-account"}},
 	})
 	m = next.(Model)
-	if m.screen != ScreenIdentity || m.identity.AccountID != "" {
-		t.Fatalf("이전 신원 응답을 수락함: 화면=%v identity=%+v", m.screen, m.identity)
+	if m.screen != ScreenIdentity || len(m.identities) != 0 {
+		t.Fatalf("이전 신원 응답을 수락함: 화면=%v identities=%+v", m.screen, m.identities)
 	}
 
-	next, _ = m.Update(identityMsg{requestID: 2, err: context.Canceled})
+	next, _ = m.Update(identityMsg{requestID: 2, canceled: true})
 	m = next.(Model)
 	if m.screen != ScreenProfile || m.errText != "" {
 		t.Fatalf("신원 확인 취소 결과: 화면=%v err=%q", m.screen, m.errText)

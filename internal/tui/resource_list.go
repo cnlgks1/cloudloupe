@@ -59,6 +59,14 @@ func (m resourceListModel) filteredCount() int {
 
 // applyFilter는 캐시된 검색 문자열에 종류와 검색 조건을 함께 적용한다.
 func (m *resourceListModel) applyFilter(kind, query string) {
+	// 필터를 바꾸기 전에 커서가 가리키던 원본 리소스 인덱스를 기억한다. fzf처럼, 검색어가
+	// 바뀌어 결과가 달라져도 그 리소스가 여전히 결과에 있으면 커서를 그 자리로 되돌린다.
+	// 화살표로 골라 둔 항목이 다음 글자 입력에 맨 위로 튀지 않게 하려는 것이다.
+	prevSelected := -1
+	if m.cursor >= 0 && m.cursor < len(m.filteredIndexes) {
+		prevSelected = m.filteredIndexes[m.cursor]
+	}
+
 	tokens := strings.Fields(strings.ToLower(query))
 	m.filteredIndexes = m.filteredIndexes[:0]
 
@@ -73,7 +81,22 @@ func (m *resourceListModel) applyFilter(kind, query string) {
 		m.filteredIndexes = append(m.filteredIndexes, i)
 	}
 
+	// 기억해 둔 리소스가 새 결과에도 있으면 그 위치로 커서를 복원한다. 사라졌으면(더 좁힌
+	// 검색에서 제외됨) 유효 범위로 클램프한다. 결과가 비면 0이 된다.
 	m.cursor = 0
+	if prevSelected >= 0 {
+		for i, idx := range m.filteredIndexes {
+			if idx == prevSelected {
+				m.cursor = i
+
+				break
+			}
+		}
+	}
+	if m.cursor >= len(m.filteredIndexes) {
+		m.cursor = max(0, len(m.filteredIndexes)-1)
+	}
+
 	m.windowStart = 0
 	// 결과 수와 window 위치가 같아도 다른 원본 행일 수 있으므로 행 매핑을 무효화한다.
 	m.visibleRows = m.visibleRows[:0]

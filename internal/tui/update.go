@@ -391,6 +391,14 @@ func (m Model) keyResourceSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
+		// 방향·페이지 키는 입력창이 아니라 트리로 보내 검색과 이동을 동시에 한다.
+		// 목록 필터(keyResourceFilter)와 같은 규칙이다.
+		if isFilterNavKey(msg) {
+			m.resourceTree.update(msg)
+
+			return m, nil
+		}
+
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
 		m.resourceTree.setQuery(m.theme, m.filterInput.Value(), m.width, height)
@@ -665,6 +673,20 @@ func (m Model) resourceKindFilterCursor() int {
 	return 0
 }
 
+// isFilterNavKey는 필터 입력 중에도 목록을 이동시킬 키인지 판정한다.
+//
+// fzf·k9s처럼 검색어를 치면서 동시에 결과를 훑을 수 있게, 화살표와 페이지 이동 키는
+// 입력창이 아니라 목록으로 보낸다. j·k는 검색어 문자이므로 이동으로 쓰지 않고, 방향키
+// (↑↓)와 PgUp/PgDn/Home/End만 이동으로 본다. 그래야 이름에 j·k가 든 리소스도 검색된다.
+func isFilterNavKey(msg tea.KeyMsg) bool {
+	switch msg.Type {
+	case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
+		return true
+	default:
+		return false
+	}
+}
+
 // keyResourceFilter는 목록 필터 입력을 처리한다.
 func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
@@ -683,6 +705,13 @@ func (m Model) keyResourceFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		return m.applyResourceFilter(), nil
 	default:
+		// 방향·페이지 키는 입력창이 아니라 목록으로 보내 검색과 이동을 동시에 한다.
+		if isFilterNavKey(msg) {
+			m.resourceList.moveCursor(msg)
+
+			return m, nil
+		}
+
 		var cmd tea.Cmd
 		m.filterInput, cmd = m.filterInput.Update(msg)
 		m.filterQuery = m.filterInput.Value()

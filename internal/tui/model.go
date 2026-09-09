@@ -402,6 +402,7 @@ func (m Model) resourceTreeView() string {
 		filterLine = m.filterInput.View()
 		help = [][2]string{
 			{"type", "live search"},
+			{"↑↓", "move"},
 			{"enter", "apply"},
 			{"esc", "cancel"},
 		}
@@ -490,6 +491,7 @@ func (m Model) resourceListView() string {
 		filterLine = m.filterInput.View()
 		help = [][2]string{
 			{"type", "live search"},
+			{"↑↓", "move"},
 			{"enter", "apply"},
 			{"esc", "cancel"},
 		}

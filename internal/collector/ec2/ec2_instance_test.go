@@ -23,6 +23,12 @@ type fakeEC2 struct {
 	pages []*awsec2.DescribeInstancesOutput
 	err   error
 	calls int
+
+	// volumes는 DescribeVolumes가 돌려줄 볼륨(VolumeId → Size)이다. volumesErr가 있으면
+	// 볼륨 조회 실패를 흉내 낸다.
+	volumes    map[string]int32
+	volumesErr error
+	volCalls   int
 }
 
 func (f *fakeEC2) DescribeInstances(_ context.Context, _ *awsec2.DescribeInstancesInput, _ ...func(*awsec2.Options)) (*awsec2.DescribeInstancesOutput, error) {
@@ -35,6 +41,25 @@ func (f *fakeEC2) DescribeInstances(_ context.Context, _ *awsec2.DescribeInstanc
 	f.calls++
 
 	return page, nil
+}
+
+func (f *fakeEC2) DescribeVolumes(_ context.Context, in *awsec2.DescribeVolumesInput, _ ...func(*awsec2.Options)) (*awsec2.DescribeVolumesOutput, error) {
+	f.volCalls++
+	if f.volumesErr != nil {
+		return nil, f.volumesErr
+	}
+
+	out := &awsec2.DescribeVolumesOutput{}
+	for _, id := range in.VolumeIds {
+		if size, ok := f.volumes[id]; ok {
+			out.Volumes = append(out.Volumes, ec2types.Volume{
+				VolumeId: aws.String(id),
+				Size:     aws.Int32(size),
+			})
+		}
+	}
+
+	return out, nil
 }
 
 func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
@@ -69,6 +94,7 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 		}},
 		// NextToken 없음 → 페이지 하나로 끝.
 	}}}
+	api.volumes = map[string]int32{"vol-0123456789abcdef0": 30}
 
 	c := ec2.NewInstance(api)
 
@@ -117,6 +143,17 @@ func TestEC2InstanceCollectorConvertsFields(t *testing.T) {
 	if got := r.FieldValue("InstanceType"); got != "t3.medium" {
 		t.Errorf("인스턴스 타입 = %q", got)
 	}
+
+	// EBS 볼륨 개수와 총 용량이 DescribeVolumes 결과로 채워져야 한다.
+	if got := r.FieldValue("EbsVolumeCount"); got != "1" {
+		t.Errorf("EbsVolumeCount = %q, want 1", got)
+	}
+	if got := r.FieldValue("EbsTotalSizeGiB"); got != "30" {
+		t.Errorf("EbsTotalSizeGiB = %q, want 30", got)
+	}
+	if api.volCalls != 1 {
+		t.Errorf("DescribeVolumes 호출 = %d회, want 1 (붙은 볼륨을 한 번에 조회)", api.volCalls)
+	}
 }
 
 func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
@@ -136,6 +173,7 @@ func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
 			}},
 		}},
 	}}}
+	api.volumes = map[string]int32{"vol-1": 100}
 
 	c := ec2.NewInstance(api)
 
@@ -151,9 +189,37 @@ func TestEC2InstanceCollectorRecordsRelations(t *testing.T) {
 		t.Errorf("ENI 관계가 없다: %+v", got[0].Related)
 	}
 
+	// 볼륨 관계의 Via에는 디바이스명과 함께 용량이 붙어야 한다. 볼륨을 따로 조회하지 않아도
+	// 관계 줄에서 각 볼륨 용량을 읽게 하려는 것이다.
 	vol := got[0].RelatedBy("BlockDeviceMappings.Ebs.VolumeId")
-	if len(vol) != 1 || vol[0].ID != "vol-1" || vol[0].Via != "/dev/xvda" {
-		t.Errorf("볼륨 관계가 없거나 디바이스가 빠졌다: %+v", got[0].Related)
+	if len(vol) != 1 || vol[0].ID != "vol-1" || vol[0].Via != "/dev/xvda (100 GiB)" {
+		t.Errorf("볼륨 관계에 디바이스·용량이 안 붙었다: %+v", got[0].Related)
+	}
+}
+
+// TestEC2InstanceRelationOmitsSizeWhenVolumeUnknown은 볼륨 용량을 조회하지 못하면 관계
+// Via에 디바이스명만 남기는지 확인한다(용량 괄호 없음).
+func TestEC2InstanceRelationOmitsSizeWhenVolumeUnknown(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{{
+		Reservations: []ec2types.Reservation{{Instances: []ec2types.Instance{{
+			InstanceId: aws.String("i-1"),
+			State:      &ec2types.InstanceState{Name: ec2types.InstanceStateNameRunning},
+			BlockDeviceMappings: []ec2types.InstanceBlockDeviceMapping{
+				{DeviceName: aws.String("/dev/xvda"), Ebs: &ec2types.EbsInstanceBlockDevice{VolumeId: aws.String("vol-1")}},
+			},
+		}}}},
+	}}}
+	api.volumesErr = errors.New("AccessDenied") // 볼륨 조회 실패 → 용량 모름
+
+	got, err := ec2.NewInstance(api).Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
+	if err == nil {
+		t.Fatal("볼륨 조회 실패가 부분 오류로 반환되어야 한다")
+	}
+	vol := got[0].RelatedBy("BlockDeviceMappings.Ebs.VolumeId")
+	if len(vol) != 1 || vol[0].Via != "/dev/xvda" {
+		t.Errorf("용량을 모르면 디바이스명만 남아야 한다: %+v", got[0].Related)
 	}
 }
 
@@ -215,5 +281,64 @@ func TestEC2InstanceCollectorType(t *testing.T) {
 	c := ec2.NewInstance(&fakeEC2{})
 	if c.Type() != model.TypeEC2Instance {
 		t.Errorf("Type() = %q, want %q", c.Type(), model.TypeEC2Instance)
+	}
+}
+
+// TestEC2InstanceCollectorVolumeLookupPartialFailure는 볼륨 용량 조회가 실패해도 인스턴스
+// 목록은 반환하고 용량만 비우는지 확인한다. 부분 실패 허용 원칙이다: 추가 조회 하나가
+// 실패했다고 이미 얻은 인스턴스를 통째로 버리지 않는다.
+func TestEC2InstanceCollectorVolumeLookupPartialFailure(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{{
+		Reservations: []ec2types.Reservation{{Instances: []ec2types.Instance{{
+			InstanceId: aws.String("i-1"),
+			State:      &ec2types.InstanceState{Name: ec2types.InstanceStateNameRunning},
+			BlockDeviceMappings: []ec2types.InstanceBlockDeviceMapping{
+				{DeviceName: aws.String("/dev/xvda"), Ebs: &ec2types.EbsInstanceBlockDevice{VolumeId: aws.String("vol-1")}},
+			},
+		}}}},
+	}}}
+	api.volumesErr = errors.New("AccessDenied")
+
+	c := ec2.NewInstance(api)
+
+	got, err := c.Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
+	if err == nil {
+		t.Fatal("볼륨 조회 실패가 부분 오류로 반환되어야 한다")
+	}
+	if len(got) != 1 {
+		t.Fatalf("인스턴스는 그대로 반환되어야 한다, got %d", len(got))
+	}
+	if v := got[0].FieldValue("EbsTotalSizeGiB"); v != "-" {
+		t.Errorf("볼륨 조회 실패 시 총 용량은 -여야 한다, got %q", v)
+	}
+	// 개수는 인스턴스 응답만으로 셀 수 있으므로 그대로 나온다.
+	if v := got[0].FieldValue("EbsVolumeCount"); v != "1" {
+		t.Errorf("EbsVolumeCount = %q, want 1", v)
+	}
+}
+
+// TestEC2InstanceCollectorHandlesNilState는 State가 없는 인스턴스도 패닉 없이 변환하는지
+// 확인한다. State는 SDK에서 포인터라 이론상 nil일 수 있다.
+func TestEC2InstanceCollectorHandlesNilState(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeEC2{pages: []*awsec2.DescribeInstancesOutput{{
+		Reservations: []ec2types.Reservation{{Instances: []ec2types.Instance{{
+			InstanceId: aws.String("i-nostate"),
+			// State 없음(nil).
+		}}}},
+	}}}
+
+	got, err := ec2.NewInstance(api).Collect(context.Background(), collect.Request{Scope: collect.Scope{Region: "r"}})
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "i-nostate" {
+		t.Fatalf("인스턴스가 변환되지 않았다: %+v", got)
+	}
+	if got[0].Status != "" {
+		t.Errorf("State가 없으면 상태는 빈 문자열이어야 한다, got %q", got[0].Status)
 	}
 }

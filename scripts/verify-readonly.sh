@@ -74,7 +74,9 @@ ALLOWED_PREFIXES='Describe|List|Get|Lookup|Search|BatchGet'
 #                            NextToken으로 이어 감싼다
 #   rulesForBus            - eventbridge 규칙 수집기의 내부 메서드. ListRules(조회)를 버스
 #                            단위로 감싼다
-INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs|clusterNames|nodegroupsForCluster|profilesForCluster|tableNames|topicARNs|queueURLs|certificateARNs|busNames|rulesForBus'
+#   volumeSizes            - ec2 인스턴스 수집기의 내부 메서드. DescribeVolumes(조회)를 감싸
+#                            인스턴스에 붙은 EBS 볼륨 용량을 VolumeId로 색인한다
+INTERNAL_ALLOW='Collect|NextPage|Run|Explain|Config|ConfigWithLocations|WhoAmI|LoadDefaultConfig|CommandContext|Value|Retrieve|Do|recordSets|targetHealth|webACLToResource|FanOut|keyEntries|aliasesByKeyID|clusterARNs|servicesForCluster|taskDefinitionARNs|clusterNames|nodegroupsForCluster|profilesForCluster|tableNames|topicARNs|queueURLs|certificateARNs|busNames|rulesForBus|volumeSizes'
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'

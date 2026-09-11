@@ -73,6 +73,9 @@ func Resources() []model.Resource {
 	ref := func(typ, id, relation string) model.Ref {
 		return model.Ref{Type: typ, ID: id, Relation: relation}
 	}
+	refVia := func(typ, id, relation, via string) model.Ref {
+		return model.Ref{Type: typ, ID: id, Relation: relation, Via: via}
+	}
 	arnRef := func(typ, arn, relation string) model.Ref {
 		return model.Ref{Type: typ, ID: arn, IdentifierKind: model.IdentifierARN, Relation: relation}
 	}
@@ -135,11 +138,14 @@ func Resources() []model.Resource {
 			Fields: []model.Field{
 				field("InstanceType", "t3.medium"), field("AvailabilityZone", Region+"a"),
 				field("PrivateIpAddress", "10.0.1.23"), field("PublicIpAddress", "3.35.10.20"),
+				field("EbsVolumeCount", "1"), field("EbsTotalSizeGiB", "30"),
 			},
 			Related: []model.Ref{
 				ref(model.TypeEC2Subnet, subnetA, "SubnetId"),
 				ref(model.TypeEC2VPC, vpc, "VpcId"),
 				ref(model.TypeEC2SecurityGroup, sgWeb, "SecurityGroups.GroupId"),
+				refVia(model.TypeEC2Volume, "vol-0a1b2c3d4e5f60031",
+					"BlockDeviceMappings.Ebs.VolumeId", "/dev/xvda (30 GiB)"),
 			},
 		},
 		{
@@ -148,6 +154,7 @@ func Resources() []model.Resource {
 			Fields: []model.Field{
 				field("InstanceType", "t3.medium"), field("AvailabilityZone", Region+"c"),
 				field("PrivateIpAddress", "10.0.2.31"), field("PublicIpAddress", "-"),
+				field("EbsVolumeCount", "2"), field("EbsTotalSizeGiB", "130"),
 			},
 			Related: []model.Ref{
 				ref(model.TypeEC2Subnet, subnetB, "SubnetId"),
